@@ -14,7 +14,7 @@ module Codec.Archive.Tar (
 
 import Data.Binary
 import Data.Binary.Get (getLazyByteString, skip, lookAhead)
-import Data.Binary.Put (runPut ,flush)
+import Data.Binary.Put (runPut, flush, putLazyByteString)
 
 import Control.Monad.Error
 import Data.Bits
@@ -178,9 +178,8 @@ modeToPerms is_dir mode =
 instance Binary TarArchive where
 
     put (TarArchive es) = do mapM_ put es
-                             put nulBlock
-                             put nulBlock
-        where nulBlock = BS.replicate 512 '\0'
+                             fill 512 '\0'
+                             fill 512 '\0'
 
     get = do block <- lookAhead 512
              if BS.head block == '\NUL'
@@ -193,7 +192,7 @@ instance Binary TarArchive where
 instance Binary TarEntry where
 
     put (TarEntry hdr cnt) = do put hdr
-                                put (rpadMod 512 '\0' cnt)
+                                putBytes (rpadMod 512 '\0' cnt)
                                 flush
     get = do hdr <- get
              cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
@@ -204,7 +203,7 @@ instance Binary TarHeader where
 
     put hdr = do let x = runPut putHeader
                      chkSum = sumBS x
-                 put $ setPart 148 (fmtOct 8 chkSum) x
+                 putBytes $ setPart 148 (fmtOct 8 chkSum) x
       where putHeader = 
               do let (filePrefix, fileSuffix) = splitFileName 100 (tarFileName hdr)
                  putString 100 $ fileSuffix
@@ -213,7 +212,7 @@ instance Binary TarHeader where
                  putOct      8 $ tarGroupID hdr
                  putOct     12 $ tarFileSize hdr
                  putOct     12 $ let TOD s _ = tarModTime hdr in s
-                 put           $ dummyChkSum
+                 fill        8 $ ' ' -- dummy checksum
                  put           $ tarFileType hdr
                  putString 100 $ tarLinkTarget hdr -- FIXME: take suffix split at / if too long
                  putString   6 $ "ustar "
@@ -223,10 +222,10 @@ instance Binary TarHeader where
                  putOct      8 $ tarDeviceMajor hdr
                  putOct      8 $ tarDeviceMinor hdr
                  putString 155 $ filePrefix
-                 put           $ BS.replicate 12 '\NUL'
+                 fill       12 $ '\NUL'
 
     get = do block <- lookAhead 512
-             let chkSum' = sumBS $ setPart 148 dummyChkSum block
+             let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
              (hdr,chkSum) <- getHeader
              if chkSum == chkSum'
                 then return hdr
@@ -275,9 +274,6 @@ splitFileName l path | n > l = error $ "File path too long: " ++ show path -- FI
 sumBS :: ByteString -> Int
 sumBS = BS.foldl' (\x y -> x + ord y) 0
 
-dummyChkSum :: ByteString
-dummyChkSum = BS.replicate 8 ' '
-
 instance Binary TarFileType where
     put t = putChar8 $ case t of
                          TarNormalFile -> '0'
@@ -304,10 +300,10 @@ instance Binary TarFileType where
 -- * TAR format primitive output
 
 putString :: Int64 -> String -> Put ()
-putString n = put . rpad n '\0' . ltrunc n . BS.pack
+putString n = putBytes . rpad n '\0' . ltrunc n . BS.pack
 
 putOct :: Integral a => Int64 -> a -> Put ()
-putOct n = put . fmtOct n
+putOct n = putBytes . fmtOct n
 
 fmtOct :: Integral a => Int64 -> a -> ByteString
 fmtOct n x = (lpad l '0' $ ltrunc l $ BS.pack $ showOct x "") 
@@ -366,3 +362,9 @@ tryError m = liftM Right m `catchError` (return . Left)
 
 decodeOrFail :: (Monad m, Binary a) => ByteString -> m a
 decodeOrFail = either (fail . show) return . decode
+
+fill :: Int -> Char -> Put ()
+fill n x = putBytes $ BS.replicate (fromIntegral n) x
+
+putBytes :: ByteString -> Put ()
+putBytes = putLazyByteString
