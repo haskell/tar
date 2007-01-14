@@ -14,7 +14,7 @@ module Codec.Archive.Tar (
 
 import Data.Binary
 import Data.Binary.Get (getLazyByteString, skip, lookAhead)
-import Data.Binary.Put (runPut)
+import Data.Binary.Put (runPut ,flush)
 
 import Control.Monad.Error
 import Data.Bits
@@ -194,6 +194,7 @@ instance Binary TarEntry where
 
     put (TarEntry hdr cnt) = do put hdr
                                 put (rpadMod 512 '\0' cnt)
+                                flush
     get = do hdr <- get
              cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
              skip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
