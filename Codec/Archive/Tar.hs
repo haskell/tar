@@ -2,7 +2,7 @@
 module Codec.Archive.Tar where
 
 import Data.Binary
-import Data.Binary.Get (runGet, getLazyByteString, skip)
+import Data.Binary.Get (runGet, getLazyByteString, skip, lookAhead)
 import Data.Binary.Put (runPut)
 
 import Control.Monad
@@ -23,7 +23,9 @@ import System.Time
 newtype TarArchive = TarArchive { archiveEntries :: [TarEntry] }
   deriving Show
 
-type TarEntry = (TarHeader,ByteString)
+data TarEntry = TarEntry { entryHeader :: TarHeader,
+                           entryData :: ByteString }
+  deriving Show
 
 data TarHeader = TarHeader 
     {
@@ -60,10 +62,12 @@ data TarFileType =
 fileToTarEntry :: FilePath -> IO TarEntry
 fileToTarEntry path = 
     do t <- getFileType path
+       let path' = path ++ if t == TarDir && not ([pathSep] `isSuffixOf` path) 
+                              then [pathSep] else ""
        perms <- getPermissions path
        time <- getModificationTime path
        let hdr = TarHeader {
-                            tarFileName = path,
+                            tarFileName = path',
                             tarFileMode = permsToMode (t == TarDir) perms,
                             tarOwnerID = 0,
                             tarGroupID = 0,
@@ -80,8 +84,11 @@ fileToTarEntry path =
          TarNormalFile -> do h <- openBinaryFile path ReadMode
                              size <- liftM fromIntegral $ hFileSize h
                              cnt <- BS.hGetContents h -- FIXME: warn if size has changed?
-                             return (hdr { tarFileSize = size }, cnt)
-         _             -> return (hdr, BS.empty)
+                             return $ TarEntry (hdr { tarFileSize = size }) cnt
+         _             -> return $ TarEntry hdr BS.empty
+
+pathSep :: Char
+pathSep = '/' -- FIXME: backslash on Windows
 
 getFileType :: FilePath -> IO TarFileType
 getFileType path = 
@@ -100,35 +107,69 @@ permsToMode isDir perms = boolsToBits [r,w,x,r,w,x,r,w,x]
         w = writable perms
         x = executable perms || searchable perms
 
+-- * Formatted information about archives
+
+archiveHeaders :: TarArchive -> [TarHeader]
+archiveHeaders = map entryHeader . archiveEntries
+
+archiveFileNames :: TarArchive -> String
+archiveFileNames = unlines . map tarFileName . archiveHeaders
+
+archiveFileInfo :: TarArchive -> String
+archiveFileInfo = unlines . map fileInfo . archiveHeaders
+  where fileInfo hdr = unwords [typ ++ mode, owner, group, size, time, name] -- FIXME: nice padding
+          where typ = case tarFileType hdr of
+                        TarSymLink  -> "l"
+                        TarCharDev  -> "c"
+                        TarBlockDev -> "b"
+                        TarDir      -> "d"
+                        TarFIFO     -> "p"
+                        _           -> "_"
+                mode = concat [u,g,o] -- FIXME: handle setuid etc.
+                  where m = tarFileMode hdr 
+                        f x = [t 2 'r', t 1 'w', t 0 'x']
+                          where t n c = if testBit x n then c else '-'
+                        u = f (m `shiftR` 6)
+                        g = f (m `shiftR` 3)
+                        o = f m
+                owner = let name = tarOwnerName hdr in if null name then show (tarOwnerID hdr) else name
+                group = let name = tarGroupName hdr in if null name then show (tarGroupID hdr) else name
+                size = show (tarFileSize hdr)
+                time = show (tarModTime hdr)
+                name = tarFileName hdr
+
 -- * Serializing and deserializing tar archives
 
 instance Binary TarArchive where
 
-    put (TarArchive es) = do mapM_ putEntry es
+    put (TarArchive es) = do mapM_ put es
                              put nulBlock
                              put nulBlock
-        where putEntry (hdr,cnt) = do put hdr
-                                      put (rpadMod 512 '\0' cnt)
-              nulBlock = BS.replicate 512 '\0'
-           
-    get = do block <- getLazyByteString 512
+        where nulBlock = BS.replicate 512 '\0'
+
+    get = do block <- lookAhead 512
              if BS.head block == '\NUL'
                 then return $ TarArchive [] -- FIXME: should we check the next block too?
-                else do me <- tryError (getEntry block)
-                        TarArchive es <- lazyGet
+                else do me <- tryError get
+--                        fail $ "read first entry"
+                        TarArchive es <- get
                         -- FIXME: output error message if the entry failed
                         return $ TarArchive $ either (\_ -> es) (:es) me
-        where getEntry block = 
-                  do hdr <- runGetM get block 
-                     cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
-                     skip (fromIntegral (512 - tarFileSize hdr `mod` 512))
-                     return (hdr,cnt)
+
+instance Binary TarEntry where
+
+    put (TarEntry hdr cnt) = do put hdr
+                                put (rpadMod 512 '\0' cnt)
+    get = do hdr <- get
+             cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
+             skip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
+             return $ TarEntry hdr cnt
 
 instance Binary TarHeader where
 
     put hdr = do let x = runPut putHeader
                      chkSum = sumBS x
-                 put $ rpad 512 '\0' $ setPart 148 (fmtOct 8 chkSum) x
+                 put $ setPart 148 (fmtOct 8 chkSum) x
       where putHeader = 
               do let (filePrefix, fileSuffix) = splitFileName 100 (tarFileName hdr)
                  putString 100 $ fileSuffix
@@ -147,11 +188,12 @@ instance Binary TarHeader where
                  putOct      8 $ tarDeviceMajor hdr
                  putOct      8 $ tarDeviceMinor hdr
                  putString 155 $ filePrefix
+                 put           $ BS.replicate 12 '\NUL'
 
-    get = do block <- getLazyByteString 512
-             (hdr,chkSum) <- runGetM getHeader block
+    get = do block <- lookAhead 512
              let chkSum' = sumBS $ setPart 148 dummyChkSum block
-             if chkSum == chkSum' 
+             (hdr,chkSum) <- getHeader
+             if chkSum == chkSum'
                 then return hdr
                 else fail $ "TAR header checksum failure: " 
                               ++ show chkSum ++ " /= " ++ show chkSum' 
@@ -172,6 +214,7 @@ instance Binary TarHeader where
                 major      <- getOct       8
                 minor      <- getOct       8
                 filePrefix <- getString  155
+                _          <- skip        12      
                 let hdr = TarHeader {
                                      tarFileName    = filePrefix ++ fileSuffix,
                                      tarFileMode    = mode,
