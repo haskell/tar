@@ -1,0 +1,17 @@
+Name: htar
+Version: 0.1
+License: BSD4
+License-File: LICENSE
+Author: Bjorn Bringert <bjorn@bringert.net>
+Maintainer: Bjorn Bringert <bjorn@bringert.net>
+Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
+Stability: Experimental
+Build-type: Simple
+Build-depends: base, mtl, binary
+Synopsis: TAR (tape archive format) implementation.
+Description:
+  Implements the USTAR (Uniform Standard Tape ARchive, POSIX.1-1988) format.
+
+Executable: htar
+Main-Is: htar.hs
+GHC-options: -O -Wall
