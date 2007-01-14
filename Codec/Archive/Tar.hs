@@ -1,5 +1,11 @@
 -- | Implements the USTAR (POSIX.1-1988) format (tar with extended header information).
-module Codec.Archive.Tar where
+module Codec.Archive.Tar (
+                          TarArchive(..),
+                          TarEntry(..),
+                          TarHeader(..),
+                          TarFileType(..),
+                          fileToTarEntry
+                         ) where
 
 import Data.Binary
 import Data.Binary.Get (runGet, getLazyByteString, skip, lookAhead)
@@ -18,6 +24,7 @@ import Numeric
 import System.Directory
 import System.IO
 import System.IO.Error
+import System.Posix.Types
 import System.Time
 
 newtype TarArchive = TarArchive { archiveEntries :: [TarEntry] }
@@ -30,7 +37,7 @@ data TarEntry = TarEntry { entryHeader :: TarHeader,
 data TarHeader = TarHeader 
     {
      tarFileName :: FilePath,
-     tarFileMode :: Int,
+     tarFileMode :: CMode,
      tarOwnerID :: Int,
      tarGroupID :: Int,
      tarFileSize :: Int64,
@@ -101,42 +108,11 @@ getFileType path =
 
 -- | This is a bit brain-dead, since 'Permissions' doesn't
 -- deal with user, group, others permissions.
-permsToMode :: Bool -> Permissions -> Int
+permsToMode :: Bool -> Permissions -> CMode
 permsToMode isDir perms = boolsToBits [r,w,x,r,w,x,r,w,x]
   where r = readable perms
         w = writable perms
         x = executable perms || searchable perms
-
--- * Formatted information about archives
-
-archiveHeaders :: TarArchive -> [TarHeader]
-archiveHeaders = map entryHeader . archiveEntries
-
-archiveFileNames :: TarArchive -> String
-archiveFileNames = unlines . map tarFileName . archiveHeaders
-
-archiveFileInfo :: TarArchive -> String
-archiveFileInfo = unlines . map fileInfo . archiveHeaders
-  where fileInfo hdr = unwords [typ ++ mode, owner, group, size, time, name] -- FIXME: nice padding
-          where typ = case tarFileType hdr of
-                        TarSymLink  -> "l"
-                        TarCharDev  -> "c"
-                        TarBlockDev -> "b"
-                        TarDir      -> "d"
-                        TarFIFO     -> "p"
-                        _           -> "_"
-                mode = concat [u,g,o] -- FIXME: handle setuid etc.
-                  where m = tarFileMode hdr 
-                        f x = [t 2 'r', t 1 'w', t 0 'x']
-                          where t n c = if testBit x n then c else '-'
-                        u = f (m `shiftR` 6)
-                        g = f (m `shiftR` 3)
-                        o = f m
-                owner = let name = tarOwnerName hdr in if null name then show (tarOwnerID hdr) else name
-                group = let name = tarGroupName hdr in if null name then show (tarGroupID hdr) else name
-                size = show (tarFileSize hdr)
-                time = show (tarModTime hdr)
-                name = tarFileName hdr
 
 -- * Serializing and deserializing tar archives
 
@@ -151,7 +127,6 @@ instance Binary TarArchive where
              if BS.head block == '\NUL'
                 then return $ TarArchive [] -- FIXME: should we check the next block too?
                 else do me <- tryError get
---                        fail $ "read first entry"
                         TarArchive es <- get
                         -- FIXME: output error message if the entry failed
                         return $ TarArchive $ either (\_ -> es) (:es) me
