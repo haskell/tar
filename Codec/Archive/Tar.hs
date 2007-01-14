@@ -8,10 +8,9 @@ module Codec.Archive.Tar (
                          ) where
 
 import Data.Binary
-import Data.Binary.Get (runGet, getLazyByteString, skip, lookAhead)
+import Data.Binary.Get (getLazyByteString, skip, lookAhead)
 import Data.Binary.Put (runPut)
 
-import Control.Monad
 import Control.Monad.Error
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BS
@@ -75,7 +74,7 @@ fileToTarEntry path =
        time <- getModificationTime path
        let hdr = TarHeader {
                             tarFileName = path',
-                            tarFileMode = permsToMode (t == TarDir) perms,
+                            tarFileMode = permsToMode perms,
                             tarOwnerID = 0,
                             tarGroupID = 0,
                             tarFileSize = 0, -- set below
@@ -108,8 +107,8 @@ getFileType path =
 
 -- | This is a bit brain-dead, since 'Permissions' doesn't
 -- deal with user, group, others permissions.
-permsToMode :: Bool -> Permissions -> CMode
-permsToMode isDir perms = boolsToBits [r,w,x,r,w,x,r,w,x]
+permsToMode :: Permissions -> CMode
+permsToMode perms = boolsToBits [r,w,x,r,w,x,r,w,x]
   where r = readable perms
         w = writable perms
         x = executable perms || searchable perms
@@ -182,8 +181,8 @@ instance Binary TarHeader where
                 chkSum     <- getOct       8
                 typ        <- get
                 target     <- getString  100
-                ustar      <- skip         6
-                version    <- skip         2
+                _ustar     <- skip         6
+                _version   <- skip         2
                 uname      <- getString   32
                 gname      <- getString   32
                 major      <- getOct       8
@@ -295,17 +294,11 @@ rpadMod n b xs = xs `BS.append` BS.replicate (n - BS.length xs `mod` n) b
 ltrunc :: Int64 -> ByteString -> ByteString
 ltrunc n xs = BS.drop (BS.length xs - n) xs
 
-rtrunc :: Int64 -> ByteString -> ByteString
-rtrunc = BS.take
-
 setPart :: Int64 -> ByteString -> ByteString -> ByteString
 setPart off new old = 
     let (before,rest) = BS.splitAt off old
         after = BS.drop (BS.length new) rest
      in before `BS.append` (BS.take (BS.length old - off) new) `BS.append` after
-
-runGetM :: Monad m => Get a -> ByteString -> m a
-runGetM g = either (fail . show) return . runGet g
 
 tryError :: MonadError e m => m a -> m (Either e a)
 tryError m = liftM Right m `catchError` (return . Left)

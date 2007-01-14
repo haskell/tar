@@ -28,7 +28,7 @@ archiveFileNames = unlines . map tarFileName . archiveHeaders
 
 archiveFileInfo :: TarArchive -> String
 archiveFileInfo = unlines . map fileInfo . archiveHeaders
-  where fileInfo hdr = unwords [typ ++ mode, owner, group, size, time, name] -- FIXME: nice padding
+  where fileInfo hdr = unwords [typ ++ mode, owner, group, size, time, file] -- FIXME: nice padding
           where typ = case tarFileType hdr of
                         TarSymLink  -> "l"
                         TarCharDev  -> "c"
@@ -47,4 +47,4 @@ archiveFileInfo = unlines . map fileInfo . archiveHeaders
                 group = let name = tarGroupName hdr in if null name then show (tarGroupID hdr) else name
                 size = show (tarFileSize hdr)
                 time = show (tarModTime hdr)
-                name = tarFileName hdr
+                file = tarFileName hdr
