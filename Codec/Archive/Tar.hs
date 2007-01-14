@@ -4,7 +4,12 @@ module Codec.Archive.Tar (
                           TarEntry(..),
                           TarHeader(..),
                           TarFileType(..),
-                          fileToTarEntry
+                          createTarFile,
+                          createTarData,
+                          createTarArchive,
+                          extractTarFile,
+                          extractTarData,
+                          extractTarArchive
                          ) where
 
 import Data.Binary
@@ -64,10 +69,21 @@ data TarFileType =
 
 -- * Building tar archives
 
+createTarFile :: FilePath -> [FilePath] -> IO ()
+createTarFile f fs = createTarData fs >>= BS.writeFile f
+
+createTarData :: [FilePath] -> IO ByteString
+createTarData = liftM encode . createTarArchive 
+
+createTarArchive :: [FilePath] -> IO TarArchive
+createTarArchive = liftM TarArchive . mapM fileToTarEntry
+
 -- FIXME: Warning if filepath is longer than 255 chars?
 fileToTarEntry :: FilePath -> IO TarEntry
 fileToTarEntry path = 
     do t <- getFileType path
+       -- FIXME: strip leading slash
+       -- FIXME: fail if path is empty
        let path' = path ++ if t == TarDir && not ([pathSep] `isSuffixOf` path) 
                               then [pathSep] else ""
        perms <- getPermissions path
@@ -105,13 +121,57 @@ getFileType path =
                          else ioError $ doesNotExistError "htar" path
 
 
+-- * Extracting tar archives
+
+extractTarFile :: FilePath -> IO ()
+extractTarFile f = BS.readFile f >>= extractTarData
+
+extractTarData :: ByteString -> IO ()
+extractTarData = either (fail . show) extractTarArchive . decode
+
+extractTarArchive :: TarArchive -> IO ()
+extractTarArchive (TarArchive es) = mapM_ extractTarEntry es
+
+extractTarEntry :: TarEntry -> IO ()
+extractTarEntry (TarEntry hdr cnt) = 
+    do -- FIXME: make sure path is sane
+       let path = tarFileName hdr
+           typ = tarFileType hdr
+       case typ of
+         TarHardLink   -> fail "Can't create hardlink yet"
+         TarSymLink    -> fail "Can't create symlink yet"
+         TarCharDev    -> fail "Can't create char device yet"
+         TarBlockDev   -> fail "Can't create block device yet"
+         TarDir        -> createDirectory path
+         TarFIFO       -> fail "Can't create FIFO yet"
+         _             -> do -- FIXME: create parent directories?
+                             BS.writeFile path cnt
+       -- FIXME: set owner
+       -- FIXME: set group
+       -- FIXME: set modification time
+       setPermissions path (modeToPerms (typ == TarDir) (tarFileMode hdr))
+
+-- * File permissions
+
 -- | This is a bit brain-dead, since 'Permissions' doesn't
 -- deal with user, group, others permissions.
 permsToMode :: Permissions -> CMode
-permsToMode perms = boolsToBits [r,w,x,r,w,x,r,w,x]
+permsToMode perms = boolsToBits [r,w,x,r,False,x,r,False,x]
   where r = readable perms
         w = writable perms
         x = executable perms || searchable perms
+
+modeToPerms :: Bool -> CMode -> Permissions
+modeToPerms is_dir mode = 
+    Permissions {
+                 readable   = read,
+                 writable   = write,
+                 executable = not is_dir && exec,
+                 searchable = is_dir && exec
+                }
+  where read  = mode `testBit` 8
+        write = mode `testBit` 7
+        exec  = mode `testBit` 6
 
 -- * Serializing and deserializing tar archives
 
