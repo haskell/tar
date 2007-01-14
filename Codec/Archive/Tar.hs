@@ -82,7 +82,8 @@ createTarArchive = liftM TarArchive . mapM fileToTarEntry
 fileToTarEntry :: FilePath -> IO TarEntry
 fileToTarEntry path = 
     do t <- getFileType path
-       -- FIXME: strip leading slash
+       -- FIXME: strip leading slash and leading ..
+       -- FIXME: normalize paths?
        -- FIXME: fail if path is empty
        let path' = path ++ if t == TarDir && not ([pathSep] `isSuffixOf` path) 
                               then [pathSep] else ""
