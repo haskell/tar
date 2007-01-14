@@ -127,7 +127,7 @@ extractTarFile :: FilePath -> IO ()
 extractTarFile f = BS.readFile f >>= extractTarData
 
 extractTarData :: ByteString -> IO ()
-extractTarData = either (fail . show) extractTarArchive . decode
+extractTarData x = decodeOrFail x >>= extractTarArchive
 
 extractTarArchive :: TarArchive -> IO ()
 extractTarArchive (TarArchive es) = mapM_ extractTarEntry es
@@ -363,3 +363,6 @@ setPart off new old =
 
 tryError :: MonadError e m => m a -> m (Either e a)
 tryError m = liftM Right m `catchError` (return . Left)
+
+decodeOrFail :: (Monad m, Binary a) => ByteString -> m a
+decodeOrFail = either (fail . show) return . decode
