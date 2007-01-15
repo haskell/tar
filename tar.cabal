@@ -12,4 +12,4 @@ Synopsis: TAR (tape archive format) library.
 Description:
   Implements the USTAR (Uniform Standard Tape ARchive, POSIX.1-1988) format.
 Exposed-modules: Codec.Archive.Tar
-GHC-Options: -Wall
+GHC-Options: -O -Wall

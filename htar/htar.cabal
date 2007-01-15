@@ -14,4 +14,4 @@ Description:
 
 Executable: htar
 Main-Is: htar.hs
-GHC-options: -Wall
+GHC-options: -O -Wall
