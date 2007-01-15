@@ -1,17 +1,23 @@
 -- | Implements the USTAR (POSIX.1-1988) format (tar with extended header information).
 module Codec.Archive.Tar (
+                          -- * TAR archive types
                           TarArchive(..),
                           TarEntry(..),
                           TarHeader(..),
                           TarFileType(..),
+                          -- * Creating and writing TAR archives
                           createTarFile,
                           createTarData,
                           createTarArchive,
+                          writeTarArchive,
+                          -- * Reading and extracting TAR archives
                           extractTarFile,
                           extractTarData,
                           extractTarArchive,
-                          writeTarArchive,
-                          readTarArchive
+                          readTarArchive,
+                          -- * Modifying TarArchives
+                          filterTarArchive,
+                          keepFiles
                          ) where
 
 import Data.Binary.Get (Get, runGet, skip, lookAhead, getWord8, getLazyByteString)
@@ -24,6 +30,7 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Char
 import Data.Int
 import Data.List
+import qualified Data.Set as Set
 import Numeric
 import System.Directory
 import System.IO
@@ -149,7 +156,7 @@ extractTarData :: ByteString -> IO ()
 extractTarData = extractTarArchive . readTarArchive
 
 extractTarArchive :: TarArchive -> IO ()
-extractTarArchive (TarArchive es) = mapM_ extractTarEntry es
+extractTarArchive = mapM_ extractTarEntry . archiveEntries
 
 extractTarEntry :: TarEntry -> IO ()
 extractTarEntry (TarEntry hdr cnt) = 
@@ -171,6 +178,14 @@ extractTarEntry (TarEntry hdr cnt) =
          _             -> do -- FIXME: create parent directories?
                              BS.writeFile path cnt
                              setMeta
+
+-- * Modifying TarArchives
+
+filterTarArchive :: (TarHeader -> Bool) -> TarArchive -> TarArchive
+filterTarArchive p = TarArchive . filter (p . entryHeader) . archiveEntries
+
+keepFiles :: [FilePath] -> TarArchive -> TarArchive
+keepFiles files = filterTarArchive ((`Set.member` Set.fromList files) . tarFileName)
 
 -- * File permissions
 

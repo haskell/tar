@@ -25,18 +25,22 @@ parseOptions args =
         _          -> die (map (("unrecognized option "++).show) nonopts)
 
 mainOpts :: Options -> [FilePath] -> IO ()
-mainOpts (Options { optAction = Nothing }) files 
+mainOpts (Options { optAction = Nothing }) _ 
     = die ["No action given. Specify one of -c, -t or -x."]
 mainOpts (Options { optFile = file, optAction = Just action }) files = 
     -- FIXME: catch errors and print out nicely
     case action of 
       Create  -> createTarData files >>= output
       -- FIXME: extract only the given files
-      Extract -> input >>= extractTarData
+      Extract -> filteredInputArchive >>= extractTarArchive
       -- FIXME: list only the given files
-      List    -> input >>= putStr . archiveFileInfo . readTarArchive
+      List    -> filteredInputArchive >>= putStr . archiveFileInfo
   where input  = if file == "-" then BS.getContents else BS.readFile file
         output = if file == "-" then BS.putStr      else BS.writeFile file
+
+        inputArchive = liftM readTarArchive input
+        filteredInputArchive | null files = inputArchive
+                             | otherwise  = liftM (keepFiles files) inputArchive
 
 die :: [String] -> IO a
 die errs = do mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) $ errs
