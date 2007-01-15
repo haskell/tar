@@ -14,9 +14,8 @@ module Codec.Archive.Tar (
                           readTarArchive
                          ) where
 
-import Data.Binary
-import Data.Binary.Get (runGet, getLazyByteString, skip, lookAhead)
-import Data.Binary.Put (runPut, flush, putLazyByteString)
+import Data.Binary.Get (Get, runGet, skip, lookAhead, getWord8, getLazyByteString)
+import Data.Binary.Put (Put, runPut, flush, putWord8, putLazyByteString)
 
 import Control.Monad.Error
 import Data.Bits
@@ -25,7 +24,6 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Char
 import Data.Int
 import Data.List
-import Data.Word
 import Numeric
 import System.Directory
 import System.IO
@@ -187,14 +185,14 @@ permsToMode perms = boolsToBits [r,w,x,r,False,x,r,False,x]
 modeToPerms :: Bool -> CMode -> Permissions
 modeToPerms is_dir mode = 
     Permissions {
-                 readable   = read,
-                 writable   = write,
-                 executable = not is_dir && exec,
-                 searchable = is_dir && exec
+                 readable   = r,
+                 writable   = w,
+                 executable = not is_dir && x,
+                 searchable = is_dir && x
                 }
-  where read  = mode `testBit` 8
-        write = mode `testBit` 7
-        exec  = mode `testBit` 6
+  where r = mode `testBit` 8
+        w = mode `testBit` 7
+        x = mode `testBit` 6
 
 -- * Reading and writing tar archives
 
@@ -355,7 +353,7 @@ fmtOct n x = (lpad l '0' $ ltrunc l $ BS.pack $ showOct x "")
     where l = n-1
 
 putChar8 :: Char -> Put
-putChar8 c = put (fromIntegral (ord c) :: Word8)
+putChar8 = putWord8 . fromIntegral . ord
 
 -- * TAR format primitive input
 
@@ -369,7 +367,7 @@ getString :: Int -> Get String
 getString = liftM (takeWhile (/='\NUL') . BS.unpack) . getLazyByteString
 
 getChar8 :: Get Char
-getChar8 = fmap (chr . fromIntegral) (get :: Get Word8)
+getChar8 = fmap (chr . fromIntegral) getWord8
 
 -- * Utilities
 
