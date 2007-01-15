@@ -7,7 +7,7 @@ Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
 Build-type: Simple
-Build-depends: base, binary, mtl, tar
+Build-depends: base, tar
 Synopsis: Command-line TAR utility.
 Description:
   Command-line TAR utility which uses the tar package.

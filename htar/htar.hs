@@ -2,10 +2,7 @@ module Main where
 
 import Codec.Archive.Tar
 
-import Data.Binary
-
 import qualified Data.ByteString.Lazy as BS
-import Data.ByteString.Lazy (ByteString)
 import Control.Monad
 import Data.Bits
 import System.Console.GetOpt
@@ -33,16 +30,13 @@ mainOpts (Options { optAction = Nothing }) files
 mainOpts (Options { optFile = file, optAction = Just action }) files = 
     -- FIXME: catch errors and print out nicely
     case action of 
-      Create  -> createTarData files >>= write
+      Create  -> createTarData files >>= output
       -- FIXME: extract only the given files
-      Extract -> read >>= extractTarData
+      Extract -> input >>= extractTarData
       -- FIXME: list only the given files
-      List    -> read >>= decodeOrFail >>= putStr . archiveFileInfo
-  where read  = if file == "-" then BS.getContents else BS.readFile file
-        write = if file == "-" then BS.putStr      else BS.writeFile file
-
-decodeOrFail :: (Monad m, Binary a) => ByteString -> m a
-decodeOrFail = either (fail . show) return . decode
+      List    -> input >>= putStr . archiveFileInfo . readTarArchive
+  where input  = if file == "-" then BS.getContents else BS.readFile file
+        output = if file == "-" then BS.putStr      else BS.writeFile file
 
 die :: [String] -> IO a
 die errs = do mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) $ errs

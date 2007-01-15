@@ -9,11 +9,13 @@ module Codec.Archive.Tar (
                           createTarArchive,
                           extractTarFile,
                           extractTarData,
-                          extractTarArchive
+                          extractTarArchive,
+                          writeTarArchive,
+                          readTarArchive
                          ) where
 
 import Data.Binary
-import Data.Binary.Get (getLazyByteString, skip, lookAhead)
+import Data.Binary.Get (runGet, getLazyByteString, skip, lookAhead)
 import Data.Binary.Put (runPut, flush, putLazyByteString)
 
 import Control.Monad.Error
@@ -73,7 +75,7 @@ createTarFile :: FilePath -> [FilePath] -> IO ()
 createTarFile f fs = createTarData fs >>= BS.writeFile f
 
 createTarData :: [FilePath] -> IO ByteString
-createTarData = liftM encode . createTarArchive 
+createTarData = liftM writeTarArchive . createTarArchive 
 
 createTarArchive :: [FilePath] -> IO TarArchive
 createTarArchive = liftM TarArchive . mapM fileToTarEntry
@@ -146,7 +148,7 @@ extractTarFile :: FilePath -> IO ()
 extractTarFile f = BS.readFile f >>= extractTarData
 
 extractTarData :: ByteString -> IO ()
-extractTarData x = decodeOrFail x >>= extractTarArchive
+extractTarData = extractTarArchive . readTarArchive
 
 extractTarArchive :: TarArchive -> IO ()
 extractTarArchive (TarArchive es) = mapM_ extractTarEntry es
@@ -194,97 +196,141 @@ modeToPerms is_dir mode =
         write = mode `testBit` 7
         exec  = mode `testBit` 6
 
--- * Serializing and deserializing tar archives
+-- * Reading and writing tar archives
 
-instance Binary TarArchive where
+writeTarArchive :: TarArchive -> ByteString
+writeTarArchive = runPut . putTarArchive
 
-    put (TarArchive es) = do mapM_ put es
-                             fill 512 '\0'
-                             fill 512 '\0'
+readTarArchive :: ByteString -> TarArchive
+readTarArchive = runGet getTarArchive
 
-    get = do block <- lookAhead 512
-             if BS.head block == '\NUL'
-                then return $ TarArchive [] -- FIXME: should we check the next block too?
-                else do me <- tryError get
-                        TarArchive es <- get
-                        -- FIXME: output error message if the entry failed
-                        return $ TarArchive $ either (\_ -> es) (:es) me
+putTarArchive :: TarArchive -> Put
+putTarArchive (TarArchive es) = 
+    do mapM_ putTarEntry es
+       fill 512 '\0'
+       fill 512 '\0'
 
-instance Binary TarEntry where
+getTarArchive :: Get TarArchive
+getTarArchive =
+    do block <- lookAhead 512
+       if BS.head block == '\NUL'
+          then return $ TarArchive [] -- FIXME: should we check the next block too?
+          else do e <- getTarEntry
+                  TarArchive es <- getTarArchive
+                  return $ TarArchive (e:es)
 
-    put (TarEntry hdr cnt) = do put hdr
-                                putBytes (rpadMod 512 '\0' cnt)
-                                flush
-    get = do hdr <- get
-             cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
-             skip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
-             return $ TarEntry hdr cnt
+putTarEntry :: TarEntry -> Put
+putTarEntry (TarEntry hdr cnt) = 
+    do putTarHeader hdr
+       putLazyByteString (rpadMod 512 '\0' cnt)
+       flush
 
-instance Binary TarHeader where
+getTarEntry :: Get TarEntry
+getTarEntry =
+    do hdr <- getTarHeader
+       -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
+       cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) 
+       skip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
+       return $ TarEntry hdr cnt
 
-    put hdr = do let x = runPut putHeader
-                     chkSum = sumBS x
-                 putBytes $ setPart 148 (fmtOct 8 chkSum) x
-      where putHeader = 
-              do let (filePrefix, fileSuffix) = splitLongPath 100 (tarFileName hdr)
-                 putString 100 $ fileSuffix
-                 putOct      8 $ tarFileMode hdr
-                 putOct      8 $ tarOwnerID hdr
-                 putOct      8 $ tarGroupID hdr
-                 putOct     12 $ tarFileSize hdr
-                 putOct     12 $ let TOD s _ = tarModTime hdr in s
-                 fill        8 $ ' ' -- dummy checksum
-                 put           $ tarFileType hdr
-                 putString 100 $ tarLinkTarget hdr -- FIXME: take suffix split at / if too long
-                 putString   6 $ "ustar "
-                 putString   2 $ " " -- strange ustar version
-                 putString  32 $ tarOwnerName hdr
-                 putString  32 $ tarGroupName hdr
-                 putOct      8 $ tarDeviceMajor hdr
-                 putOct      8 $ tarDeviceMinor hdr
-                 putString 155 $ filePrefix
-                 fill       12 $ '\NUL'
+putTarHeader :: TarHeader -> Put
+putTarHeader hdr = 
+    do let x = runPut (putHeaderNoChkSum hdr)
+           chkSum = sumBS x
+       putLazyByteString $ setPart 148 (fmtOct 8 chkSum) x
 
-    get = do block <- lookAhead 512
-             let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
-             (hdr,chkSum) <- getHeader
-             if chkSum == chkSum'
-                then return hdr
-                else fail $ "TAR header checksum failure: " 
-                              ++ show chkSum ++ " /= " ++ show chkSum' 
-     where getHeader =            
-             do fileSuffix <- getString  100
-                mode       <- getOct       8
-                uid        <- getOct       8
-                gid        <- getOct       8
-                size       <- getOct      12
-                time       <- getOct      12
-                chkSum     <- getOct       8
-                typ        <- get
-                target     <- getString  100
-                _ustar     <- skip         6
-                _version   <- skip         2
-                uname      <- getString   32
-                gname      <- getString   32
-                major      <- getOct       8
-                minor      <- getOct       8
-                filePrefix <- getString  155
-                _          <- skip        12      
-                let hdr = TarHeader {
-                                     tarFileName    = filePrefix ++ fileSuffix,
-                                     tarFileMode    = mode,
-                                     tarOwnerID     = uid,
-                                     tarGroupID     = gid,
-                                     tarFileSize    = size,
-                                     tarModTime     = TOD time 0,
-                                     tarFileType    = typ,
-                                     tarLinkTarget  = target,
-                                     tarOwnerName   = uname,
-                                     tarGroupName   = gname,
-                                     tarDeviceMajor = major,
-                                     tarDeviceMinor = minor
-                                    }
-                return (hdr,chkSum)
+putHeaderNoChkSum :: TarHeader -> Put
+putHeaderNoChkSum hdr =
+    do let (filePrefix, fileSuffix) = splitLongPath 100 (tarFileName hdr)
+       putString  100 $ fileSuffix
+       putOct       8 $ tarFileMode hdr
+       putOct       8 $ tarOwnerID hdr
+       putOct       8 $ tarGroupID hdr
+       putOct      12 $ tarFileSize hdr
+       putOct      12 $ let TOD s _ = tarModTime hdr in s
+       fill         8 $ ' ' -- dummy checksum
+       putTarFileType $ tarFileType hdr
+       putString  100 $ tarLinkTarget hdr -- FIXME: take suffix split at / if too long
+       putString    6 $ "ustar "
+       putString    2 $ " " -- strange ustar version
+       putString   32 $ tarOwnerName hdr
+       putString   32 $ tarGroupName hdr
+       putOct       8 $ tarDeviceMajor hdr
+       putOct       8 $ tarDeviceMinor hdr
+       putString  155 $ filePrefix
+       fill        12 $ '\NUL'
+
+getTarHeader :: Get TarHeader
+getTarHeader =
+    do block <- lookAhead 512
+       let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
+       (hdr,chkSum) <- getHeaderAndChkSum
+       if chkSum == chkSum'
+          then return hdr
+          else fail $ "TAR header checksum failure: " 
+                   ++ show chkSum ++ " /= " ++ show chkSum'
+
+getHeaderAndChkSum :: Get (TarHeader, Int)
+getHeaderAndChkSum =
+    do fileSuffix <- getString  100
+       mode       <- getOct       8
+       uid        <- getOct       8
+       gid        <- getOct       8
+       size       <- getOct      12
+       time       <- getOct      12
+       chkSum     <- getOct       8
+       typ        <- getTarFileType
+       target     <- getString  100
+       _ustar     <- skip         6
+       _version   <- skip         2
+       uname      <- getString   32
+       gname      <- getString   32
+       major      <- getOct       8
+       minor      <- getOct       8
+       filePrefix <- getString  155
+       _          <- skip        12      
+       let hdr = TarHeader {
+                            tarFileName    = filePrefix ++ fileSuffix,
+                            tarFileMode    = mode,
+                            tarOwnerID     = uid,
+                            tarGroupID     = gid,
+                            tarFileSize    = size,
+                            tarModTime     = TOD time 0,
+                            tarFileType    = typ,
+                            tarLinkTarget  = target,
+                            tarOwnerName   = uname,
+                            tarGroupName   = gname,
+                            tarDeviceMajor = major,
+                            tarDeviceMinor = minor
+                           }
+       return (hdr,chkSum)
+
+putTarFileType :: TarFileType -> Put
+putTarFileType t = 
+    putChar8 $ case t of
+                 TarNormalFile -> '0'
+                 TarHardLink   -> '1'
+                 TarSymLink    -> '2'
+                 TarCharDev    -> '3'
+                 TarBlockDev   -> '4'
+                 TarDir        -> '5'
+                 TarFIFO       -> '6'
+                 TarContiguous -> '7'
+                 TarCustom c   -> c
+
+getTarFileType :: Get TarFileType
+getTarFileType = 
+    do c <- getChar8
+       return $ case c of
+                  '0' -> TarNormalFile
+                  '1' -> TarHardLink
+                  '2' -> TarSymLink
+                  '3' -> TarCharDev
+                  '4' -> TarBlockDev
+                  '5' -> TarDir
+                  '6' -> TarFIFO
+                  '7' -> TarContiguous
+                  _   -> TarCustom c
 
 splitLongPath :: Int -> FilePath -> (String,String)
 splitLongPath l path | l < 1 || null path = error $ unwords ["splitFileName", show l, show path]
@@ -295,43 +341,20 @@ splitLongPath l path | n > l = error $ "File path too long: " ++ show path -- FI
 sumBS :: ByteString -> Int
 sumBS = BS.foldl' (\x y -> x + ord y) 0
 
-instance Binary TarFileType where
-    put t = putChar8 $ case t of
-                         TarNormalFile -> '0'
-                         TarHardLink   -> '1'
-                         TarSymLink    -> '2'
-                         TarCharDev    -> '3'
-                         TarBlockDev   -> '4'
-                         TarDir        -> '5'
-                         TarFIFO       -> '6'
-                         TarContiguous -> '7'
-                         TarCustom c   -> c
-    get = do c <- getChar8
-             return $ case c of
-                        '0' -> TarNormalFile
-                        '1' -> TarHardLink
-                        '2' -> TarSymLink
-                        '3' -> TarCharDev
-                        '4' -> TarBlockDev
-                        '5' -> TarDir
-                        '6' -> TarFIFO
-                        '7' -> TarContiguous
-                        _   -> TarCustom c
-
 -- * TAR format primitive output
 
-putString :: Int64 -> String -> Put ()
-putString n = putBytes . rpad n '\0' . ltrunc n . BS.pack
+putString :: Int64 -> String -> Put
+putString n = putLazyByteString . rpad n '\0' . ltrunc n . BS.pack
 
-putOct :: Integral a => Int64 -> a -> Put ()
-putOct n = putBytes . fmtOct n
+putOct :: Integral a => Int64 -> a -> Put
+putOct n = putLazyByteString . fmtOct n
 
 fmtOct :: Integral a => Int64 -> a -> ByteString
 fmtOct n x = (lpad l '0' $ ltrunc l $ BS.pack $ showOct x "") 
              `BS.append` BS.singleton '\NUL'
     where l = n-1
 
-putChar8 :: Char -> Put ()
+putChar8 :: Char -> Put
 putChar8 c = put (fromIntegral (ord c) :: Word8)
 
 -- * TAR format primitive input
@@ -381,14 +404,5 @@ setPart off new old =
         after = BS.drop (BS.length new) rest
      in before `BS.append` (BS.take (BS.length old - off) new) `BS.append` after
 
-tryError :: MonadError e m => m a -> m (Either e a)
-tryError m = liftM Right m `catchError` (return . Left)
-
-decodeOrFail :: (Monad m, Binary a) => ByteString -> m a
-decodeOrFail = either (fail . show) return . decode
-
-fill :: Int -> Char -> Put ()
-fill n x = putBytes $ BS.replicate (fromIntegral n) x
-
-putBytes :: ByteString -> Put ()
-putBytes = putLazyByteString
+fill :: Int -> Char -> Put
+fill n = putLazyByteString . BS.replicate (fromIntegral n)
