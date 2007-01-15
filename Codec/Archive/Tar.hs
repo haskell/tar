@@ -156,19 +156,21 @@ extractTarEntry (TarEntry hdr cnt) =
     do -- FIXME: make sure path is sane
        let path = tarFileName hdr
            typ = tarFileType hdr
+           -- FIXME: set owner
+           -- FIXME: set group
+           -- FIXME: set modification time
+           setMeta = setPermissions path (modeToPerms (typ == TarDir) (tarFileMode hdr))
        case typ of
-         TarHardLink   -> fail "Can't create hardlink yet"
-         TarSymLink    -> fail "Can't create symlink yet"
-         TarCharDev    -> fail "Can't create char device yet"
-         TarBlockDev   -> fail "Can't create block device yet"
-         TarDir        -> createDirectory path
-         TarFIFO       -> fail "Can't create FIFO yet"
+         TarHardLink   -> warn $ "Can't create hardlink yet, skipping " ++ path 
+         TarSymLink    -> warn $ "Can't create symlink yet, skipping " ++ path 
+         TarCharDev    -> warn $ "Can't create char dev yet, skipping " ++ path
+         TarBlockDev   -> warn $ "Can't create block dev yet, skipping " ++ path 
+         TarDir        -> do createDirectory path
+                             setMeta
+         TarFIFO       -> warn $ "Can't create FIFO yet, skipping " ++ path 
          _             -> do -- FIXME: create parent directories?
                              BS.writeFile path cnt
-       -- FIXME: set owner
-       -- FIXME: set group
-       -- FIXME: set modification time
-       setPermissions path (modeToPerms (typ == TarDir) (tarFileMode hdr))
+                             setMeta
 
 -- * File permissions
 
