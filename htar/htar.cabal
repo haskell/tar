@@ -1,0 +1,17 @@
+Name: htar
+Version: 0.1
+License: BSD4
+License-File: LICENSE
+Author: Bjorn Bringert <bjorn@bringert.net>
+Maintainer: Bjorn Bringert <bjorn@bringert.net>
+Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
+Stability: Experimental
+Build-type: Simple
+Build-depends: base, binary, mtl, tar
+Synopsis: Command-line TAR utility.
+Description:
+  Command-line TAR utility which uses the tar package.
+
+Executable: htar
+Main-Is: htar.hs
+GHC-options: -Wall

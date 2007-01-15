@@ -1,4 +1,4 @@
-Name: htar
+Name: tar
 Version: 0.1
 License: BSD4
 License-File: LICENSE
@@ -8,10 +8,8 @@ Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
 Build-type: Simple
 Build-depends: base, mtl, binary
-Synopsis: TAR (tape archive format) implementation.
+Synopsis: TAR (tape archive format) library.
 Description:
   Implements the USTAR (Uniform Standard Tape ARchive, POSIX.1-1988) format.
-
-Executable: htar
-Main-Is: htar.hs
-GHC-options: -O -Wall
+Exposed-modules: Codec.Archive.Tar
+GHC-Options: -Wall
