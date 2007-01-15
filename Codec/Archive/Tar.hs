@@ -82,11 +82,7 @@ createTarArchive = liftM TarArchive . mapM fileToTarEntry
 fileToTarEntry :: FilePath -> IO TarEntry
 fileToTarEntry path = 
     do t <- getFileType path
-       -- FIXME: strip leading slash and leading ..
-       -- FIXME: normalize paths?
-       -- FIXME: fail if path is empty
-       let path' = path ++ if t == TarDir && not ([pathSep] `isSuffixOf` path) 
-                              then [pathSep] else ""
+       path' <- sanitizePath t path
        perms <- getPermissions path
        time <- getModificationTime path
        let hdr = TarHeader {
@@ -109,6 +105,28 @@ fileToTarEntry path =
                              cnt <- BS.hGetContents h -- FIXME: warn if size has changed?
                              return $ TarEntry (hdr { tarFileSize = size }) cnt
          _             -> return $ TarEntry hdr BS.empty
+
+-- FIXME: normalize paths?
+-- FIXME: fail if path is empty
+sanitizePath :: TarFileType -> FilePath -> IO FilePath
+sanitizePath t path = liftM (removeDuplSep . addTrailingSep) $ removeInit path
+  where 
+    removeInit p | null d = return p
+                 | otherwise = 
+                     do warn $ "removing initial " ++ d ++" from path " ++ p
+                        return p'
+        where p' = fixEq (removeDotDot . removeSep) p
+              d = take (length p - length p') p
+    removeDotDot ('.':'.':p) = p
+    removeDotDot p = p
+    removeSep (c:p) | c == pathSep = p
+    removeSep p = p
+    addTrailingSep = if t == TarDir then (++[pathSep]) else id
+    removeDuplSep = 
+        concat . map (\g -> if all (==pathSep) g then [pathSep] else g) . group
+
+fixEq :: Eq a => (a -> a) -> a -> a
+fixEq f x = let x' = f x in if x' == x then x else fixEq f x'
 
 pathSep :: Char
 pathSep = '/' -- FIXME: backslash on Windows
@@ -206,7 +224,7 @@ instance Binary TarHeader where
                      chkSum = sumBS x
                  putBytes $ setPart 148 (fmtOct 8 chkSum) x
       where putHeader = 
-              do let (filePrefix, fileSuffix) = splitFileName 100 (tarFileName hdr)
+              do let (filePrefix, fileSuffix) = splitLongPath 100 (tarFileName hdr)
                  putString 100 $ fileSuffix
                  putOct      8 $ tarFileMode hdr
                  putOct      8 $ tarOwnerID hdr
@@ -266,9 +284,9 @@ instance Binary TarHeader where
                                     }
                 return (hdr,chkSum)
 
-splitFileName :: Int -> FilePath -> (String,String)
-splitFileName l path | l < 1 || null path = error $ unwords ["splitFileName", show l, show path]
-splitFileName l path | n > l = error $ "File path too long: " ++ show path -- FIXME: implement real splitting
+splitLongPath :: Int -> FilePath -> (String,String)
+splitLongPath l path | l < 1 || null path = error $ unwords ["splitFileName", show l, show path]
+splitLongPath l path | n > l = error $ "File path too long: " ++ show path -- FIXME: implement real splitting
                      | otherwise = ("",path)
   where n = length path
 
@@ -329,6 +347,9 @@ getChar8 :: Get Char
 getChar8 = fmap (chr . fromIntegral) (get :: Get Word8)
 
 -- * Utilities
+
+warn :: String -> IO ()
+warn = hPutStrLn stderr . ("htar: "++)
 
 doesNotExistError :: String -> FilePath -> IOError
 doesNotExistError loc = mkIOError doesNotExistErrorType loc Nothing . Just
