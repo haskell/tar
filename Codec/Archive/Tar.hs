@@ -373,6 +373,7 @@ getTarFileType :: Get TarFileType
 getTarFileType = 
     do c <- getChar8
        return $ case c of
+                  '\0'-> TarNormalFile
                   '0' -> TarNormalFile
                   '1' -> TarHardLink
                   '2' -> TarSymLink
