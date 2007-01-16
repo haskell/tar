@@ -17,7 +17,9 @@ module Codec.Archive.Tar (
                           readTarArchive,
                           -- * Modifying TarArchives
                           filterTarArchive,
-                          keepFiles
+                          keepFiles,
+                          -- * File utilities
+                          recurseDirectories
                          ) where
 
 import Data.Binary.Get (Get, runGet, skip, lookAhead, getWord8, getLazyByteString)
@@ -35,6 +37,7 @@ import Numeric
 import System.Directory
 import System.IO
 import System.IO.Error
+import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix.Types
 import System.Time
 
@@ -113,6 +116,8 @@ fileToTarEntry path =
                              return $ TarEntry (hdr { tarFileSize = size }) cnt
          _             -> return $ TarEntry hdr BS.empty
 
+-- * Path and file stuff
+
 -- FIXME: normalize paths?
 -- FIXME: fail if path is empty
 sanitizePath :: TarFileType -> FilePath -> IO FilePath
@@ -145,6 +150,27 @@ getFileType path =
             else do d <- doesDirectoryExist path
                     if d then return TarDir
                          else ioError $ doesNotExistError "htar" path
+
+-- | Recurse through a list of files and directories
+-- in depth-first order.
+-- Each of the given paths are returned, and each path which 
+-- refers to a directory is followed by its descendants.
+-- The output is suitable for feeding to the
+-- TAR archive creation functions.
+recurseDirectories :: [FilePath] -> IO [FilePath]
+recurseDirectories = 
+    liftM concat . mapM (\p -> liftM (p:) $ unsafeInterleaveIO $ descendants p)
+  where 
+    descendants path =
+        do d <- doesDirectoryExist path
+           if d then do cs <- getDirectoryContents path
+                        let cs' = [path++[pathSep]++c | c <- cs, includeDir c]
+                        ds <- recurseDirectories cs'
+                        return ds
+                else return []
+     where includeDir "." = False
+           includeDir ".." = False
+           includeDir _ = True
 
 
 -- * Extracting tar archives
