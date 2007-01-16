@@ -10,11 +10,13 @@ module Codec.Archive.Tar (
                           createTarData,
                           createTarArchive,
                           writeTarArchive,
+                          createTarEntry,
                           -- * Reading and extracting TAR archives
                           extractTarFile,
                           extractTarData,
                           extractTarArchive,
                           readTarArchive,
+                          extractTarEntry,
                           -- * Modifying TarArchives
                           filterTarArchive,
                           keepFiles,
@@ -95,11 +97,11 @@ createTarData = liftM writeTarArchive . createTarArchive
 -- Only includes files and directories mentioned in the list,
 -- does not recurse through directories.
 createTarArchive :: [FilePath] -> IO TarArchive
-createTarArchive = liftM TarArchive . mapM fileToTarEntry
+createTarArchive = liftM TarArchive . mapM createTarEntry
 
 -- FIXME: Warning if filepath is longer than 255 chars?
-fileToTarEntry :: FilePath -> IO TarEntry
-fileToTarEntry path = 
+createTarEntry :: FilePath -> IO TarEntry
+createTarEntry path = 
     do t <- getFileType path
        path' <- sanitizePath t path
        perms <- getPermissions path
@@ -219,6 +221,7 @@ extractTarEntry (TarEntry hdr cnt) =
 filterTarArchive :: (TarHeader -> Bool) -> TarArchive -> TarArchive
 filterTarArchive p = TarArchive . filter (p . entryHeader) . archiveEntries
 
+-- FIXME: allow files names to differ in trailing slashes
 keepFiles :: [FilePath] -> TarArchive -> TarArchive
 keepFiles files = filterTarArchive ((`Set.member` Set.fromList files) . tarFileName)
 
