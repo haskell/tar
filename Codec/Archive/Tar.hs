@@ -154,6 +154,11 @@ fixEq f x = let x' = f x in if x' == x then x else fixEq f x'
 pathSep :: Char
 pathSep = '/' -- FIXME: backslash on Windows
 
+-- FIXME: not good enough. Use System.FilePath?
+dirName :: FilePath -> FilePath
+dirName p = if null d then "." else d
+  where d = reverse $ dropWhile (/=pathSep) $ reverse p
+
 getFileType :: FilePath -> IO TarFileType
 getFileType path = 
     do f <- doesFileExist path
@@ -209,10 +214,10 @@ extractTarEntry (TarEntry hdr cnt) =
          TarSymLink    -> warn $ "Can't create symlink yet, skipping " ++ path 
          TarCharDev    -> warn $ "Can't create char dev yet, skipping " ++ path
          TarBlockDev   -> warn $ "Can't create block dev yet, skipping " ++ path 
-         TarDir        -> do createDirectory path
+         TarDir        -> do createDirectoryIfMissing True path
                              setMeta
          TarFIFO       -> warn $ "Can't create FIFO yet, skipping " ++ path 
-         _             -> do -- FIXME: create parent directories?
+         _             -> do createDirectoryIfMissing True $ dirName path
                              BS.writeFile path cnt
                              setMeta
 
