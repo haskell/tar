@@ -412,8 +412,9 @@ putChar8 = putWord8 . fromIntegral . ord
 -- * TAR format primitive input
 
 getOct :: Integral a => Int -> Get a
-getOct n = getLazyByteString n >>= parseOct . BS.unpack
-  where parseOct s = case readOct s of
+getOct n = getLazyByteString n >>= parseOct . takeWhile (/='\0') . BS.unpack
+  where parseOct "" = return 0
+        parseOct s = case readOct s of
                        [(x,_)] -> return x
                        _       -> fail $ "Number format error: " ++ show s
 
