@@ -79,12 +79,21 @@ data TarFileType =
 
 -- * Building tar archives
 
+-- | Convenience function:
+-- @createTarFile f fs = createTarData fs >>= Data.ByteString.Lazy.writeFile f@
 createTarFile :: FilePath -> [FilePath] -> IO ()
 createTarFile f fs = createTarData fs >>= BS.writeFile f
 
+-- | Convenience function:
+-- @createTarData = liftM writeTarArchive . createTarArchive@
 createTarData :: [FilePath] -> IO ByteString
 createTarData = liftM writeTarArchive . createTarArchive 
 
+-- | Create a TAR archive containing a number of files
+-- and directories. In the list of paths, any directory 
+-- should come before any files in that directory.
+-- Only includes files and directories mentioned in the list,
+-- does not recurse through directories.
 createTarArchive :: [FilePath] -> IO TarArchive
 createTarArchive = liftM TarArchive . mapM fileToTarEntry
 
