@@ -444,7 +444,7 @@ rpad n b xs = xs `BS.append` BS.replicate (n - BS.length xs) b
 
 -- | Right-pad up to the nearest multiple of the given length.
 rpadMod :: Int64 -> Char -> ByteString -> ByteString
-rpadMod n b xs = xs `BS.append` BS.replicate (n - BS.length xs `mod` n) b
+rpadMod n b xs = xs `BS.append` BS.replicate ((n - BS.length xs) `mod` n) b
 
 ltrunc :: Int64 -> ByteString -> ByteString
 ltrunc n xs = BS.drop (BS.length xs - n) xs
