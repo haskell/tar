@@ -10,12 +10,14 @@ module Codec.Archive.Tar (
                           createTarData,
                           createTarArchive,
                           writeTarArchive,
+                          writeTarFile,
                           createTarEntry,
                           -- * Reading and extracting TAR archives
                           extractTarFile,
                           extractTarData,
                           extractTarArchive,
                           readTarArchive,
+                          readTarFile,
                           extractTarEntry,
                           -- * Modifying TarArchives
                           filterTarArchive,
@@ -257,8 +259,14 @@ modeToPerms is_dir mode =
 writeTarArchive :: TarArchive -> ByteString
 writeTarArchive = runPut . putTarArchive
 
+writeTarFile :: FilePath -> TarArchive -> IO ()
+writeTarFile f = BS.writeFile f . writeTarArchive
+
 readTarArchive :: ByteString -> TarArchive
 readTarArchive = runGet getTarArchive
+
+readTarFile :: FilePath -> IO TarArchive
+readTarFile = liftM readTarArchive . BS.readFile
 
 putTarArchive :: TarArchive -> Put
 putTarArchive (TarArchive es) = 
