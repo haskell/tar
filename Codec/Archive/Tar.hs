@@ -268,7 +268,7 @@ putTarArchive (TarArchive es) =
 
 getTarArchive :: Get TarArchive
 getTarArchive =
-    do block <- lookAhead (getBytes 512)
+    do block <- lookAhead (getLazyByteString 512) -- FIXME: if file ends here, maybe it's not an error?
        if BS.head block == '\NUL'
           then return $ TarArchive [] -- FIXME: should we check the next block too?
           else do e <- getTarEntry
@@ -318,7 +318,7 @@ putHeaderNoChkSum hdr =
 
 getTarHeader :: Get TarHeader
 getTarHeader =
-    do block <- lookAhead (getBytes 512)
+    do block <- lookAhead (getLazyByteString 512)
        let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
        (hdr,chkSum) <- getHeaderAndChkSum
        if chkSum == chkSum'
