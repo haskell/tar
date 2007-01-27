@@ -267,13 +267,10 @@ putTarArchive (TarArchive es) =
        fill 512 '\0'
 
 getTarArchive :: Get TarArchive
-getTarArchive =
-    do block <- lookAhead (getLazyByteString 512) -- FIXME: if file ends here, maybe it's not an error?
-       if BS.head block == '\NUL'
-          then return $ TarArchive [] -- FIXME: should we check the next block too?
-          else do e <- getTarEntry
-                  TarArchive es <- getTarArchive
-                  return $ TarArchive (e:es)
+getTarArchive = liftM TarArchive $ unfoldM getTarEntry
+
+unfoldM :: Monad m => m (Maybe a) -> m [a]
+unfoldM f = f >>= maybe (return []) (\x -> liftM (x:) (unfoldM f))
 
 putTarEntry :: TarEntry -> Put
 putTarEntry (TarEntry hdr cnt) = 
@@ -281,13 +278,19 @@ putTarEntry (TarEntry hdr cnt) =
        putLazyByteString (rpadMod 512 '\0' cnt)
        flush
 
-getTarEntry :: Get TarEntry
+-- | Returns 'Nothing' if the entry is an end block.
+getTarEntry :: Get (Maybe TarEntry)
 getTarEntry =
-    do hdr <- getTarHeader
-       -- FIXME: this only allows files < 2GB. getBytes should be changed.
-       cnt <- getBytes (fromIntegral $ tarFileSize hdr) 
-       uncheckedSkip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
-       return $ TarEntry hdr cnt
+    do mhdr <- getTarHeader
+       case mhdr of
+         Nothing -> return Nothing
+         Just hdr -> liftM Just $ getBody hdr
+  where getBody hdr = 
+            do 
+            -- FIXME: this only allows files < 2GB. getBytes should be changed.
+            cnt <- getBytes (fromIntegral $ tarFileSize hdr) 
+            uncheckedSkip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
+            return $ TarEntry hdr cnt
 
 putTarHeader :: TarHeader -> Put
 putTarHeader hdr = 
@@ -316,15 +319,18 @@ putHeaderNoChkSum hdr =
        putString  155 $ filePrefix
        fill        12 $ '\NUL'
 
-getTarHeader :: Get TarHeader
+getTarHeader :: Get (Maybe TarHeader)
 getTarHeader =
     do block <- lookAhead (getLazyByteString 512)
-       let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
-       (hdr,chkSum) <- getHeaderAndChkSum
-       if chkSum == chkSum'
-          then return hdr
-          else fail $ "TAR header checksum failure: " 
-                   ++ show chkSum ++ " /= " ++ show chkSum'
+       if BS.head block == '\NUL'
+          then return Nothing
+          else do
+               let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
+               (hdr,chkSum) <- getHeaderAndChkSum
+               if chkSum == chkSum'
+                 then return $ Just hdr
+                 else fail $ "TAR header checksum failure: " 
+                             ++ show chkSum ++ " /= " ++ show chkSum'
 
 getHeaderAndChkSum :: Get (TarHeader, Int)
 getHeaderAndChkSum =
