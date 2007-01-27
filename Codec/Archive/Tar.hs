@@ -24,8 +24,8 @@ module Codec.Archive.Tar (
                           recurseDirectories
                          ) where
 
-import Data.Binary.Get (Get, runGet, skip, lookAhead, getWord8, getLazyByteString)
-import Data.Binary.Put (Put, runPut, flush, putWord8, putLazyByteString)
+import Data.Binary.Get
+import Data.Binary.Put
 
 import Control.Monad.Error
 import Data.Bits
@@ -268,7 +268,7 @@ putTarArchive (TarArchive es) =
 
 getTarArchive :: Get TarArchive
 getTarArchive =
-    do block <- lookAhead 512
+    do block <- lookAhead (getBytes 512)
        if BS.head block == '\NUL'
           then return $ TarArchive [] -- FIXME: should we check the next block too?
           else do e <- getTarEntry
@@ -284,9 +284,9 @@ putTarEntry (TarEntry hdr cnt) =
 getTarEntry :: Get TarEntry
 getTarEntry =
     do hdr <- getTarHeader
-       -- FIXME: this only allows files < 2GB. getLazyByteString should be changed.
-       cnt <- getLazyByteString (fromIntegral $ tarFileSize hdr) 
-       skip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
+       -- FIXME: this only allows files < 2GB. getBytes should be changed.
+       cnt <- getBytes (fromIntegral $ tarFileSize hdr) 
+       uncheckedSkip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
        return $ TarEntry hdr cnt
 
 putTarHeader :: TarHeader -> Put
@@ -318,7 +318,7 @@ putHeaderNoChkSum hdr =
 
 getTarHeader :: Get TarHeader
 getTarHeader =
-    do block <- lookAhead 512
+    do block <- lookAhead (getBytes 512)
        let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
        (hdr,chkSum) <- getHeaderAndChkSum
        if chkSum == chkSum'
