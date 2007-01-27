@@ -329,12 +329,12 @@ putHeaderNoChkSum hdr =
 
 getTarHeader :: Get (Maybe TarHeader)
 getTarHeader =
-    do block <- lookAhead (getLazyByteString 512)
+    do block <- liftM BS.copy $ getLazyByteString 512
        if BS.head block == '\NUL'
           then return Nothing
           else do
                let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
-               (hdr,chkSum) <- getHeaderAndChkSum
+                   (hdr,chkSum) = runGet getHeaderAndChkSum block -- FIXME: this gets the byte number wrong in error messages
                if chkSum == chkSum'
                  then return $ Just hdr
                  else fail $ "TAR header checksum failure: " 
