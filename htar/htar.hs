@@ -65,9 +65,9 @@ die errs = do mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) $ errs
 usage :: IO a
 usage = do putStrLn (usageInfo hdr optDescr)
            exitWith ExitSuccess
-  where hdr = unlines ["htar can create and extract file archives.",
+  where hdr = unlines ["htar creates and extract file archives.",
                        "",
-                       "Usage: htar "]
+                       "Usage: htar [OPTION ...] [FILE ...]"]
 
 -- * Options
 
