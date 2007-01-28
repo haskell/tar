@@ -1,7 +1,7 @@
 Name: htar
 Version: 0.1
 License: BSD4
-License-File: LICENSE
+License-File: ../LICENSE
 Author: Bjorn Bringert <bjorn@bringert.net>
 Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
