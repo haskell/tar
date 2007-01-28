@@ -133,15 +133,10 @@ optDescr =
 
 -- * Formatted information about archives
 
-archiveHeaders :: TarArchive -> [TarHeader]
-archiveHeaders = map entryHeader . archiveEntries
-
-archiveFileNames :: TarArchive -> String
-archiveFileNames = unlines . map tarFileName . archiveHeaders
-
-archiveFileInfo :: Bool -> TarEntry -> String
-archiveFileInfo verbose = 
-    (if verbose then detailedInfo else tarFileName) . entryHeader
+entryInfo :: Bool -- ^ Verbosity
+          -> TarEntry -> String
+entryInfo True  = detailedInfo . entryHeader
+entryInfo False = tarFileName  . entryHeader
 
 detailedInfo :: TarHeader -> String
 detailedInfo hdr =
