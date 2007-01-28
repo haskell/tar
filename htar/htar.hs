@@ -6,6 +6,7 @@ import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy (ByteString)
 import Control.Monad
 import Data.Bits
+import qualified Data.Set as Set
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -43,9 +44,13 @@ mainOpts (Options { optFile = file, optAction = Just action,
         output = if file == "-" then BS.putStr      else BS.writeFile file
 
 readEntries :: [FilePath] -> ByteString -> [TarEntry]
-readEntries files = archiveEntries
-                    . (if null files then id else keepFiles files) 
-                    . readTarArchive
+readEntries files = (if null files then id else keepFiles files) 
+                    . archiveEntries . readTarArchive
+
+-- FIXME: allow files names to differ in trailing slashes
+keepFiles :: [FilePath] -> [TarEntry] -> [TarEntry]
+keepFiles files = filter (p . entryHeader)
+  where p = ((`Set.member` Set.fromList files) . tarFileName)
 
 createEntry :: Bool -> FilePath -> IO TarEntry
 createEntry verbose file =

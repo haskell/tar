@@ -19,9 +19,6 @@ module Codec.Archive.Tar (
                           readTarArchive,
                           readTarFile,
                           extractTarEntry,
-                          -- * Modifying TarArchives
-                          filterTarArchive,
-                          keepFiles,
                           -- * File utilities
                           recurseDirectories
                          ) where
@@ -36,7 +33,6 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Char
 import Data.Int
 import Data.List
-import qualified Data.Set as Set
 import Numeric
 import System.Directory
 import System.IO
@@ -222,15 +218,6 @@ extractTarEntry (TarEntry hdr cnt) =
          _             -> do createDirectoryIfMissing True $ dirName path
                              BS.writeFile path cnt
                              setMeta
-
--- * Modifying TarArchives
-
-filterTarArchive :: (TarHeader -> Bool) -> TarArchive -> TarArchive
-filterTarArchive p = TarArchive . filter (p . entryHeader) . archiveEntries
-
--- FIXME: allow files names to differ in trailing slashes
-keepFiles :: [FilePath] -> TarArchive -> TarArchive
-keepFiles files = filterTarArchive ((`Set.member` Set.fromList files) . tarFileName)
 
 -- * File permissions
 
