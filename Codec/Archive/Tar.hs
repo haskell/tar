@@ -295,9 +295,9 @@ getTarEntry =
          Just hdr -> liftM Just $ getBody hdr
   where getBody hdr = 
             do 
-            -- FIXME: this only allows files < 2GB. getBytes should be changed.
-            cnt <- getBytes (fromIntegral $ tarFileSize hdr) 
-            uncheckedSkip $ fromIntegral ((512 - tarFileSize hdr) `mod` 512)
+            let size = tarFileSize hdr
+                padding = (512 - size) `mod` 512
+            cnt <- liftM (BS.take size) $ getBytes $ size + padding
             return $ TarEntry hdr cnt
 
 putTarHeader :: TarHeader -> Put
@@ -330,15 +330,15 @@ putHeaderNoChkSum hdr =
 getTarHeader :: Get (Maybe TarHeader)
 getTarHeader =
     do block <- liftM BS.copy $ getLazyByteString 512
-       if BS.head block == '\NUL'
-          then return Nothing
-          else do
-               let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
+       return $ 
+        if BS.head block == '\NUL'
+          then Nothing
+          else let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
                    (hdr,chkSum) = runGet getHeaderAndChkSum block -- FIXME: this gets the byte number wrong in error messages
-               if chkSum == chkSum'
-                 then return $ Just hdr
-                 else fail $ "TAR header checksum failure: " 
-                             ++ show chkSum ++ " /= " ++ show chkSum'
+                in if chkSum == chkSum'
+                     then Just hdr
+                     else error $ "TAR header checksum failure: " 
+                                   ++ show chkSum ++ " /= " ++ show chkSum'
 
 getHeaderAndChkSum :: Get (TarHeader, Int)
 getHeaderAndChkSum =
