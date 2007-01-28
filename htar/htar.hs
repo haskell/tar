@@ -2,6 +2,8 @@ module Main where
 
 import Codec.Archive.Tar
 
+import Codec.Compression.GZip.GUnZip (gunzip)
+
 import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy (ByteString)
 import Control.Monad
@@ -29,19 +31,31 @@ parseOptions args =
 mainOpts :: Options -> [FilePath] -> IO ()
 mainOpts (Options { optAction = Nothing }) _ 
     = die ["No action given. Specify one of -c, -t or -x."]
-mainOpts (Options { optFile = file, optAction = Just action, 
+mainOpts (Options { optFile = file, 
+                    optAction = Just action,
+                    optCompression = compression, 
                     optVerbose = verbose }) files = 
     -- FIXME: catch errors and print out nicely
     case action of 
       Create  -> recurseDirectories files 
                  >>= mapM (createEntry verbose) 
-                 >>= output . writeTarArchive . TarArchive
-      Extract -> liftM (readEntries files) input 
-                 >>= mapM_ (extractEntry verbose)
-      List    -> liftM (readEntries files) input
-                 >>= mapM_ (putStrLn . archiveFileInfo verbose)
+                 >>= output . compress compression 
+                         . writeTarArchive . TarArchive
+      Extract -> inputEntries >>= mapM_ (extractEntry verbose)
+      List    -> inputEntries >>= mapM_ (putStrLn . entryInfo verbose)
   where input  = if file == "-" then BS.getContents else BS.readFile file
         output = if file == "-" then BS.putStr      else BS.writeFile file
+        inputEntries = input >>= return . readEntries files . decompress compression
+
+compress :: Maybe Compression -> ByteString -> ByteString
+compress Nothing      = id
+compress (Just GZip)  = error "gzip compression is not supported yet"
+compress (Just BZip2) = error "bzip2 compression is not supported yet"
+
+decompress :: Maybe Compression -> ByteString -> ByteString
+decompress Nothing      = id
+decompress (Just GZip)  = gunzip
+decompress (Just BZip2) = error "bzip2 decompression is not supported yet"
 
 readEntries :: [FilePath] -> ByteString -> [TarEntry]
 readEntries files = (if null files then id else keepFiles files) 
