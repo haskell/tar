@@ -102,8 +102,8 @@ optDescr =
      Option ['c'] ["create"] (action Create) "Create a new archive.",
      Option ['x'] ["extract","get"] (action Extract) "Extract files.",
      Option ['t'] ["list"] (action List) "List archive contents.",
-     Option ['z'] ["gzip","ungzip"] (compression GZip) "List archive contents.",
-     Option ['j'] ["bzip2"] (compression BZip2) "List archive contents.",
+     Option ['z'] ["gzip","ungzip"] (compression GZip) "Use gzip compression.",
+     Option ['j'] ["bzip2"] (compression BZip2) "Use bzip2 compression.",
      Option ['f'] ["file"] (ReqArg (\f o -> o { optFile = f}) "ARCHIVE")
             "Use archive file ARCHIVE.",
      Option ['v'] ["verbose"] (NoArg (\o -> o { optVerbose = True }))
