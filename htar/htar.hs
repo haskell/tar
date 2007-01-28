@@ -75,6 +75,7 @@ data Options = Options
     {
      optFile :: FilePath, -- "-" means stdin/stdout
      optAction :: Maybe Action,
+     optCompression :: Maybe Compression,
      optVerbose :: Bool
     }
  deriving Show
@@ -84,10 +85,14 @@ data Action = Create
             | List
   deriving Show
 
+data Compression = GZip | BZip2
+  deriving Show
+
 defaultOptions :: Options
 defaultOptions = Options {
                           optFile = "-",
                           optAction = Nothing,
+                          optCompression = Nothing,
                           optVerbose = False
                          }
 
@@ -97,12 +102,15 @@ optDescr =
      Option ['c'] ["create"] (action Create) "Create a new archive.",
      Option ['x'] ["extract","get"] (action Extract) "Extract files.",
      Option ['t'] ["list"] (action List) "List archive contents.",
+     Option ['z'] ["gzip","ungzip"] (compression GZip) "List archive contents.",
+     Option ['j'] ["bzip2"] (compression BZip2) "List archive contents.",
      Option ['f'] ["file"] (ReqArg (\f o -> o { optFile = f}) "ARCHIVE")
             "Use archive file ARCHIVE.",
      Option ['v'] ["verbose"] (NoArg (\o -> o { optVerbose = True }))
             "Increase output verbosity."
     ]
  where action a = NoArg (\o -> o { optAction = Just a })
+       compression c = NoArg (\o -> o { optCompression = Just c })
 
 -- * Formatted information about archives
 
