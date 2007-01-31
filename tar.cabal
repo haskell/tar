@@ -6,9 +6,16 @@ Author: Bjorn Bringert <bjorn@bringert.net>
 Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
-Build-depends: base, mtl, binary
+Build-depends: base, binary
 Synopsis: TAR (tape archive format) library.
 Description:
   Implements the USTAR (Uniform Standard Tape ARchive, POSIX.1-1988) format.
 Exposed-modules: Codec.Archive.Tar
+Other-modules:
+ Codec.Archive.Tar.Create,
+ Codec.Archive.Tar.Extract,
+ Codec.Archive.Tar.Read,
+ Codec.Archive.Tar.Types,
+ Codec.Archive.Tar.Util,
+ Codec.Archive.Tar.Write
 GHC-Options: -O -Wall
