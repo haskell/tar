@@ -10,7 +10,6 @@ import Control.Monad (liftM)
 import qualified Data.ByteString.Lazy.Char8 as BS
 import Data.ByteString.Lazy (ByteString)
 import Numeric (readOct)
-import System.Time (ClockTime(..))
 
 
 readTarArchive :: ByteString -> TarArchive
@@ -77,7 +76,7 @@ getHeaderAndChkSum =
                             tarOwnerID     = uid,
                             tarGroupID     = gid,
                             tarFileSize    = size,
-                            tarModTime     = TOD time 0,
+                            tarModTime     = fromInteger time,
                             tarFileType    = typ,
                             tarLinkTarget  = target,
                             tarOwnerName   = uname,

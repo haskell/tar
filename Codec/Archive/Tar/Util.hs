@@ -8,6 +8,8 @@ import Data.Char (ord)
 import Data.Int (Int64)
 import System.IO
 import System.IO.Error
+import System.Posix.Types
+import System.Time (ClockTime(..))
 
 -- * Functions
 
@@ -83,3 +85,11 @@ forceRelativePath p
             removeDotDot x = x
             removeSep (c:x) | c == pathSep = x
             removeSep x = x
+
+-- * Date and time
+
+epochTimeToSecs :: EpochTime -> Integer
+epochTimeToSecs = round . toRational
+
+clockTimeToEpochTime :: ClockTime -> EpochTime
+clockTimeToEpochTime (TOD s _) = fromInteger s

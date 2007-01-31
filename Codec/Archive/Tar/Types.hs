@@ -2,8 +2,7 @@ module Codec.Archive.Tar.Types where
 
 import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
-import System.Posix.Types (CMode)
-import System.Time (ClockTime)
+import System.Posix.Types (CMode, EpochTime)
 
 newtype TarArchive = TarArchive { archiveEntries :: [TarEntry] }
   deriving Show
@@ -19,7 +18,7 @@ data TarHeader = TarHeader
      tarOwnerID :: Int,
      tarGroupID :: Int,
      tarFileSize :: Int64,
-     tarModTime :: ClockTime,
+     tarModTime :: EpochTime,
      tarFileType :: TarFileType,
      tarLinkTarget :: FilePath,
      tarOwnerName :: String,

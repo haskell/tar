@@ -10,7 +10,6 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Char (ord)
 import Data.Int (Int64)
 import Numeric (showOct)
-import System.Time (ClockTime(..))
 
 
 writeTarArchive :: TarArchive -> ByteString
@@ -45,7 +44,7 @@ putHeaderNoChkSum hdr =
        putOct       8 $ tarOwnerID hdr
        putOct       8 $ tarGroupID hdr
        putOct      12 $ tarFileSize hdr
-       putOct      12 $ let TOD s _ = tarModTime hdr in s
+       putOct      12 $ epochTimeToSecs $ tarModTime hdr
        fill         8 $ ' ' -- dummy checksum
        putTarFileType $ tarFileType hdr
        putString  100 $ tarLinkTarget hdr -- FIXME: take suffix split at / if too long
