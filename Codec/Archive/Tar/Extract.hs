@@ -3,35 +3,44 @@ module Codec.Archive.Tar.Extract where
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
 
+import Control.Monad
 import Data.Bits
 import qualified Data.ByteString.Lazy as BS
 import System.Directory
+import System.IO.Error
 import System.Posix.Types
 
 
 extractTarArchive :: TarArchive -> IO ()
-extractTarArchive = mapM_ extractTarEntry . archiveEntries
+extractTarArchive = mapM_ extractTarEntry' . archiveEntries
 
+-- | Prints a warning on error, doesn't fail.
+extractTarEntry' :: TarEntry -> IO ()
+extractTarEntry' e = catchJustIOError isIllegalOperationErrorType
+                       (extractTarEntry e)
+                       (\err -> warn $ show err)
+
+-- | Fails if any problems are encountered.
 extractTarEntry :: TarEntry -> IO ()
 extractTarEntry (TarEntry hdr cnt) = 
-    do -- FIXME: make sure path is sane
-       let path = tarFileName hdr
-           typ = tarFileType hdr
-           -- FIXME: set owner
-           -- FIXME: set group
-           -- FIXME: set modification time
-           setMeta = setPermissions path (modeToPerms (typ == TarDir) (tarFileMode hdr))
-       case typ of
-         TarHardLink   -> warn $ "Can't create hardlink yet, skipping " ++ path 
-         TarSymLink    -> warn $ "Can't create symlink yet, skipping " ++ path 
-         TarCharDev    -> warn $ "Can't create char dev yet, skipping " ++ path
-         TarBlockDev   -> warn $ "Can't create block dev yet, skipping " ++ path 
-         TarDir        -> do createDirectoryIfMissing True path
-                             setMeta
-         TarFIFO       -> warn $ "Can't create FIFO yet, skipping " ++ path 
-         _             -> do createDirectoryIfMissing True $ dirName path
-                             BS.writeFile path cnt
-                             setMeta
+    do -- FIXME: more path checks?
+       path <- forceRelativePath $ tarFileName hdr
+       let dir = dirName path
+       when (not (null dir)) $ createDirectoryIfMissing True dir
+       let unsupported t = illegalOperation (t ++ " not supported") (Just path)
+       case tarFileType hdr of
+               TarHardLink   -> unsupported "hardlink" 
+               TarSymLink    -> unsupported "symlink" 
+               TarCharDev    -> unsupported "char dev"
+               TarBlockDev   -> unsupported "block dev"
+               TarDir        -> createDirectoryIfMissing True path >> return True
+               TarFIFO       -> unsupported "FIFO"
+               _             -> BS.writeFile path cnt >> return True
+       -- FIXME: set owner
+       -- FIXME: set group
+       -- FIXME: set modification time
+       setPermissions path (modeToPerms (tarFileType hdr == TarDir) (tarFileMode hdr))
+
 modeToPerms :: Bool -> CMode -> Permissions
 modeToPerms is_dir mode = 
     Permissions {

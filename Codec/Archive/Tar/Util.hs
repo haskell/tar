@@ -1,5 +1,6 @@
 module Codec.Archive.Tar.Util where
 
+import Control.Exception (Exception(..), catchJust)
 import Data.Bits
 import qualified Data.ByteString.Lazy.Char8 as BS
 import Data.ByteString.Lazy (ByteString)
@@ -8,13 +9,26 @@ import Data.Int (Int64)
 import System.IO
 import System.IO.Error
 
+-- * Functions
+
+fixEq :: Eq a => (a -> a) -> a -> a
+fixEq f x = let x' = f x in if x' == x then x else fixEq f x'
+
 -- * IO
 
 warn :: String -> IO ()
-warn = hPutStrLn stderr . ("htar: "++)
+warn = hPutStrLn stderr . ("tar: "++)
 
-doesNotExistError :: String -> FilePath -> IOError
-doesNotExistError loc = mkIOError doesNotExistErrorType loc Nothing . Just
+doesNotExist :: String -> FilePath -> IO a
+doesNotExist loc = ioError . mkIOError doesNotExistErrorType loc Nothing . Just
+
+illegalOperation :: String -> Maybe FilePath -> IO a
+illegalOperation loc = ioError . mkIOError illegalOperationErrorType loc Nothing
+
+catchJustIOError :: (IOErrorType -> Bool) -> IO a -> (IOError -> IO a) -> IO a
+catchJustIOError p = catchJust q
+  where q (IOException ioe) | p (ioeGetErrorType ioe) = Just ioe
+        q _                                           = Nothing
 
 -- * Bits
 
@@ -56,3 +70,16 @@ pathSep = '/' -- FIXME: backslash on Windows
 dirName :: FilePath -> FilePath
 dirName p = if null d then "." else d
   where d = reverse $ dropWhile (/=pathSep) $ reverse p
+
+-- FIXME: make nicer, no IO
+forceRelativePath :: FilePath -> IO FilePath
+forceRelativePath p
+    | null d = return p
+    | otherwise = do warn $ "removing initial " ++ d ++" from path " ++ p
+                     return p'
+      where p' = fixEq (removeDotDot . removeSep) p
+            d = take (length p - length p') p
+            removeDotDot ('.':'.':x) = x
+            removeDotDot x = x
+            removeSep (c:x) | c == pathSep = x
+            removeSep x = x

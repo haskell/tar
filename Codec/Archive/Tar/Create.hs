@@ -3,7 +3,7 @@ module Codec.Archive.Tar.Create where
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
 
-import Control.Monad (liftM)
+import Control.Monad
 import qualified Data.ByteString.Lazy as BS
 import Data.List
 import System.Directory
@@ -20,7 +20,6 @@ import System.Posix.Types
 createTarArchive :: [FilePath] -> IO TarArchive
 createTarArchive = liftM TarArchive . mapM createTarEntry
 
--- FIXME: Warning if filepath is longer than 255 chars?
 createTarEntry :: FilePath -> IO TarEntry
 createTarEntry path = 
     do t <- getFileType path
@@ -61,26 +60,16 @@ permsToMode perms = boolsToBits [r,w,x,r,False,x,r,False,x]
 -- * Path and file stuff
 
 -- FIXME: normalize paths?
--- FIXME: fail if path is empty
 sanitizePath :: TarFileType -> FilePath -> IO FilePath
-sanitizePath t path = liftM (removeDuplSep . addTrailingSep) $ removeInit path
+sanitizePath t path = 
+    do path' <- liftM (removeDuplSep . addTrailingSep) $ forceRelativePath path       
+       when (null path' || length path' > 255) $
+            fail $ "Path too long: " ++ show path' -- FIXME: warn instead?
+       return path'
   where 
-    removeInit p | null d = return p
-                 | otherwise = 
-                     do warn $ "removing initial " ++ d ++" from path " ++ p
-                        return p'
-        where p' = fixEq (removeDotDot . removeSep) p
-              d = take (length p - length p') p
-    removeDotDot ('.':'.':p) = p
-    removeDotDot p = p
-    removeSep (c:p) | c == pathSep = p
-    removeSep p = p
     addTrailingSep = if t == TarDir then (++[pathSep]) else id
     removeDuplSep = 
         concat . map (\g -> if all (==pathSep) g then [pathSep] else g) . group
-
-fixEq :: Eq a => (a -> a) -> a -> a
-fixEq f x = let x' = f x in if x' == x then x else fixEq f x'
 
 getFileType :: FilePath -> IO TarFileType
 getFileType path = 
@@ -88,7 +77,7 @@ getFileType path =
        if f then return TarNormalFile
             else do d <- doesDirectoryExist path
                     if d then return TarDir
-                         else ioError $ doesNotExistError "htar" path
+                         else doesNotExist "tar" path
 
 -- | Recurse through a list of files and directories
 -- in depth-first order.
