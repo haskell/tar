@@ -5,10 +5,11 @@ import Codec.Archive.Tar.Util
 
 import Data.Binary.Get
 
-import Data.Char (chr)
+import Data.Char (chr,ord)
 import Control.Monad (liftM)
 import qualified Data.ByteString.Lazy.Char8 as BS
 import Data.ByteString.Lazy (ByteString)
+import Data.Int (Int8)
 import Numeric (readOct)
 
 
@@ -44,12 +45,21 @@ getTarHeader =
        return $ 
         if BS.head block == '\NUL'
           then Nothing
-          else let chkSum' = sumBS $ setPart 148 (BS.replicate 8 ' ') block
-                   (hdr,chkSum) = runGet getHeaderAndChkSum block -- FIXME: this gets the byte number wrong in error messages
-                in if chkSum == chkSum'
+          else let (hdr,chkSum) = runGet getHeaderAndChkSum block
+                in if checkChkSum block chkSum
                      then Just hdr
-                     else error $ "TAR header checksum failure: " 
-                                   ++ show chkSum ++ " /= " ++ show chkSum'
+                     else error $ "TAR header checksum failure." 
+
+checkChkSum :: ByteString -> Int -> Bool
+checkChkSum block s = s == sumBS block' || s == signedChkSum block'
+  where 
+    block' = setPart 148 (BS.replicate 8 ' ') block
+    -- tar.info says that Sun tar is buggy and 
+    -- calculates the checksum using signed chars
+    signedChkSum = BS.foldl' (\x y -> x + (signedOrd y)) 0
+
+signedOrd :: Char -> Int
+signedOrd c = fromIntegral (fromIntegral (ord c) :: Int8)
 
 getHeaderAndChkSum :: Get (TarHeader, Int)
 getHeaderAndChkSum =
