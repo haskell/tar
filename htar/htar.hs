@@ -142,12 +142,12 @@ detailedInfo :: TarHeader -> String
 detailedInfo hdr =
     unwords [typ ++ mode, owner, group, size, time, name] -- FIXME: nice padding
     where typ = case tarFileType hdr of
-                  TarSymLink  -> "l"
-                  TarCharDev  -> "c"
-                  TarBlockDev -> "b"
-                  TarDir      -> "d"
-                  TarFIFO     -> "p"
-                  _           -> "-"
+                  TarSymbolicLink    -> "l"
+                  TarCharacterDevice -> "c"
+                  TarBlockDevice     -> "b"
+                  TarDirectory       -> "d"
+                  TarFIFO            -> "p"
+                  _                  -> "-"
           mode = concat [u,g,o] -- FIXME: handle setuid etc.
               where m = tarFileMode hdr 
                     f x = [t 2 'r', t 1 'w', t 0 'x']

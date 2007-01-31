@@ -60,15 +60,15 @@ putHeaderNoChkSum hdr =
 putTarFileType :: TarFileType -> Put
 putTarFileType t = 
     putChar8 $ case t of
-                 TarNormalFile -> '0'
-                 TarHardLink   -> '1'
-                 TarSymLink    -> '2'
-                 TarCharDev    -> '3'
-                 TarBlockDev   -> '4'
-                 TarDir        -> '5'
-                 TarFIFO       -> '6'
-                 TarContiguous -> '7'
-                 TarCustom c   -> c
+                 TarNormalFile      -> '0'
+                 TarHardLink        -> '1'
+                 TarSymbolicLink    -> '2'
+                 TarCharacterDevice -> '3'
+                 TarBlockDevice     -> '4'
+                 TarDirectory       -> '5'
+                 TarFIFO            -> '6'
+                 TarContiguous      -> '7'
+                 TarCustom c        -> c
 
 splitLongPath :: Int -> FilePath -> (String,String)
 splitLongPath l path | l < 1 || null path = error $ unwords ["splitFileName", show l, show path]

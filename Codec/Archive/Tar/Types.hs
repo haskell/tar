@@ -4,13 +4,16 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
 import System.Posix.Types (CMode, EpochTime)
 
+-- | A TAR archive.
 newtype TarArchive = TarArchive { archiveEntries :: [TarEntry] }
   deriving Show
 
+-- | A TAR archive entry for a file or directory.
 data TarEntry = TarEntry { entryHeader :: TarHeader,
                            entryData :: ByteString }
   deriving Show
 
+-- | TAR archive entry meta-data.
 data TarHeader = TarHeader 
     {
      tarFileName :: FilePath,
@@ -31,10 +34,10 @@ data TarHeader = TarHeader
 data TarFileType = 
    TarNormalFile
  | TarHardLink
- | TarSymLink
- | TarCharDev
- | TarBlockDev
- | TarDir
+ | TarSymbolicLink
+ | TarCharacterDevice
+ | TarBlockDevice
+ | TarDirectory
  | TarFIFO
  | TarContiguous
  | TarCustom Char

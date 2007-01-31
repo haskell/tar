@@ -1,10 +1,17 @@
-module Codec.Archive.Tar.Create where
+module Codec.Archive.Tar.Create (
+                                 -- * Creating TAR archives from files
+                                 createTarArchive, createTarEntry,
+                                 recurseDirectories,
+                                 -- * Creating TAR archives from scratch
+                                 mkTarHeader, 
+                                 mkFileTarEntry, mkDirectoryTarEntry) where
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
 
 import Control.Monad
 import qualified Data.ByteString.Lazy as BS
+import Data.ByteString.Lazy (ByteString)
 import Data.List
 import System.Directory
 import System.IO
@@ -12,34 +19,29 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import System.Posix.Types
 
 
--- | Create a TAR archive containing a number of files
--- and directories. In the list of paths, any directory 
+-- | Creates a TAR archive containing a number of files
+-- and directories taken from the file system. In the list 
+-- of paths, any directory 
 -- should come before any files in that directory.
 -- Only includes files and directories mentioned in the list,
 -- does not recurse through directories.
 createTarArchive :: [FilePath] -> IO TarArchive
 createTarArchive = liftM TarArchive . mapM createTarEntry
 
+-- | Creates a TAR archive entry for a file or directory.
+-- The meta-data and file contents are taken from the given file.
 createTarEntry :: FilePath -> IO TarEntry
 createTarEntry path = 
     do t <- getFileType path
        path' <- sanitizePath t path
        perms <- getPermissions path
        time <- getModificationTime path
-       let hdr = TarHeader {
-                            tarFileName = path',
-                            tarFileMode = permsToMode perms,
-                            tarOwnerID = 0,
-                            tarGroupID = 0,
-                            tarFileSize = 0, -- set below
-                            tarModTime = clockTimeToEpochTime time,
-                            tarFileType = t,
-                            tarLinkTarget = "",
-                            tarOwnerName = "",
-                            tarGroupName = "",
-                            tarDeviceMajor = 0,
-                            tarDeviceMinor = 0
-                           }
+       let hdr = (mkTarHeader path') {
+                                      tarFileMode = permsToMode perms,
+                                      tarModTime = clockTimeToEpochTime time,
+                                      tarFileType = t
+                                     }
+       -- FIXME: handle other file types
        case t of
          TarNormalFile -> do h <- openBinaryFile path ReadMode
                              size <- liftM fromIntegral $ hFileSize h
@@ -47,7 +49,36 @@ createTarEntry path =
                              return $ TarEntry (hdr { tarFileSize = size }) cnt
          _             -> return $ TarEntry hdr BS.empty
 
+-- | Creates a TAR header for a normal file with the given path.
+-- Does not consult the file system.
+-- All meta-data is set to default values.
+mkTarHeader :: FilePath -> TarHeader
+mkTarHeader path = TarHeader {
+                              tarFileName    = path,
+                              tarFileMode    = defaultMode,
+                              tarOwnerID     = 0,
+                              tarGroupID     = 0,
+                              tarFileSize    = 0,
+                              tarModTime     = 0,
+                              tarFileType    = TarNormalFile,
+                              tarLinkTarget  = "",
+                              tarOwnerName   = "",
+                              tarGroupName   = "",
+                              tarDeviceMajor = 0,
+                              tarDeviceMinor = 0
+                             }
+
+mkFileTarEntry :: FilePath -> ByteString -> TarEntry
+mkFileTarEntry p = TarEntry (mkTarHeader p)
+
+mkDirectoryTarEntry :: FilePath -> TarEntry
+mkDirectoryTarEntry p = 
+    TarEntry ((mkTarHeader p) { tarFileType = TarDirectory }) BS.empty
+
 -- * File permissions
+
+defaultMode :: CMode
+defaultMode = 0o644
 
 -- | This is a bit brain-dead, since 'Permissions' doesn't
 -- deal with user, group, others permissions.
@@ -67,7 +98,7 @@ sanitizePath t path =
             fail $ "Path too long: " ++ show path' -- FIXME: warn instead?
        return path'
   where 
-    addTrailingSep = if t == TarDir then (++[pathSep]) else id
+    addTrailingSep = if t == TarDirectory then (++[pathSep]) else id
     removeDuplSep = 
         concat . map (\g -> if all (==pathSep) g then [pathSep] else g) . group
 
@@ -76,7 +107,7 @@ getFileType path =
     do f <- doesFileExist path
        if f then return TarNormalFile
             else do d <- doesDirectoryExist path
-                    if d then return TarDir
+                    if d then return TarDirectory
                          else doesNotExist "tar" path
 
 -- | Recurse through a list of files and directories

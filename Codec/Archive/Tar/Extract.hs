@@ -29,17 +29,18 @@ extractTarEntry (TarEntry hdr cnt) =
        when (not (null dir)) $ createDirectoryIfMissing True dir
        let unsupported t = illegalOperation (t ++ " not supported") (Just path)
        case tarFileType hdr of
-               TarHardLink   -> unsupported "hardlink" 
-               TarSymLink    -> unsupported "symlink" 
-               TarCharDev    -> unsupported "char dev"
-               TarBlockDev   -> unsupported "block dev"
-               TarDir        -> createDirectoryIfMissing True path >> return True
-               TarFIFO       -> unsupported "FIFO"
-               _             -> BS.writeFile path cnt >> return True
+               TarHardLink        -> unsupported "hardlink" 
+               TarSymbolicLink    -> unsupported "symlink" 
+               TarCharacterDevice -> unsupported "char dev"
+               TarBlockDevice     -> unsupported "block dev"
+               TarDirectory       -> createDirectoryIfMissing True path >> return True
+               TarFIFO            -> unsupported "FIFO"
+               _                  -> BS.writeFile path cnt >> return True
        -- FIXME: set owner
        -- FIXME: set group
        -- FIXME: set modification time
-       setPermissions path (modeToPerms (tarFileType hdr == TarDir) (tarFileMode hdr))
+       let isDir = tarFileType hdr == TarDirectory
+       setPermissions path (modeToPerms isDir (tarFileMode hdr))
 
 modeToPerms :: Bool -> CMode -> Permissions
 modeToPerms is_dir mode = 

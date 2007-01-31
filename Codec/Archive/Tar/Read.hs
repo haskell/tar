@@ -93,10 +93,10 @@ getTarFileType =
                   '\0'-> TarNormalFile
                   '0' -> TarNormalFile
                   '1' -> TarHardLink
-                  '2' -> TarSymLink
-                  '3' -> TarCharDev
-                  '4' -> TarBlockDev
-                  '5' -> TarDir
+                  '2' -> TarSymbolicLink
+                  '3' -> TarCharacterDevice
+                  '4' -> TarBlockDevice
+                  '5' -> TarDirectory
                   '6' -> TarFIFO
                   '7' -> TarContiguous
                   _   -> TarCustom c
