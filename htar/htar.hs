@@ -12,7 +12,10 @@ import qualified Data.Set as Set
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
+import System.Locale (defaultTimeLocale)
 import System.IO
+import System.Posix.Types (EpochTime)
+import System.Time (ClockTime(..), toUTCTime, formatCalendarTime)
 
 main :: IO ()
 main = do args <- getArgs
@@ -155,9 +158,23 @@ detailedInfo hdr =
                     u = f (m `shiftR` 6)
                     g = f (m `shiftR` 3)
                     o = f m
-          owner = nameOrID (tarOwnerName hdr) (tarOwnerID hdr)
-          group = nameOrID (tarGroupName hdr) (tarGroupID hdr)
+          owner = rpad 7 ' ' $ nameOrID (tarOwnerName hdr) (tarOwnerID hdr)
+          group = rpad 7 ' ' $ nameOrID (tarGroupName hdr) (tarGroupID hdr)
           nameOrID n i = if null n then show i else n
-          size = show (tarFileSize hdr)
-          time = show (tarModTime hdr)
+          size = lpad 11 ' ' $ show (tarFileSize hdr)
+          time = formatEpochTime "%Y-%m-%d %H:%M:%S" (tarModTime hdr)
           name = tarFileName hdr
+
+lpad :: Int -> a -> [a] -> [a]
+lpad n x xs = replicate (n - length xs) x ++ xs
+
+rpad :: Int -> a -> [a] -> [a]
+rpad n x xs = xs ++ replicate (n - length xs) x
+
+formatEpochTime :: String -> EpochTime -> String
+formatEpochTime f = 
+    formatCalendarTime defaultTimeLocale f . toUTCTime . epochTimeToClockTime
+
+epochTimeToClockTime :: EpochTime -> ClockTime
+epochTimeToClockTime e = TOD s (truncate (1000000000 * f))
+    where (s,f) = properFraction (toRational e)
