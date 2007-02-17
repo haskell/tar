@@ -107,8 +107,7 @@ getTarFileType =
                   '4' -> TarBlockDevice
                   '5' -> TarDirectory
                   '6' -> TarFIFO
-                  '7' -> TarContiguous
-                  _   -> TarCustom c
+                  _   -> TarOther c
 
 -- * TAR format primitive input
 

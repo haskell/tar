@@ -63,6 +63,5 @@ data TarFileType =
  | TarBlockDevice
  | TarDirectory
  | TarFIFO
- | TarContiguous
- | TarCustom Char
+ | TarOther Char
   deriving (Eq,Show)

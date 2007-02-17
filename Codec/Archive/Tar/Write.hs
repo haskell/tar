@@ -76,8 +76,7 @@ putTarFileType t =
                  TarBlockDevice     -> '4'
                  TarDirectory       -> '5'
                  TarFIFO            -> '6'
-                 TarContiguous      -> '7'
-                 TarCustom c        -> c
+                 TarOther c         -> c
 
 splitLongPath :: Int -> FilePath -> (String,String)
 splitLongPath l path | l < 1 || null path = error $ unwords ["splitFileName", show l, show path]
