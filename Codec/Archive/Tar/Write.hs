@@ -1,4 +1,4 @@
-module Codec.Archive.Tar.Write where
+module Codec.Archive.Tar.Write (writeTarArchive) where
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
@@ -13,9 +13,6 @@ import Numeric (showOct)
 -- Implements the USTAR (POSIX.1-1988) format (tar with extended header information).
 writeTarArchive :: TarArchive -> L.ByteString
 writeTarArchive = runPut . putTarArchive
-
-writeTarFile :: FilePath -> TarArchive -> IO ()
-writeTarFile f = L.writeFile f . writeTarArchive
 
 putTarArchive :: TarArchive -> Put
 putTarArchive (TarArchive es) = 

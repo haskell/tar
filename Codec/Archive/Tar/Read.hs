@@ -1,4 +1,4 @@
-module Codec.Archive.Tar.Read where
+module Codec.Archive.Tar.Read (readTarArchive) where
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
@@ -15,10 +15,6 @@ import Numeric (readOct)
 -- | Reads a TAR archive from a lazy ByteString.
 readTarArchive :: L.ByteString -> TarArchive
 readTarArchive = runGet getTarArchive
-
--- | Reads a TAR archive from a file.
-readTarFile :: FilePath -> IO TarArchive
-readTarFile = liftM readTarArchive . L.readFile
 
 getTarArchive :: Get TarArchive
 getTarArchive = liftM TarArchive $ unfoldM getTarEntry

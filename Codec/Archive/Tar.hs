@@ -14,7 +14,7 @@ module Codec.Archive.Tar (
                           -- * Writing TAR archives
                           writeTarArchive,
                           writeTarFile,
-                          -- * extracting TAR archives
+                          -- * Extracting TAR archives
                           extractTarFile,
                           extractTarData,
                           extractTarArchive,
@@ -31,12 +31,10 @@ import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Write
 
 import Control.Monad (liftM)
-import qualified Data.ByteString.Lazy.Char8 as BS
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.ByteString.Lazy (ByteString)
 import System.IO
 
-
--- * Creating tar archives
 
 -- | Creates a TAR archive containing a number of files
 -- and directories, and write the archive to a file. 
@@ -45,7 +43,7 @@ import System.IO
 createTarFile :: FilePath   -- ^ File to write the archive to.
               -> [FilePath] -- ^ Files and directories to include in the archive.
               -> IO ()
-createTarFile f fs = createTarData fs >>= BS.writeFile f
+createTarFile f fs = createTarData fs >>= L.writeFile f
 
 -- | Creates a TAR archive containing a number of files
 -- and directories, and return the archive as a lazy ByteString.
@@ -55,8 +53,22 @@ createTarData :: [FilePath]    -- ^ Files and directories to include in the arch
               -> IO ByteString
 createTarData = liftM writeTarArchive . createTarArchive 
 
+-- | Writes a TAR archive to a file.
+--
+-- See 'writeTarArchive' for more information.
+writeTarFile :: FilePath   -- ^ The file to write the archive to.
+             -> TarArchive -- ^ The archive to write out.
+             -> IO ()
+writeTarFile f = L.writeFile f . writeTarArchive
 
--- * Extracting tar archives
+
+-- | Reads a TAR archive from a file.
+--
+-- See 'readTarArchive' for more information.
+readTarFile :: FilePath -- ^ File to read the archive from.
+            -> IO TarArchive
+readTarFile = liftM readTarArchive . L.readFile
+
 
 -- | Reads a TAR archive from a file and extracts its contents into
 -- the current directory.
@@ -64,7 +76,7 @@ createTarData = liftM writeTarArchive . createTarArchive
 -- See 'readTarArchive' and 'extractTarArchive' for more information.
 extractTarFile :: FilePath -- ^ File from which the archive is read.
                -> IO ()
-extractTarFile f = BS.readFile f >>= extractTarData
+extractTarFile f = L.readFile f >>= extractTarData
 
 -- | Reads a TAR archive from a lazy ByteString and extracts its contents into
 -- the current directory.
@@ -73,3 +85,5 @@ extractTarFile f = BS.readFile f >>= extractTarData
 extractTarData :: ByteString -- ^ Data from which the archive is read.
                -> IO ()
 extractTarData = extractTarArchive . readTarArchive
+
+
