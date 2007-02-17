@@ -144,7 +144,7 @@ entryInfo False = tarFileName  . entryHeader
 
 detailedInfo :: TarHeader -> String
 detailedInfo hdr =
-    unwords [typ ++ mode, owner, group, size, time, name] -- FIXME: nice padding
+    unwords [typ ++ mode, owner, group, size, time, name]
     where typ = case tarFileType hdr of
                   TarSymbolicLink    -> "l"
                   TarCharacterDevice -> "c"
