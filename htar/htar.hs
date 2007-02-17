@@ -8,6 +8,7 @@ import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy (ByteString)
 import Control.Monad
 import Data.Bits
+import Data.Char (toUpper)
 import qualified Data.Set as Set
 import System.Console.GetOpt
 import System.Environment
@@ -151,13 +152,16 @@ detailedInfo hdr =
                   TarDirectory       -> "d"
                   TarFIFO            -> "p"
                   _                  -> "-"
-          mode = concat [u,g,o] -- FIXME: handle setuid etc.
+          mode = concat [u,g,o]
               where m = tarFileMode hdr 
-                    f x = [t 2 'r', t 1 'w', t 0 'x']
-                        where t n c = if testBit x n then c else '-'
-                    u = f (m `shiftR` 6)
-                    g = f (m `shiftR` 3)
-                    o = f m
+                    f r w x s c = [if testBit m r then 'r' else '-',
+                                   if testBit m w then 'w' else '-',
+                                   if testBit m s 
+                                     then if testBit m x then c   else toUpper c
+                                     else if testBit m x then 'x' else '-']
+                    u = f 8 7 6 11 's'
+                    g = f 5 4 3 10 's'
+                    o = f 2 1 0  9 't'
           owner = rpad 7 ' ' $ nameOrID (tarOwnerName hdr) (tarOwnerID hdr)
           group = rpad 7 ' ' $ nameOrID (tarGroupName hdr) (tarGroupID hdr)
           nameOrID n i = if null n then show i else n
