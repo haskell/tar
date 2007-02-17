@@ -1,23 +1,22 @@
 module Codec.Archive.Tar.Read where
 
 import Codec.Archive.Tar.Types
-import Codec.Archive.Tar.Util
 
 import Data.Binary.Get
 
 import Data.Char (chr,ord)
 import Control.Monad (liftM)
-import qualified Data.ByteString.Lazy.Char8 as BS
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Int (Int8)
 import Numeric (readOct)
 
 
-readTarArchive :: ByteString -> TarArchive
+readTarArchive :: L.ByteString -> TarArchive
 readTarArchive = runGet getTarArchive
 
 readTarFile :: FilePath -> IO TarArchive
-readTarFile = liftM readTarArchive . BS.readFile
+readTarFile = liftM readTarArchive . L.readFile
 
 getTarArchive :: Get TarArchive
 getTarArchive = liftM TarArchive $ unfoldM getTarEntry
@@ -34,32 +33,37 @@ getTarEntry =
          Just hdr -> liftM Just $ getBody hdr
   where getBody hdr = 
             do 
-            let size = tarFileSize hdr
+            let size = tarFileSize hdr -- FIXME: treat size as 0 for non-files, it seems
+                                       -- like diretories can sometimes have non-zero size
+                                       -- in the header.
                 padding = (512 - size) `mod` 512
-            cnt <- liftM (BS.take size) $ getBytes $ size + padding
+            cnt <- liftM (L.take size) $ getLazyByteString $ size + padding
             return $ TarEntry hdr cnt
 
 getTarHeader :: Get (Maybe TarHeader)
 getTarHeader =
-    do block <- liftM BS.copy $ getLazyByteString 512
+    do -- FIXME: warn and return nothing on EOF
+       block <- liftM B.copy $ getBytes 512
        return $ 
-        if BS.head block == '\NUL'
+        if B.head block == '\NUL'
           then Nothing
-          else let (hdr,chkSum) = runGet getHeaderAndChkSum block
+          else let (hdr,chkSum) = 
+                       runGet getHeaderAndChkSum $ L.fromChunks [block]
                 in if checkChkSum block chkSum
                      then Just hdr
                      else error $ "TAR header checksum failure." 
 
-checkChkSum :: ByteString -> Int -> Bool
-checkChkSum block s = s == sumBS block' || s == signedChkSum block'
+checkChkSum :: B.ByteString -> Int -> Bool
+checkChkSum block s = s == chkSum block' || s == signedChkSum block'
   where 
-    block' = setPart 148 (BS.replicate 8 ' ') block
+    block' = B.concat [B.take 148 block, B.replicate 8 ' ', B.drop 156 block]
     -- tar.info says that Sun tar is buggy and 
     -- calculates the checksum using signed chars
-    signedChkSum = BS.foldl' (\x y -> x + (signedOrd y)) 0
+    chkSum = B.foldl' (\x y -> x + ord y) 0
+    signedChkSum = B.foldl' (\x y -> x + (ordSigned y)) 0
 
-signedOrd :: Char -> Int
-signedOrd c = fromIntegral (fromIntegral (ord c) :: Int8)
+ordSigned :: Char -> Int
+ordSigned c = fromIntegral (fromIntegral (ord c) :: Int8)
 
 getHeaderAndChkSum :: Get (TarHeader, Int)
 getHeaderAndChkSum =
@@ -113,14 +117,14 @@ getTarFileType =
 -- * TAR format primitive input
 
 getOct :: Integral a => Int -> Get a
-getOct n = getLazyByteString n >>= parseOct . takeWhile (/='\0') . BS.unpack
+getOct n = getBytes n >>= parseOct . takeWhile (/='\0') . B.unpack
   where parseOct "" = return 0
         parseOct s = case readOct s of
                        [(x,_)] -> return x
                        _       -> fail $ "Number format error: " ++ show s
 
 getString :: Int -> Get String
-getString = liftM (takeWhile (/='\NUL') . BS.unpack) . getLazyByteString
+getString n = liftM (takeWhile (/='\NUL') . B.unpack) $ getBytes n
 
 getChar8 :: Get Char
 getChar8 = fmap (chr . fromIntegral) getWord8

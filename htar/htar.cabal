@@ -6,7 +6,7 @@ Author: Bjorn Bringert <bjorn@bringert.net>
 Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
-Build-depends: base, tar, compression
+Build-depends: base, tar, compression >= 0.1
 Synopsis: Command-line TAR utility.
 Description:
   Command-line TAR utility which uses the tar package.

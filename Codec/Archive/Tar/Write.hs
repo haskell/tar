@@ -5,36 +5,45 @@ import Codec.Archive.Tar.Util
 
 import Data.Binary.Put
 
-import qualified Data.ByteString.Lazy.Char8 as BS
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Char (ord)
-import Data.Int (Int64)
 import Numeric (showOct)
 
 
-writeTarArchive :: TarArchive -> ByteString
+writeTarArchive :: TarArchive -> L.ByteString
 writeTarArchive = runPut . putTarArchive
 
 writeTarFile :: FilePath -> TarArchive -> IO ()
-writeTarFile f = BS.writeFile f . writeTarArchive
+writeTarFile f = L.writeFile f . writeTarArchive
 
 putTarArchive :: TarArchive -> Put
 putTarArchive (TarArchive es) = 
     do mapM_ putTarEntry es
        fill 512 '\0'
        fill 512 '\0'
+       flush
 
 putTarEntry :: TarEntry -> Put
 putTarEntry (TarEntry hdr cnt) = 
     do putTarHeader hdr
-       putLazyByteString (rpadMod 512 '\0' cnt)
+       putContent cnt
        flush
+
+-- | Puts a lazy ByteString and nul-pads to a multiple of 512 bytes.
+putContent :: L.ByteString -> Put
+putContent = f 0 . L.toChunks
+  where f 0 []     = return ()
+        f n []     = fill (512 - n) '\NUL'
+        f n (x:xs) = putByteString x >> f ((n+B.length x) `mod` 512) xs
 
 putTarHeader :: TarHeader -> Put
 putTarHeader hdr = 
-    do let x = runPut (putHeaderNoChkSum hdr)
-           chkSum = sumBS x
-       putLazyByteString $ setPart 148 (fmtOct 8 chkSum) x
+    do let block = B.concat $ L.toChunks $ runPut (putHeaderNoChkSum hdr)
+           chkSum = B.foldl' (\x y -> x + ord y) 0 block
+       putByteString $ B.take 148 block
+       putOct 8 chkSum
+       putByteString $ B.drop 156 block
 
 putHeaderNoChkSum :: TarHeader -> Put
 putHeaderNoChkSum hdr =
@@ -78,19 +87,18 @@ splitLongPath l path | n > l = error $ "File path too long: " ++ show path -- FI
 
 -- * TAR format primitive output
 
-putString :: Int64 -> String -> Put
-putString n = putLazyByteString . rpad n '\0' . ltrunc n . BS.pack
+putString :: Int -> String -> Put
+putString n s = do mapM_ putChar8 $ take n s
+                   fill (n - length s) '\NUL'
 
-putOct :: Integral a => Int64 -> a -> Put
-putOct n = putLazyByteString . fmtOct n
-
-fmtOct :: Integral a => Int64 -> a -> ByteString
-fmtOct n x = (lpad l '0' $ ltrunc l $ BS.pack $ showOct x "") 
-             `BS.append` BS.singleton '\NUL'
-    where l = n-1
+putOct :: Integral a => Int -> a -> Put
+putOct n x = do let o = take n $ showOct x ""
+                fill (n - length o - 1) '0'
+                mapM_ putChar8 o
+                putChar8 '\NUL'
 
 putChar8 :: Char -> Put
-putChar8 = putWord8 . fromIntegral . ord
+putChar8 c = putWord8 $ fromIntegral $ ord c
 
 fill :: Int -> Char -> Put
-fill n = putLazyByteString . BS.replicate (fromIntegral n)
+fill n c = putByteString $ B.replicate n c
