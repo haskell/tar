@@ -2,10 +2,11 @@ module Codec.Archive.Tar.Util where
 
 import Control.Exception (Exception(..), catchJust)
 import Control.Monad (liftM)
-import Data.Bits
-import System.IO
-import System.IO.Error
-import System.Posix.Types
+import Data.Bits (Bits, shiftL, (.|.))
+import System.IO (hPutStrLn, stderr)
+import System.IO.Error (IOErrorType, ioeGetErrorType, mkIOError, 
+                        doesNotExistErrorType, illegalOperationErrorType)
+import System.Posix.Types (EpochTime)
 import System.Time (ClockTime(..))
 
 -- * Functions
