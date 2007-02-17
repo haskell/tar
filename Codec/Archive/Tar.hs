@@ -46,7 +46,7 @@ createTarFile :: FilePath   -- ^ File to write the archive to.
 createTarFile f fs = createTarData fs >>= L.writeFile f
 
 -- | Creates a TAR archive containing a number of files
--- and directories, and return the archive as a lazy ByteString.
+-- and directories, and returns the archive as a lazy ByteString.
 --
 -- See 'createTarArchive' and 'writeTarArchive' for more information.
 createTarData :: [FilePath]    -- ^ Files and directories to include in the archive.

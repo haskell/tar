@@ -10,7 +10,10 @@ import System.Directory
 import System.IO.Error
 import System.Posix.Types
 
-
+-- | Extracts the contents of a TAR archive into the current directory.
+--
+-- If problems are encountered, warnings are printed to 
+-- 'stderr', and the extraction continues.
 extractTarArchive :: TarArchive -> IO ()
 extractTarArchive = mapM_ extractTarEntry' . archiveEntries
 
@@ -20,7 +23,9 @@ extractTarEntry' e = catchJustIOError isIllegalOperationErrorType
                        (extractTarEntry e)
                        (\err -> warn $ show err)
 
--- | Fails if any problems are encountered.
+-- | Extracts a TAR entry into the current directory.
+--
+-- This function throws an exception if any problems are encountered.
 extractTarEntry :: TarEntry -> IO ()
 extractTarEntry (TarEntry hdr cnt) = 
     do -- FIXME: more path checks?
