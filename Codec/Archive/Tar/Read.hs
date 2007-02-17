@@ -1,6 +1,7 @@
 module Codec.Archive.Tar.Read where
 
 import Codec.Archive.Tar.Types
+import Codec.Archive.Tar.Util
 
 import Data.Binary.Get
 
@@ -20,9 +21,6 @@ readTarFile = liftM readTarArchive . L.readFile
 
 getTarArchive :: Get TarArchive
 getTarArchive = liftM TarArchive $ unfoldM getTarEntry
-
-unfoldM :: Monad m => m (Maybe a) -> m [a]
-unfoldM f = f >>= maybe (return []) (\x -> liftM (x:) (unfoldM f))
 
 -- | Returns 'Nothing' if the entry is an end block.
 getTarEntry :: Get (Maybe TarEntry)

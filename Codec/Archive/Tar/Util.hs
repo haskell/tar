@@ -1,6 +1,7 @@
 module Codec.Archive.Tar.Util where
 
 import Control.Exception (Exception(..), catchJust)
+import Control.Monad (liftM)
 import Data.Bits
 import System.IO
 import System.IO.Error
@@ -27,6 +28,11 @@ catchJustIOError :: (IOErrorType -> Bool) -> IO a -> (IOError -> IO a) -> IO a
 catchJustIOError p = catchJust q
   where q (IOException ioe) | p (ioeGetErrorType ioe) = Just ioe
         q _                                           = Nothing
+
+-- * Monads
+
+unfoldM :: Monad m => m (Maybe a) -> m [a]
+unfoldM f = f >>= maybe (return []) (\x -> liftM (x:) (unfoldM f))
 
 -- * Bits
 
