@@ -57,8 +57,8 @@ putHeaderNoChkSum hdr =
        fill         8 $ ' ' -- dummy checksum
        putTarFileType $ tarFileType hdr
        putString  100 $ tarLinkTarget hdr -- FIXME: take suffix split at / if too long
-       putString    6 $ "ustar "
-       putString    2 $ " " -- strange ustar version
+       putString    6 $ "ustar"
+       putString    2 $ "00" -- no nul byte
        putString   32 $ tarOwnerName hdr
        putString   32 $ tarGroupName hdr
        putOct       8 $ tarDeviceMajor hdr
