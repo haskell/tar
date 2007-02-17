@@ -23,9 +23,10 @@ import System.Posix.Types
 -- and directories taken from the file system. In the list 
 -- of paths, any directory 
 -- should come before any files in that directory.
--- Only includes files and directories mentioned in the list,
--- does not recurse through directories.
-createTarArchive :: [FilePath] -> IO TarArchive
+-- Only files and directories mentioned in the list are included,
+-- this function does not recurse into the directories.
+createTarArchive :: [FilePath] -- ^ Files and directories to include in the archive.
+                    -> IO TarArchive
 createTarArchive = liftM TarArchive . mapM createTarEntry
 
 -- | Creates a TAR archive entry for a file or directory.
@@ -110,7 +111,7 @@ getFileType path =
                     if d then return TarDirectory
                          else doesNotExist "tar" path
 
--- | Recurse through a list of files and directories
+-- | Recurses through a list of files and directories
 -- in depth-first order.
 -- Each of the given paths are returned, and each path which 
 -- refers to a directory is followed by its descendants.

@@ -1,4 +1,4 @@
--- | Implements the USTAR (POSIX.1-1988) format (tar with extended header information).
+-- | This is a library for reading and writing TAR archives.
 module Codec.Archive.Tar (
                           -- * TAR archive types
                           TarArchive(..),
@@ -10,7 +10,6 @@ module Codec.Archive.Tar (
                           createTarData,
                           createTarArchive,
                           createTarEntry,
-                          -- ** Utilities
                           recurseDirectories,
                           -- * Writing TAR archives
                           writeTarArchive,
@@ -39,28 +38,38 @@ import System.IO
 
 -- * Creating tar archives
 
--- | Create a TAR archive containing a number of files
+-- | Creates a TAR archive containing a number of files
 -- and directories, and write the archive to a file. 
-createTarFile :: FilePath -- ^ File to write the archive to.
-              -> [FilePath] 
-              -- ^ Files and directories to include in the archive.
-              -- Any directory should come before any files in that directory.
-              -- Only files and directories mentioned in the list are included,
-              -- this function does not recurse into the directories.
+--
+-- See 'createTarArchive' and 'writeTarArchive' for more information.
+createTarFile :: FilePath   -- ^ File to write the archive to.
+              -> [FilePath] -- ^ Files and directories to include in the archive.
               -> IO ()
 createTarFile f fs = createTarData fs >>= BS.writeFile f
 
--- | Convenience function:
--- @createTarData = liftM writeTarArchive . createTarArchive@
-createTarData :: [FilePath] -> IO ByteString
+-- | Creates a TAR archive containing a number of files
+-- and directories, and return the archive as a lazy ByteString.
+--
+-- See 'createTarArchive' and 'writeTarArchive' for more information.
+createTarData :: [FilePath]    -- ^ Files and directories to include in the archive.
+              -> IO ByteString
 createTarData = liftM writeTarArchive . createTarArchive 
 
 
 -- * Extracting tar archives
 
-extractTarFile :: FilePath -> IO ()
+-- | Reads a TAR archive from a file and extracts its contents into
+-- the current directory.
+--
+-- See 'readTarArchive' and 'extractTarArchive' for more information.
+extractTarFile :: FilePath -- ^ File from which the archive is read.
+               -> IO ()
 extractTarFile f = BS.readFile f >>= extractTarData
 
-extractTarData :: ByteString -> IO ()
+-- | Reads a TAR archive from a lazy ByteString and extracts its contents into
+-- the current directory.
+--
+-- See 'readTarArchive' and 'extractTarArchive' for more information.
+extractTarData :: ByteString -- ^ Data from which the archive is read.
+               -> IO ()
 extractTarData = extractTarArchive . readTarArchive
-

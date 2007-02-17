@@ -10,7 +10,7 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Char (ord)
 import Numeric (showOct)
 
-
+-- Implements the USTAR (POSIX.1-1988) format (tar with extended header information).
 writeTarArchive :: TarArchive -> L.ByteString
 writeTarArchive = runPut . putTarArchive
 

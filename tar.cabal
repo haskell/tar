@@ -9,7 +9,7 @@ Stability: Experimental
 Build-depends: base >= 2.0, binary >= 0.2
 Synopsis: TAR (tape archive format) library.
 Description:
-  Creates and extracts TAR archives.
+  This is a library for reading and writing TAR archives.
 Exposed-modules: Codec.Archive.Tar
 Other-modules:
  Codec.Archive.Tar.Create,

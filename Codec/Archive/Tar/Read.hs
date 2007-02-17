@@ -12,10 +12,11 @@ import qualified Data.ByteString.Lazy.Char8 as L
 import Data.Int (Int8)
 import Numeric (readOct)
 
-
+-- | Reads a TAR archive from a lazy ByteString.
 readTarArchive :: L.ByteString -> TarArchive
 readTarArchive = runGet getTarArchive
 
+-- | Reads a TAR archive from a file.
 readTarFile :: FilePath -> IO TarArchive
 readTarFile = liftM readTarArchive . L.readFile
 
@@ -112,6 +113,7 @@ getTarFileType =
                   '6' -> TarFIFO
                   '7' -> TarContiguous
                   _   -> TarCustom c
+
 -- * TAR format primitive input
 
 getOct :: Integral a => Int -> Get a
