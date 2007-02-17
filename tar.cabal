@@ -6,7 +6,7 @@ Author: Bjorn Bringert <bjorn@bringert.net>
 Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
-Build-depends: base, binary >= 0.2
+Build-depends: base >= 2.0, binary >= 0.2
 Synopsis: TAR (tape archive format) library.
 Description:
   Creates and extracts TAR archives.
