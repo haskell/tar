@@ -14,6 +14,7 @@ Exposed-modules: Codec.Archive.Tar
 Other-modules:
  Codec.Archive.Tar.Create,
  Codec.Archive.Tar.Extract,
+ Codec.Archive.Tar.Files,
  Codec.Archive.Tar.Read,
  Codec.Archive.Tar.Types,
  Codec.Archive.Tar.Util,
