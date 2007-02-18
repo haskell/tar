@@ -21,7 +21,8 @@ data TarEntry = TarEntry {
 -- | TAR archive entry meta-data.
 data TarHeader = TarHeader 
     {
-     -- | Full relative path of the file or directory.
+     -- | Path of the file or directory. The path separator should be @/@ 
+     -- for portable TAR archives.
      tarFileName :: FilePath,
      -- | UNIX file mode.
      tarFileMode :: CMode,
