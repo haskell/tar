@@ -9,6 +9,8 @@ module Codec.Archive.Tar.Create (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
 
+import System.PosixCompat.Files
+
 import Control.Monad
 import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy (ByteString)
@@ -16,7 +18,6 @@ import Data.List
 import System.Directory
 import System.IO
 import System.IO.Unsafe (unsafeInterleaveIO)
-import System.Posix.Types
 
 
 -- | Creates a TAR archive containing a number of files
@@ -33,22 +34,37 @@ createTarArchive = liftM TarArchive . mapM createTarEntry
 -- The meta-data and file contents are taken from the given file.
 createTarEntry :: FilePath -> IO TarEntry
 createTarEntry path = 
-    do t <- getFileType path
+    do stat <- getFileStatus path
+       let t = fileType stat
+           dev = deviceID stat
        path' <- sanitizePath t path
-       perms <- getPermissions path
-       time <- getModificationTime path
-       let hdr = (mkTarHeader path') {
-                                      tarFileMode = permsToMode perms,
-                                      tarModTime = clockTimeToEpochTime time,
-                                      tarFileType = t
-                                     }
-       -- FIXME: handle other file types
-       case t of
-         TarNormalFile -> do h <- openBinaryFile path ReadMode
-                             size <- liftM fromIntegral $ hFileSize h
-                             cnt <- BS.hGetContents h -- FIXME: warn if size has changed?
-                             return $ TarEntry (hdr { tarFileSize = size }) cnt
-         _             -> return $ TarEntry hdr BS.empty
+       let hdr = TarHeader {
+                            tarFileName    = path',
+                            tarFileMode    = fileMode stat,
+                            tarOwnerID     = fileOwner stat,
+                            tarGroupID     = fileGroup stat,
+                            tarFileSize    = fromIntegral $ fileSize stat,
+                            tarModTime     = modificationTime stat,
+                            tarFileType    = t,
+                            tarLinkTarget  = "", -- FIXME: get link name
+                            tarOwnerName   = "", -- FIXME: get owner name
+                            tarGroupName   = "", -- FIXME: get group name
+                            tarDeviceMajor = 0,  -- FIXME: get major number
+                            tarDeviceMinor = 0   -- FIXME: get minor number
+                           }
+       cnt <- case t of
+                TarNormalFile -> BS.readFile path -- FIXME: warn if size has changed?
+                _             -> return BS.empty
+       return $ TarEntry hdr cnt
+
+fileType :: FileStatus -> TarFileType
+fileType stat | isRegularFile     stat = TarNormalFile
+              | isSymbolicLink    stat = TarSymbolicLink
+              | isCharacterDevice stat = TarCharacterDevice
+              | isBlockDevice     stat = TarBlockDevice
+              | isDirectory       stat = TarDirectory
+              | isNamedPipe       stat = TarFIFO
+              | otherwise              = error "Unknown file type."
 
 -- | Creates a TAR header for a normal file with the given path.
 -- Does not consult the file system.
@@ -56,7 +72,7 @@ createTarEntry path =
 mkTarHeader :: FilePath -> TarHeader
 mkTarHeader path = TarHeader {
                               tarFileName    = path,
-                              tarFileMode    = defaultMode,
+                              tarFileMode    = stdFileMode,
                               tarOwnerID     = 0,
                               tarGroupID     = 0,
                               tarFileSize    = 0,
@@ -76,19 +92,6 @@ mkDirectoryTarEntry :: FilePath -> TarEntry
 mkDirectoryTarEntry p = 
     TarEntry ((mkTarHeader p) { tarFileType = TarDirectory }) BS.empty
 
--- * File permissions
-
-defaultMode :: CMode
-defaultMode = 0o644
-
--- | This is a bit brain-dead, since 'Permissions' doesn't
--- deal with user, group, others permissions.
-permsToMode :: Permissions -> CMode
-permsToMode perms = boolsToBits [r,w,x,r,False,x,r,False,x]
-  where r = readable perms
-        w = writable perms
-        x = executable perms || searchable perms
-
 -- * Path and file stuff
 
 -- FIXME: normalize paths?
@@ -102,14 +105,6 @@ sanitizePath t path =
     addTrailingSep = if t == TarDirectory then (++[pathSep]) else id
     removeDuplSep = 
         concat . map (\g -> if all (==pathSep) g then [pathSep] else g) . group
-
-getFileType :: FilePath -> IO TarFileType
-getFileType path = 
-    do f <- doesFileExist path
-       if f then return TarNormalFile
-            else do d <- doesDirectoryExist path
-                    if d then return TarDirectory
-                         else doesNotExist "tar" path
 
 -- | Recurses through a list of files and directories
 -- in depth-first order.

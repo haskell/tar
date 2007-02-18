@@ -3,6 +3,7 @@ module Codec.Archive.Tar.Types where
 import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
 import System.Posix.Types (FileMode, UserID, GroupID, EpochTime)
+import System.PosixCompat.Extensions (CMajor, CMinor)
 
 -- | A TAR archive.
 newtype TarArchive = TarArchive { archiveEntries :: [TarEntry] }
@@ -47,11 +48,11 @@ data TarHeader = TarHeader
      -- | For character and block device entries, this is the 
      -- major number of the device. For all other entry types, it
      -- should be set to @0@.
-     tarDeviceMajor :: Int,
+     tarDeviceMajor :: CMajor,
      -- | For character and block device entries, this is the 
      -- minor number of the device. For all other entry types, it
      -- should be set to @0@.
-     tarDeviceMinor :: Int
+     tarDeviceMinor :: CMinor
     } 
   deriving Show
 
