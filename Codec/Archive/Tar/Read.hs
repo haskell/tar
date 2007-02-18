@@ -6,6 +6,7 @@ import Codec.Archive.Tar.Util
 import Data.Binary.Get
 
 import Data.Char (chr,ord)
+import Data.Int (Int64)
 import Control.Monad (liftM)
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as L
@@ -25,15 +26,24 @@ getTarEntry =
     do mhdr <- getTarHeader
        case mhdr of
          Nothing -> return Nothing
-         Just hdr -> liftM Just $ getBody hdr
-  where getBody hdr = 
-            do 
-            let size = tarFileSize hdr -- FIXME: treat size as 0 for non-files, it seems
-                                       -- like diretories can sometimes have non-zero size
-                                       -- in the header.
-                padding = (512 - size) `mod` 512
-            cnt <- liftM (L.take size) $ getLazyByteString $ size + padding
-            return $ TarEntry hdr cnt
+         Just hdr -> do let size = contentSize hdr
+                        cnt <- if size == 0 
+                                then return L.empty
+                                else let padding = (512 - size) `mod` 512
+                                in liftM (L.take size) $ getLazyByteString $ size + padding
+                        return $ Just $ TarEntry hdr cnt
+
+-- | Get the size of the content for the given header. This can sometimes
+-- be different from 'tarFileSize'. I have seen hints that some platforms
+-- may set the size to non-zero values for directories.
+contentSize :: TarHeader -> Int64
+contentSize hdr = if hasContent hdr then tarFileSize hdr else 0
+
+hasContent :: TarHeader -> Bool
+hasContent hdr = case tarFileType hdr of
+                    TarNormalFile -> True
+                    TarOther _    -> True
+                    _             -> False
 
 getTarHeader :: Get (Maybe TarHeader)
 getTarHeader =
