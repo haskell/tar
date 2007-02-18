@@ -339,15 +339,17 @@ rename name1 name2 = renameFile name1 name2
 -- -----------------------------------------------------------------------------
 -- chown()
 
+-- | The portable implementation does nothing.
 setOwnerAndGroup :: FilePath -> UserID -> GroupID -> IO ()
-setOwnerAndGroup name uid gid = unsupported "setOwnerAndGroup"
+setOwnerAndGroup name uid gid = return ()
 
+-- | The portable implementation does nothing.
 setFdOwnerAndGroup :: Fd -> UserID -> GroupID -> IO ()
-setFdOwnerAndGroup fd uid gid = unsupported "setFdOwnerAndGroup"
+setFdOwnerAndGroup fd uid gid = return ()
 
+-- | The portable implementation does nothing.
 setSymbolicLinkOwnerAndGroup :: FilePath -> UserID -> GroupID -> IO ()
-setSymbolicLinkOwnerAndGroup name uid gid = 
-    unsupported "setSymbolicLinkOwnerAndGroup"
+setSymbolicLinkOwnerAndGroup name uid gid = return ()
 
 -- -----------------------------------------------------------------------------
 -- utime()
