@@ -61,6 +61,8 @@ module Codec.Archive.Tar.Files (
 
 #define UNIX !defined(mingw32_HOST_OS)
 
+#define HAVE_FD_TO_HANDLE __GLASGOW_HASKELL__
+
 #if UNIX
 
 import System.Posix.Files
@@ -178,6 +180,7 @@ socketMode           = 0o0140000
 
 setFileMode :: FilePath -> FileMode -> IO ()
 setFileMode name m = setPermissions name $ modeToPerms m
+
 
 setFdMode :: Fd -> FileMode -> IO ()
 setFdMode fd m = unsupported "setFdMode"
@@ -360,26 +363,18 @@ touchFile name =
 -- -----------------------------------------------------------------------------
 -- Setting file sizes
 
-#if __GLASGOW_HASKELL__
-
 setFileSize :: FilePath -> FileOffset -> IO ()
 setFileSize file off = 
     bracket (openFile file WriteMode) (hClose)
             (\h -> hSetFileSize h (fromIntegral off))
 
 setFdSize :: Fd -> FileOffset -> IO ()
+#if HAVE_FD_TO_HANDLE
 setFdSize (Fd fd) off = 
     do h <- fdToHandle (fromIntegral fd)
        hSetFileSize h (fromIntegral off)
-
 #else
-
-setFileSize :: FilePath -> FileOffset -> IO ()
-setFileSize file off = unsupported "setFileSize"
-
-setFdSize :: Fd -> FileOffset -> IO ()
 setFdSize fd off = unsupported "setFdSize"
-
 #endif
 
 -- -----------------------------------------------------------------------------
