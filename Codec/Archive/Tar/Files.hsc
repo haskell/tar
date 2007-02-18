@@ -158,13 +158,13 @@ intersectFileModes m1 m2 = m1 .&. m2
 fileTypeModes :: FileMode
 fileTypeModes = 0o0170000
 
-blockSpecialMode :: FileMode
+blockSpecialMode     :: FileMode
 characterSpecialMode :: FileMode
-namedPipeMode :: FileMode
-regularFileMode :: FileMode
-directoryMode :: FileMode
-symbolicLinkMode :: FileMode
-socketMode :: FileMode
+namedPipeMode        :: FileMode
+regularFileMode      :: FileMode
+directoryMode        :: FileMode
+symbolicLinkMode     :: FileMode
+socketMode           :: FileMode
 
 blockSpecialMode     = 0o0060000
 characterSpecialMode = 0o0020000
