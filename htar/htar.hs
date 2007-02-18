@@ -143,15 +143,15 @@ entryInfo True  = detailedInfo . entryHeader
 entryInfo False = tarFileName  . entryHeader
 
 detailedInfo :: TarHeader -> String
-detailedInfo hdr =
-    unwords [typ ++ mode, owner, group, size, time, name]
+detailedInfo hdr = unwords [typ:mode, owner, group, size, time, name++link]
     where typ = case tarFileType hdr of
-                  TarSymbolicLink    -> "l"
-                  TarCharacterDevice -> "c"
-                  TarBlockDevice     -> "b"
-                  TarDirectory       -> "d"
-                  TarFIFO            -> "p"
-                  _                  -> "-"
+                  TarHardLink        -> 'h'
+                  TarSymbolicLink    -> 'l'
+                  TarCharacterDevice -> 'c'
+                  TarBlockDevice     -> 'b'
+                  TarDirectory       -> 'd'
+                  TarFIFO            -> 'p'
+                  _                  -> '-'
           mode = concat [u,g,o]
               where m = tarFileMode hdr 
                     f r w x s c = [if testBit m r then 'r' else '-',
@@ -168,6 +168,10 @@ detailedInfo hdr =
           size = lpad 11 ' ' $ show (tarFileSize hdr)
           time = formatEpochTime "%Y-%m-%d %H:%M:%S" (tarModTime hdr)
           name = tarFileName hdr
+          link = case tarFileType hdr of
+                   TarHardLink     -> " link to " ++ tarLinkTarget hdr
+                   TarSymbolicLink -> " -> " ++ tarLinkTarget hdr
+                   _               -> ""
 
 lpad :: Int -> a -> [a] -> [a]
 lpad n x xs = replicate (n - length xs) x ++ xs
