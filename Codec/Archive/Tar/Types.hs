@@ -2,7 +2,7 @@ module Codec.Archive.Tar.Types where
 
 import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
-import System.Posix.Types (CMode, EpochTime)
+import System.Posix.Types (FileMode, UserID, GroupID, EpochTime)
 
 -- | A TAR archive.
 newtype TarArchive = TarArchive { archiveEntries :: [TarEntry] }
@@ -25,11 +25,11 @@ data TarHeader = TarHeader
      -- for portable TAR archives.
      tarFileName :: FilePath,
      -- | UNIX file mode.
-     tarFileMode :: CMode,
+     tarFileMode :: FileMode,
      -- | Numeric owner user id. Should be set to @0@ if unknown.
-     tarOwnerID :: Int,
+     tarOwnerID :: UserID,
      -- | Numeric owner group id. Should be set to @0@ if unknown.
-     tarGroupID :: Int,
+     tarGroupID :: GroupID,
      -- | File size in bytes. Should be 0 for entries other than normal files.
      tarFileSize :: Int64,
      -- | Last modification time, expressed as the number of seconds
