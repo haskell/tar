@@ -13,8 +13,7 @@ import System.PosixCompat.Files
 import System.PosixCompat.User
 
 import Control.Monad
-import qualified Data.ByteString.Lazy as BS
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString.Lazy as L
 import Data.List
 import System.Directory
 import System.IO
@@ -64,8 +63,8 @@ createTarEntry path =
                             tarDeviceMinor = minor
                            }
        cnt <- case t of
-                TarNormalFile -> BS.readFile path -- FIXME: warn if size has changed?
-                _             -> return BS.empty
+                TarNormalFile -> L.readFile path -- FIXME: warn if size has changed?
+                _             -> return L.empty
        return $ TarEntry hdr cnt
 
 fileType :: FileStatus -> TarFileType
