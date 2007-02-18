@@ -9,7 +9,9 @@ module Codec.Archive.Tar.Create (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
 
+import System.PosixCompat.Extensions
 import System.PosixCompat.Files
+import System.PosixCompat.User
 
 import Control.Monad
 import qualified Data.ByteString.Lazy as BS
@@ -34,10 +36,20 @@ createTarArchive = liftM TarArchive . mapM createTarEntry
 -- The meta-data and file contents are taken from the given file.
 createTarEntry :: FilePath -> IO TarEntry
 createTarEntry path = 
-    do stat <- getFileStatus path
+    do stat <- getSymbolicLinkStatus path
        let t = fileType stat
-           dev = deviceID stat
        path' <- sanitizePath t path
+       target <- case t of
+                   TarSymbolicLink -> readSymbolicLink path
+                   _               -> return ""
+       let (major,minor) = if t == TarCharacterDevice || t == TarBlockDevice
+                             then let dev = deviceID stat
+                                   in (deviceMajor dev, deviceMinor dev)
+                             else (0,0)
+       -- FIXME: don't work on OS X
+       -- FIXME: if it fails, return nil
+       owner <- return "" --liftM userName  $ getUserEntryForID  $ fileOwner stat
+       grp   <- return "" --liftM groupName $ getGroupEntryForID $ fileGroup stat
        let hdr = TarHeader {
                             tarFileName    = path',
                             tarFileMode    = fileMode stat,
@@ -46,11 +58,11 @@ createTarEntry path =
                             tarFileSize    = fromIntegral $ fileSize stat,
                             tarModTime     = modificationTime stat,
                             tarFileType    = t,
-                            tarLinkTarget  = "", -- FIXME: get link name
-                            tarOwnerName   = "", -- FIXME: get owner name
-                            tarGroupName   = "", -- FIXME: get group name
-                            tarDeviceMajor = 0,  -- FIXME: get major number
-                            tarDeviceMinor = 0   -- FIXME: get minor number
+                            tarLinkTarget  = target,
+                            tarOwnerName   = owner,
+                            tarGroupName   = grp,
+                            tarDeviceMajor = major,
+                            tarDeviceMinor = minor
                            }
        cnt <- case t of
                 TarNormalFile -> BS.readFile path -- FIXME: warn if size has changed?
