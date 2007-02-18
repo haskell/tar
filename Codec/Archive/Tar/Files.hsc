@@ -182,8 +182,9 @@ setFileMode name m = setPermissions name $ modeToPerms m
 setFdMode :: Fd -> FileMode -> IO ()
 setFdMode fd m = unsupported "setFdMode"
 
+-- | The portable implementation does nothing and returns 'nullFileMode'.
 setFileCreationMask :: FileMode -> IO FileMode
-setFileCreationMask mask = unsupported "setFileCreationMask"
+setFileCreationMask mask = return nullFileMode
 
 modeToPerms :: FileMode -> Permissions
 modeToPerms m = Permissions {
