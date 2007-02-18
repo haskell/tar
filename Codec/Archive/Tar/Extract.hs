@@ -45,7 +45,7 @@ extractTarEntry (TarEntry hdr cnt) =
        warnIOError $ setFileMode path mode
        -- FIXME: use tarOwnerName / tarGroupName if available
        -- FIXME: gives lots of warnings if run by non-root
-       warnIOError $ setOwnerAndGroup path (tarOwnerID hdr) (tarGroupID hdr)
+       --warnIOError $ setOwnerAndGroup path (tarOwnerID hdr) (tarGroupID hdr)
        setFileTimes path (tarModTime hdr) (tarModTime hdr)
 
 createCharacterDevice :: FilePath -> FileMode -> DeviceID -> IO ()
