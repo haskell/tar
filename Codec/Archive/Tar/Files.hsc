@@ -77,7 +77,8 @@ import Control.Exception (bracket)
 import Control.Monad (liftM, liftM2)
 import Data.Bits ((.|.), (.&.))
 import System.Directory (renameFile, doesFileExist, doesDirectoryExist, 
-                         Permissions(..), getPermissions, getModificationTime)
+                         Permissions(..), getPermissions, setPermissions,
+                         getModificationTime)
 import System.IO (IOMode(..), openFile, hFileSize, hSetFileSize, hClose)
 import System.IO.Error
 import System.Posix.Types
@@ -176,13 +177,21 @@ socketMode           = 0o0140000
 
 
 setFileMode :: FilePath -> FileMode -> IO ()
-setFileMode name m = unsupported "setFileMode"
+setFileMode name m = setPermissions name $ modeToPerms m
 
 setFdMode :: Fd -> FileMode -> IO ()
 setFdMode fd m = unsupported "setFdMode"
 
 setFileCreationMask :: FileMode -> IO FileMode
 setFileCreationMask mask = unsupported "setFileCreationMask"
+
+modeToPerms :: FileMode -> Permissions
+modeToPerms m = Permissions {
+                             readable   = m .&. ownerReadMode    /= 0,
+                             writable   = m .&. ownerWriteMode   /= 0,
+                             executable = m .&. ownerExecuteMode /= 0,
+                             searchable = m .&. ownerExecuteMode /= 0
+                            }
 
 -- -----------------------------------------------------------------------------
 -- access()
