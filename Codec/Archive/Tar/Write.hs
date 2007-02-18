@@ -47,7 +47,7 @@ putTarHeader hdr =
 
 putHeaderNoChkSum :: TarHeader -> Put
 putHeaderNoChkSum hdr =
-    do let (filePrefix, fileSuffix) = splitLongPath 100 (tarFileName hdr)
+    do let (filePrefix, fileSuffix) = splitLongPath (tarFileName hdr)
        putString  100 $ fileSuffix
        putOct       8 $ tarFileMode hdr
        putOct       8 $ tarOwnerID hdr
@@ -78,11 +78,19 @@ putTarFileType t =
                  TarFIFO            -> '6'
                  TarOther c         -> c
 
-splitLongPath :: Int -> FilePath -> (String,String)
-splitLongPath l path | l < 1 || null path = error $ unwords ["splitFileName", show l, show path]
-splitLongPath l path | n > l = error $ "File path too long: " ++ show path -- FIXME: implement real splitting
-                     | otherwise = ("",path)
-  where n = length path
+splitLongPath :: FilePath -> (String,String)
+splitLongPath path =
+    let (x,y) = splitAt (length path - 101) path 
+              -- 101 since we will always move a separator to the prefix  
+     in if null x 
+         then if null y then err "Empty path." else ("", y)
+         else case break (==pathSep) y of
+                (_,"")    -> err "Can't split path." 
+                (_,_:"")  -> err "Can't split path." 
+                (y1,s:y2) | length p > 155 || length y2 > 100 -> err "Can't split path."
+                          | otherwise -> (p,y2)
+                      where p = x ++ y1 ++ [s]
+  where err e = error $ show path ++ ": " ++ e
 
 -- * TAR format primitive output
 
