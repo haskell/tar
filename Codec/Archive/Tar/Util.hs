@@ -1,6 +1,6 @@
 module Codec.Archive.Tar.Util where
 
-import Control.Exception (Exception(..), catchJust)
+import Control.Exception (Exception(..), catchJust, ioErrors)
 import Control.Monad (liftM)
 import Data.Bits (Bits, shiftL, (.|.))
 import System.IO (hPutStrLn, stderr)
@@ -18,6 +18,9 @@ fixEq f x = let x' = f x in if x' == x then x else fixEq f x'
 
 warn :: String -> IO ()
 warn = hPutStrLn stderr . ("tar: "++)
+
+warnIOError :: IO a -> IO ()
+warnIOError m = catchJust ioErrors (m >> return ()) (\e -> warn $ show e)
 
 doesNotExist :: String -> FilePath -> IO a
 doesNotExist loc = ioError . mkIOError doesNotExistErrorType loc Nothing . Just

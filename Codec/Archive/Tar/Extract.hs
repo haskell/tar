@@ -42,9 +42,10 @@ extractTarEntry (TarEntry hdr cnt) =
                TarDirectory       -> createDirectoryIfMissing False path
                TarFIFO            -> createNamedPipe path mode
                _                  -> BS.writeFile path cnt
-       setFileMode path mode
+       warnIOError $ setFileMode path mode
        -- FIXME: use tarOwnerName / tarGroupName if available
-       setOwnerAndGroup path (tarOwnerID hdr) (tarGroupID hdr)
+       -- FIXME: gives lots of warnings if run by non-root
+       warnIOError $ setOwnerAndGroup path (tarOwnerID hdr) (tarGroupID hdr)
        setFileTimes path (tarModTime hdr) (tarModTime hdr)
 
 createCharacterDevice :: FilePath -> FileMode -> DeviceID -> IO ()
