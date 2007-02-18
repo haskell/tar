@@ -3,8 +3,7 @@ module Codec.Archive.Tar.Create (
                                  createTarArchive, createTarEntry,
                                  recurseDirectories,
                                  -- * Creating TAR archives from scratch
-                                 mkTarHeader, 
-                                 mkFileTarEntry, mkDirectoryTarEntry) where
+                                 mkTarHeader) where
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Util
@@ -96,13 +95,6 @@ mkTarHeader path = TarHeader {
                               tarDeviceMajor = 0,
                               tarDeviceMinor = 0
                              }
-
-mkFileTarEntry :: FilePath -> ByteString -> TarEntry
-mkFileTarEntry p = TarEntry (mkTarHeader p)
-
-mkDirectoryTarEntry :: FilePath -> TarEntry
-mkDirectoryTarEntry p = 
-    TarEntry ((mkTarHeader p) { tarFileType = TarDirectory }) BS.empty
 
 -- * Path and file stuff
 
