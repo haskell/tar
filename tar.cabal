@@ -6,6 +6,7 @@ Author: Bjorn Bringert <bjorn@bringert.net>
 Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
+Build-type: Simple
 Build-depends: base >= 2.0, binary >= 0.2, unix-compat >= 0.1
 Synopsis: TAR (tape archive format) library.
 Description:
