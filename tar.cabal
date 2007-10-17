@@ -6,17 +6,36 @@ Author: Bjorn Bringert <bjorn@bringert.net>
 Maintainer: Bjorn Bringert <bjorn@bringert.net>
 Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
 Stability: Experimental
-Build-type: Simple
-Build-depends: base >= 2.0, binary >= 0.2, unix-compat >= 0.1
 Synopsis: TAR (tape archive format) library.
 Description:
   This is a library for reading and writing TAR archives.
-Exposed-modules: Codec.Archive.Tar
-Other-modules:
- Codec.Archive.Tar.Create,
- Codec.Archive.Tar.Extract,
- Codec.Archive.Tar.Read,
- Codec.Archive.Tar.Types,
- Codec.Archive.Tar.Util,
- Codec.Archive.Tar.Write
-GHC-Options: -O -Wall
+Build-type: Simple
+Cabal-version: >=1.2
+
+Flag bytestring-in-base
+Flag split-base
+
+Library
+  if flag(bytestring-in-base)
+    -- bytestring was in base-2.0 and 2.1.1
+    Build-depends: base >= 2.0 && < 2.2
+  else
+    -- in base 1.0 and 3.0 bytestring is a separate package
+    Build-depends: base < 2.0 || >= 3, bytestring >= 0.9
+
+  if flag(split-base)
+    Build-depends:   base >= 3.0, directory, old-time
+  else
+    Build-depends:   base < 3.0
+
+  Build-depends: binary >= 0.2, unix-compat >= 0.1
+
+  Exposed-modules: Codec.Archive.Tar
+  Other-modules:
+   Codec.Archive.Tar.Create,
+   Codec.Archive.Tar.Extract,
+   Codec.Archive.Tar.Read,
+   Codec.Archive.Tar.Types,
+   Codec.Archive.Tar.Util,
+   Codec.Archive.Tar.Write
+  GHC-Options: -Wall
