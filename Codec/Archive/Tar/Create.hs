@@ -10,7 +10,6 @@ import Codec.Archive.Tar.Util
 
 import System.PosixCompat.Extensions
 import System.PosixCompat.Files
-import System.PosixCompat.User
 
 import Control.Monad
 import qualified Data.ByteString.Lazy as L
