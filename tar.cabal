@@ -1,5 +1,5 @@
 Name: tar
-Version: 0.1.1
+Version: 0.1.1.1
 License: BSD4
 License-File: LICENSE
 Author: Bjorn Bringert <bjorn@bringert.net>
@@ -28,7 +28,7 @@ Library
   else
     Build-depends:   base < 3.0
 
-  Build-depends: binary >= 0.2, unix-compat >= 0.1
+  Build-depends: binary >= 0.2, unix-compat >= 0.1.2
 
   Exposed-modules: Codec.Archive.Tar
   Other-modules:

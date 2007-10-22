@@ -2,7 +2,7 @@ module Codec.Archive.Tar.Types where
 
 import Data.ByteString.Lazy (ByteString)
 import Data.Int (Int64)
-import System.Posix.Types (FileMode, UserID, GroupID, EpochTime)
+import System.PosixCompat.Types (FileMode, UserID, GroupID, EpochTime)
 import System.PosixCompat.Extensions (CMajor, CMinor)
 
 -- | A TAR archive.

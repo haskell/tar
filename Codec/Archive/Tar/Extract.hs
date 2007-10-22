@@ -9,7 +9,7 @@ import System.PosixCompat.Files
 import Control.Monad
 import qualified Data.ByteString.Lazy as BS
 import System.Directory
-import System.Posix.Types
+import System.PosixCompat.Types
 
 -- | Extracts the contents of a TAR archive into the current directory.
 --

@@ -6,7 +6,7 @@ import Data.Bits (Bits, shiftL, (.|.))
 import System.IO (hPutStrLn, stderr)
 import System.IO.Error (IOErrorType, ioeGetErrorType, mkIOError, 
                         doesNotExistErrorType, illegalOperationErrorType)
-import System.Posix.Types (EpochTime)
+import System.PosixCompat.Types (EpochTime)
 import System.Time (ClockTime(..))
 
 -- * Functions
