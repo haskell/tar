@@ -99,7 +99,7 @@ putString n s = do mapM_ putChar8 $ take n s
                    fill (n - length s) '\NUL'
 
 putOct :: Integral a => Int -> a -> Put
-putOct n x = do let o = take n $ showOct x ""
+putOct n x = do let o = take (n-1) $ showOct x ""
                 fill (n - length o - 1) '0'
                 mapM_ putChar8 o
                 putChar8 '\NUL'
