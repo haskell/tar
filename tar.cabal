@@ -21,10 +21,10 @@ Library
     Build-depends: base >= 2.0 && < 2.2
   else
     -- in base 1.0 and 3.0 bytestring is a separate package
-    Build-depends: base < 2.0 || >= 3, bytestring >= 0.9
+    Build-depends: base < 2.0 || == 3.*, bytestring >= 0.9
 
   if flag(split-base)
-    Build-depends:   base >= 3.0, directory, old-time
+    Build-depends:   base == 3.*, directory, old-time
   else
     Build-depends:   base < 3.0
 
