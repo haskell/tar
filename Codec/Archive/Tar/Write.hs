@@ -1,111 +1,112 @@
-module Codec.Archive.Tar.Write (writeTarArchive) where
+-----------------------------------------------------------------------------
+-- |
+-- Module      :  Codec.Archive.Tar.Write
+-- Copyright   :  (c) 2007 Bjorn Bringert,
+--                    2008 Andrea Vezzosi,
+--                    2008-2009 Duncan Coutts
+-- License     :  BSD3
+--
+-- Maintainer  :  duncan@haskell.org
+-- Portability :  portable
+--
+-----------------------------------------------------------------------------
+module Codec.Archive.Tar.Write (write) where
 
 import Codec.Archive.Tar.Types
-import Codec.Archive.Tar.Util
 
-import Data.Binary.Put
+import Data.Char     (ord)
+import Data.List     (foldl')
+import Numeric       (showOct)
 
-import qualified Data.ByteString.Char8 as B
-import qualified Data.ByteString.Lazy.Char8 as L
-import Data.Char (ord)
-import Numeric (showOct)
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BS.Char8
+import Data.ByteString.Lazy (ByteString)
 
--- | Writes a TAR archive to a lazy ByteString.
+
+-- | Create the external representation of a tar archive by serialising a list
+-- of tar entries.
 --
--- The archive is written in USTAR (POSIX.1-1988) format 
--- (tar with extended header information).
-writeTarArchive :: TarArchive -> L.ByteString
-writeTarArchive = runPut . putTarArchive
+-- The conversion is done lazily.
+--
+write :: [Entry] -> ByteString
+write es = BS.concat $ map putEntry es ++ [BS.replicate (512*2) 0]
 
-putTarArchive :: TarArchive -> Put
-putTarArchive (TarArchive es) = 
-    do mapM_ putTarEntry es
-       fill 512 '\0'
-       fill 512 '\0'
-       flush
+putEntry :: Entry -> ByteString
+putEntry entry = BS.concat [ header, content, padding ]
+  where
+    header  = putHeader entry
+    content = fileContent entry
+    padding = BS.replicate paddingSize 0
+    paddingSize = fromIntegral $ negate (fileSize entry) `mod` 512
 
-putTarEntry :: TarEntry -> Put
-putTarEntry (TarEntry hdr cnt) = 
-    do putTarHeader hdr
-       putContent cnt
-       flush
+putHeader :: Entry -> ByteString
+putHeader entry =
+     BS.Char8.pack $ take 148 block
+  ++ putOct 7 checksum
+  ++ ' ' : drop 156 block
+--  ++ putOct 8 checksum
+--  ++ drop 156 block
+  where
+    block    = putHeaderNoChkSum entry
+    checksum = foldl' (\x y -> x + ord y) 0 block
 
--- | Puts a lazy ByteString and nul-pads to a multiple of 512 bytes.
-putContent :: L.ByteString -> Put
-putContent = f 0 . L.toChunks
-  where f 0 []     = return ()
-        f n []     = fill (512 - n) '\NUL'
-        f n (x:xs) = putByteString x >> f ((n+B.length x) `mod` 512) xs
+putHeaderNoChkSum :: Entry -> String
+putHeaderNoChkSum entry = concat
+    [ putString  100 $ name
+    , putOct       8 $ fileMode entry
+    , putOct       8 $ ownerId entry
+    , putOct       8 $ groupId entry
+    , putOct      12 $ fileSize entry
+    , putOct      12 $ modTime entry
+    , fill         8 $ ' ' -- dummy checksum
+    , putChar8       $ toFileTypeCode (fileType entry)
+    , putString  100 $ linkTarget entry
+    ] ++
+  case headerExt entry of
+  V7Header          ->
+      fill 255 '\NUL'
+  ext@UstarHeader {}-> concat
+    [ putString    8 $ "ustar\NUL00"
+    , putString   32 $ ownerName ext
+    , putString   32 $ groupName ext
+    , putOct       8 $ deviceMajor ext
+    , putOct       8 $ deviceMinor ext
+    , putString  155 $ prefix
+    , fill        12 $ '\NUL'
+    ]
+  ext@GnuHeader {} -> concat
+    [ putString    8 $ "ustar  \NUL"
+    , putString   32 $ ownerName ext
+    , putString   32 $ groupName ext
+    , putGnuDev    8 $ deviceMajor ext
+    , putGnuDev    8 $ deviceMinor ext
+    , putString  155 $ prefix
+    , fill        12 $ '\NUL'
+    ]
+  where
+    TarPath name prefix = filePath entry
+    putGnuDev w n = case fileType entry of
+      CharacterDevice -> putOct w n
+      BlockDevice     -> putOct w n
+      _               -> replicate w '\NUL'
 
-putTarHeader :: TarHeader -> Put
-putTarHeader hdr = 
-    do let block = B.concat $ L.toChunks $ runPut (putHeaderNoChkSum hdr)
-           chkSum = B.foldl' (\x y -> x + ord y) 0 block
-       putByteString $ B.take 148 block
-       putOct 8 chkSum
-       putByteString $ B.drop 156 block
-
-putHeaderNoChkSum :: TarHeader -> Put
-putHeaderNoChkSum hdr =
-    do let (filePrefix, fileSuffix) = splitLongPath (tarFileName hdr)
-       putString  100 $ fileSuffix
-       putOct       8 $ tarFileMode hdr
-       putOct       8 $ tarOwnerID hdr
-       putOct       8 $ tarGroupID hdr
-       putOct      12 $ tarFileSize hdr
-       putOct      12 $ epochTimeToSecs $ tarModTime hdr
-       fill         8 $ ' ' -- dummy checksum
-       putTarFileType $ tarFileType hdr
-       putString  100 $ tarLinkTarget hdr -- FIXME: take suffix split at / if too long
-       putString    6 $ "ustar"
-       putString    2 $ "00" -- no nul byte
-       putString   32 $ tarOwnerName hdr
-       putString   32 $ tarGroupName hdr
-       putOct       8 $ tarDeviceMajor hdr
-       putOct       8 $ tarDeviceMinor hdr
-       putString  155 $ filePrefix
-       fill        12 $ '\NUL'
-
-putTarFileType :: TarFileType -> Put
-putTarFileType t = 
-    putChar8 $ case t of
-                 TarNormalFile      -> '0'
-                 TarHardLink        -> '1'
-                 TarSymbolicLink    -> '2'
-                 TarCharacterDevice -> '3'
-                 TarBlockDevice     -> '4'
-                 TarDirectory       -> '5'
-                 TarFIFO            -> '6'
-                 TarOther c         -> c
-
-splitLongPath :: FilePath -> (String,String)
-splitLongPath path =
-    let (x,y) = splitAt (length path - 101) path 
-              -- 101 since we will always move a separator to the prefix  
-     in if null x 
-         then if null y then err "Empty path." else ("", y)
-         else case break (==pathSep) y of
-                (_,"")    -> err "Can't split path." 
-                (_,_:"")  -> err "Can't split path." 
-                (y1,s:y2) | length p > 155 || length y2 > 100 -> err "Can't split path."
-                          | otherwise -> (p,y2)
-                      where p = x ++ y1 ++ [s]
-  where err e = error $ show path ++ ": " ++ e
 
 -- * TAR format primitive output
 
-putString :: Int -> String -> Put
-putString n s = do mapM_ putChar8 $ take n s
-                   fill (n - length s) '\NUL'
+type FieldWidth = Int
 
-putOct :: Integral a => Int -> a -> Put
-putOct n x = do let o = take (n-1) $ showOct x ""
-                fill (n - length o - 1) '0'
-                mapM_ putChar8 o
-                putChar8 '\NUL'
+putString :: FieldWidth -> String -> String
+putString n s = take n s ++ fill (n - length s) '\NUL'
 
-putChar8 :: Char -> Put
-putChar8 c = putWord8 $ fromIntegral $ ord c
+putOct :: Integral a => FieldWidth -> a -> String
+putOct n x =
+  let octStr = take (n-1) $ showOct x ""
+   in fill (n - length octStr - 1) '0'
+   ++ octStr
+   ++ putChar8 '\NUL'
 
-fill :: Int -> Char -> Put
-fill n c = putByteString $ B.replicate n c
+putChar8 :: Char -> String
+putChar8 c = [c]
+
+fill :: FieldWidth -> Char -> String
+fill n c = replicate n c

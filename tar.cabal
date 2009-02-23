@@ -1,41 +1,40 @@
-Name: tar
-Version: 0.1.1.3
-License: BSD3
-License-File: LICENSE
-Author: Bjorn Bringert <bjorn@bringert.net>
-Maintainer: Bjorn Bringert <bjorn@bringert.net>
-Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
-Stability: Experimental
-Synopsis: TAR (tape archive format) library.
-Description:
-  This is a library for reading and writing TAR archives.
-Build-type: Simple
-Cabal-version: >=1.2
+name: tar
+version: 0.2.0.0
+license: BSD3
+license-File: LICENSE
+author: Bjorn Bringert <bjorn@bringert.net>
+        Duncan Coutts <duncan@haskell.org>
+maintainer: Duncan Coutts <duncan@haskell.org>
+copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
+           2008-2009 Duncan Coutts <duncan@haskell.org>
+synopsis: Reading, writing and manipulating \"@.tar@\" archive files.
+description:
+  This library is for working with \"@.tar@\" archive files. It can read and
+  write a range of common variations of archive format including V7, USTAR,
+  POSIX and GNU formats. It provides support for packing and unpacking
+  portable archives. This makes it suitable for distribution but not backup
+  because details like file ownership and exact permissions are not preserved.
+build-type: Simple
+cabal-version: >=1.2
 
-Flag bytestring-in-base
-Flag split-base
+flag base3
 
-Library
-  if flag(bytestring-in-base)
-    -- bytestring was in base-2.0 and 2.1.1
-    Build-depends: base >= 2.0 && < 2.2
+library
+  build-depends: base >= 2 && < 5, filepath
+  if flag(base3)
+    build-depends:   base >= 3, directory, old-time, bytestring
   else
-    -- in base 1.0 and 3.0 bytestring is a separate package
-    Build-depends: base < 2.0 || == 3.*, bytestring >= 0.9
+    build-depends:   base < 3
 
-  if flag(split-base)
-    Build-depends:   base == 3.*, directory, old-time
-  else
-    Build-depends:   base < 3.0
+  exposed-modules: Codec.Archive.Tar
+  other-modules:
+   Codec.Archive.Tar.Types
 
-  Build-depends: binary >= 0.2, unix-compat >= 0.1.2
-
-  Exposed-modules: Codec.Archive.Tar
-  Other-modules:
-   Codec.Archive.Tar.Create,
-   Codec.Archive.Tar.Extract,
-   Codec.Archive.Tar.Read,
-   Codec.Archive.Tar.Types,
-   Codec.Archive.Tar.Util,
+   Codec.Archive.Tar.Read
    Codec.Archive.Tar.Write
-  GHC-Options: -Wall
+
+   Codec.Archive.Tar.Pack
+   Codec.Archive.Tar.Unpack
+   Codec.Archive.Tar.Check
+
+  ghc-options: -Wall
