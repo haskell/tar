@@ -1,16 +1,39 @@
-Name: htar
-Version: 0.1
-License: BSD3
-License-File: ../LICENSE
-Author: Bjorn Bringert <bjorn@bringert.net>
-Maintainer: Bjorn Bringert <bjorn@bringert.net>
-Copyright: 2007 Bjorn Bringert <bjorn@bringert.net>
-Stability: Experimental
-Build-depends: base >= 2.0, tar == 0.1, compression >= 0.1
-Synopsis: Command-line TAR utility.
-Description:
-  Command-line TAR utility which uses the tar package.
+name:            htar
+version:         0.2
+license:         BSD3
+license-File:    LICENSE
+author:          Bjorn Bringert <bjorn@bringert.net>
+                 Duncan Coutts <duncan@haskell.org>
+maintainer:      Duncan Coutts <duncan@haskell.org>
+copyright:       2007 Bjorn Bringert <bjorn@bringert.net>
+                 2008-2009 Duncan Coutts <duncan@haskell.org>
+category:        Codec
+synopsis:        Command-line tar archive utility.
+description:     A Command-line utility to create, extract and list the
+                 contents of tar archives. It can work with compressed
+                 archives using gzip or bzip2 compression.
+build-type:      Simple
+cabal-version:   >= 1.2
 
-Executable: htar
-Main-Is: htar.hs
-GHC-options: -O -Wall
+flag base3
+
+executable htar
+  main-is: htar.hs
+  ghc-options: -Wall
+  build-depends:
+    base  >= 2,
+    tar   >= 0.2 && < 0.3,
+    zlib  >= 0.4 && < 0.6,
+    bzlib >= 0.4 && < 0.6,
+    filepath >= 1
+
+  if flag(base3)
+    build-depends:
+      base >= 3,
+      old-time   >= 1.0,
+      old-locale >= 1.0,
+      directory  >= 1.0,
+      bytestring >= 0.9
+  else
+    build-depends:
+      base < 3
