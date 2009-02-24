@@ -1,6 +1,7 @@
 module Main where
 
-import qualified Codec.Archive.Tar as Tar
+import qualified Codec.Archive.Tar       as Tar
+import qualified Codec.Archive.Tar.Entry as Tar
 
 import qualified Codec.Compression.GZip as GZip (compress, decompress)
 import qualified Codec.Compression.BZip as BZip (compress, decompress)
