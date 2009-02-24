@@ -28,7 +28,7 @@ module Codec.Archive.Tar (
   -- tar files are almost always processed linearly rather than in a
   -- random-access fashion.
   --
-  -- The functions in this module are designed for working on tar files
+  -- The functions in this package are designed for working on tar files
   -- linearly and lazily. This makes it possible to do many operations in
   -- constant space rather than having to load the entire archive into memory.
   --
@@ -38,6 +38,11 @@ module Codec.Archive.Tar (
   -- archives. If you need to construct GNU format archives or exactly preserve
   -- file ownership and permissions then you will need to write some extra
   -- helper functions.
+  --
+  -- This module contains just the simple high level operations without
+  -- exposing the all the details of tar files. If you need to inspect tar
+  -- entries in more detail or construct them directly then you also need
+  -- the module "Codec.Archive.Tar.Entry".
 
   -- * High level \"all in one\" operations
   create,

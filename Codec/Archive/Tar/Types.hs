@@ -78,7 +78,7 @@ data Entry = Entry {
     -- | Path of the file or directory.
     filePath :: !TarPath,
 
-    -- | UNIX file mode.
+    -- | UNIX file mode (file permissions).
     fileMode :: !FileMode,
 
     -- | Numeric owner user id. Should be set to @0@ if unknown.
@@ -93,7 +93,7 @@ data Entry = Entry {
     -- | Last modification time.
     modTime :: !EpochTime,
 
-    -- | Type of this entry.
+    -- | The type of this tar entry. Usually just 'NormalFile' or 'Directory'.
     fileType :: FileType,
 
     -- | If the entry is a hard link or a symbolic link, this is the path of
@@ -107,15 +107,12 @@ data Entry = Entry {
     -- information is encoded.
     headerExt :: ExtendedHeader,
 
-    -- | Entry contents. For entries other than normal files, this should be an
-    -- empty string.
+    -- | Tar entry contents. For entries other than 'NormalFile', this should
+    -- be an empty string.
     fileContent :: ByteString
   }
 
--- | 'FilePath' of the file or directory within the archive.
---
--- The difference between this function and 'filePath' is that it gives us back
--- a native 'FilePath' rather than a archive 'TarPath'.
+-- | Native 'FilePath' of the file or directory within the archive.
 --
 fileName :: Entry -> FilePath
 fileName = fromTarPath . filePath
@@ -174,14 +171,14 @@ data ExtendedHeader =
 
 -- | Tar archive entry types.
 --
--- In portable archives you should only use 'NormalFile' and 'Directory'.
+-- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
 data FileType = NormalFile
-              | HardLink
+              | Directory
               | SymbolicLink
+              | HardLink
               | CharacterDevice
               | BlockDevice
-              | Directory
               | FIFO
               | ExtendedHeader
               | GlobalHeader

@@ -8,7 +8,7 @@ maintainer:      Duncan Coutts <duncan@haskell.org>
 copyright:       2007 Bjorn Bringert <bjorn@bringert.net>
                  2008-2009 Duncan Coutts <duncan@haskell.org>
 category:        Codec
-synopsis:        Reading, writing and manipulating \"@.tar@\" archive files.
+synopsis:        Reading, writing and manipulating ".tar" archive files.
 description:     This library is for working with \"@.tar@\" archive files. It
                  can read and write a range of common variations of archive
                  format including V7, USTAR, POSIX and GNU formats. It provides
