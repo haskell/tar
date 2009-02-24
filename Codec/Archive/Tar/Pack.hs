@@ -45,12 +45,15 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 -- to pack directories containing recursive symbolic links. Special files like
 -- FIFOs (named pipes), sockets or device files will also cause problems.
 --
+-- * Note: this function returns results lazily. Subdirectories are scanned
+-- and files are read one by one as the list of entries is consumed.
+--
 pack :: FilePath    -- ^ Base directory
      -> FilePath    -- ^ Directory to pack, relative to the base dir
      -> IO [Entry]
 pack baseDir sourceDir = do
   files <- getDirectoryContentsRecursive (baseDir </> sourceDir)
-  sequence --FIXME: add IO interleaving
+  interleave
     [ do tarpath <- either fail return (toTarPath ftype relPath)
          if isDir then packDirectoryEntry filepath tarpath
                   else packFileEntry      filepath tarpath
@@ -58,6 +61,16 @@ pack baseDir sourceDir = do
     , let isDir   = FilePath.Native.hasTrailingPathSeparator filepath
           ftype   = if isDir then Directory else NormalFile
           relPath = FilePath.Native.makeRelative baseDir filepath ]
+
+  where
+    interleave :: [IO a] -> IO [a]
+    interleave = unsafeInterleaveIO . go
+      where
+        go []     = return []
+        go (x:xs) = do
+          x'  <- x
+          xs' <- interleave xs
+          return (x':xs')
 
 -- | Construct a tar 'Entry' based on a local file.
 --
