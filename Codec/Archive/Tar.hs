@@ -82,6 +82,7 @@ module Codec.Archive.Tar (
   Entry,
   fileName,
   fileType,
+  fileContent,
   FileType(..),
 
   -- ** Sequences of tar entries
