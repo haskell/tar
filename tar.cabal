@@ -28,15 +28,16 @@ library
   else
     build-depends: base < 3
 
-  exposed-modules: Codec.Archive.Tar
+  exposed-modules:
+    Codec.Archive.Tar
+    Codec.Archive.Tar.Entry
+    Codec.Archive.Tar.Check
+
   other-modules:
-   Codec.Archive.Tar.Types
-
-   Codec.Archive.Tar.Read
-   Codec.Archive.Tar.Write
-
-   Codec.Archive.Tar.Pack
-   Codec.Archive.Tar.Unpack
-   Codec.Archive.Tar.Check
+    Codec.Archive.Tar.Types
+    Codec.Archive.Tar.Read
+    Codec.Archive.Tar.Write
+    Codec.Archive.Tar.Pack
+    Codec.Archive.Tar.Unpack
 
   ghc-options: -Wall

@@ -69,48 +69,15 @@ module Codec.Archive.Tar (
   pack,
   unpack,
 
-  -- * Checking tarball contents
-  checkSecurity,
-  checkTarbomb,
-  checkPortability,
-
-  -- * Representation types and utilities
-  -- ** Tar entry and associated types
-  Entry(..),
+  -- * Types
+  -- ** Tar entry type
+  -- | This module provides only very simple and limited read-only access to
+  -- the 'Entry' type. If you need access to the details or you need to
+  -- construct your own entries then also import "Codec.Archive.Tar.Entry".
+  Entry,
   fileName,
-  ExtendedHeader(..),
-  FileSize,
-  FileMode,
-  EpochTime,
-  UserId,
-  GroupId,
-  DevMajor,
-  DevMinor,
+  fileType,
   FileType(..),
-
-  -- ** Constructing simple entry values
-  emptyEntry,
-  fileEntry,
-  directoryEntry,
-
-  -- ** Constructing entries from disk files
-  packFileEntry,
-  packDirectoryEntry,
-  getDirectoryContentsRecursive,
-
-  -- ** Standard file modes
-  -- | For maximum portability when constructing archives use only these file
-  -- modes.
-  ordinaryFileMode,
-  executableFileMode,
-  directoryFileMode,
-
-  -- ** TarPaths
-  TarPath,
-  toTarPath,
-  fromTarPath,
-  fromTarPathToPosixPath,
-  fromTarPathToWindowsPath,
 
   -- ** Sequences of tar entries
   Entries(..),
@@ -127,8 +94,6 @@ import Codec.Archive.Tar.Write
 
 import Codec.Archive.Tar.Pack
 import Codec.Archive.Tar.Unpack
-
-import Codec.Archive.Tar.Check
 
 import qualified Data.ByteString.Lazy as BS
 import Prelude hiding (read)
