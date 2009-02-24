@@ -114,7 +114,7 @@ getEntry bs
    devmajor_  = getOct    329   8 header
    devminor_  = getOct    337   8 header
    prefix     = getString 345 155 header
---   trailing   = getBytes  500  12 header --TODO: check all \0's
+-- trailing   = getBytes  500  12 header
 
 data EntryFormat = V7 | USTAR | GNU
 
