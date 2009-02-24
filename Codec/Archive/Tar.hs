@@ -72,7 +72,7 @@ module Codec.Archive.Tar (
   -- * Checking tarball contents
   checkSecurity,
   checkTarbomb,
---  checkPortability,
+  checkPortability,
 
   -- * Representation types and utilities
   -- ** Tar entry and associated types
