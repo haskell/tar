@@ -39,6 +39,8 @@ module Codec.Archive.Tar.Types (
   TarPath(..),
   toTarPath,
   fromTarPath,
+  fromTarPathToPosixPath,
+  fromTarPathToWindowsPath,
 
   Entries(..),
   mapEntries,
@@ -57,6 +59,8 @@ import qualified System.FilePath as FilePath.Native
          ( joinPath, splitDirectories )
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, addTrailingPathSeparator )
+import qualified System.FilePath.Windows as FilePath.Windows
+         ( joinPath )
 import System.Posix.Types
          ( FileMode )
 
@@ -323,6 +327,32 @@ fromTarPath :: TarPath -> FilePath
 fromTarPath (TarPath name prefix) =
   FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
                           ++ FilePath.Posix.splitDirectories name
+
+-- | Convert a 'TarPath' to a Unix/Posix 'FilePath'.
+--
+-- The difference compared to 'fromTarPath' is that it always returns a Unix
+-- style path irrespective of the current operating system.
+--
+-- This is useful to check how a 'TarPath' would be interpreted on a specific
+-- operating system, eg to perform portability checks.
+--
+fromTarPathToPosixPath :: TarPath -> FilePath
+fromTarPathToPosixPath (TarPath name prefix) =
+  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
+                         ++ FilePath.Posix.splitDirectories name
+
+-- | Convert a 'TarPath' to a Windows 'FilePath'.
+--
+-- The only difference compared to 'fromTarPath' is that it always returns a
+-- Windows style path irrespective of the current operating system.
+--
+-- This is useful to check how a 'TarPath' would be interpreted on a specific
+-- operating system, eg to perform portability checks.
+--
+fromTarPathToWindowsPath :: TarPath -> FilePath
+fromTarPathToWindowsPath (TarPath name prefix) =
+  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
+                           ++ FilePath.Posix.splitDirectories name
 
 -- | Convert a native 'FilePath' to a 'TarPath'. The 'FileType' parameter is
 -- needed because for directories a 'TarPath' always uses a trailing @\/@.

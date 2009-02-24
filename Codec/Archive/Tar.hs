@@ -109,6 +109,8 @@ module Codec.Archive.Tar (
   TarPath,
   toTarPath,
   fromTarPath,
+  fromTarPathToPosixPath,
+  fromTarPathToWindowsPath,
 
   -- ** Sequences of tar entries
   Entries(..),
