@@ -321,7 +321,7 @@ data TarPath = TarPath FilePath -- path name, 100 characters max.
 --
 -- * The tar path may be an absolute path or may contain @\"..\"@ components.
 --   For security reasons this should not usually be allowed, but it is your
---   responsibility to check for these conditions.
+--   responsibility to check for these conditions (eg using 'checkSecurity').
 --
 fromTarPath :: TarPath -> FilePath
 fromTarPath (TarPath name prefix) =
