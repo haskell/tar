@@ -29,7 +29,7 @@ import Prelude hiding (read)
 -- structure. Decoding errors are reported by the 'Fail' constructor of the
 -- 'Entries' type.
 --
--- The conversion is done lazily.
+-- * The conversion is done lazily.
 --
 read :: ByteString -> Entries
 read = unfoldEntries getEntry

@@ -25,18 +25,8 @@ import qualified System.FilePath as FilePath.Native
 import qualified System.FilePath.Windows as FilePath.Windows
 import qualified System.FilePath.Posix   as FilePath.Posix
 
--- | This is pretty important. A maliciously constructed tar archives could
--- contain entries that specify bad file names. It could specify absolute file
--- names like \"@\/etc\/passwd@\" or relative files outside of the archive like
--- \"..\/..\/..\/something\".
---
--- If we did not check for file names like these when 'unpack'ing an archive
--- then we could create a security problem commonly called a \"directory
--- traversal vulnerability\". Historically, such vulnerabilites have been
--- common in packages handling tar archives.
---
--- This function checks a sequence of tar entries for such problems. It checks
--- that:
+-- | This function checks a sequence of tar entries for file name security
+-- problems. It checks that:
 --
 -- * file paths are not absolute
 --

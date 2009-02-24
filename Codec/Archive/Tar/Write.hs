@@ -26,7 +26,7 @@ import Data.ByteString.Lazy (ByteString)
 -- | Create the external representation of a tar archive by serialising a list
 -- of tar entries.
 --
--- The conversion is done lazily.
+-- * The conversion is done lazily.
 --
 write :: [Entry] -> ByteString
 write es = BS.concat $ map putEntry es ++ [BS.replicate (512*2) 0]

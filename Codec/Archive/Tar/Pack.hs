@@ -45,7 +45,7 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 -- to pack directories containing recursive symbolic links. Special files like
 -- FIFOs (named pipes), sockets or device files will also cause problems.
 --
--- * Note: this function returns results lazily. Subdirectories are scanned
+-- * This function returns results lazily. Subdirectories are scanned
 -- and files are read one by one as the list of entries is consumed.
 --
 pack :: FilePath    -- ^ Base directory
@@ -78,7 +78,7 @@ pack baseDir sourceDir = do
 -- modification time. If the file is executable then that information is also
 -- preserved. File ownership and detailed permissions are not preserved.
 --
--- * Note: the file contents is read lazily.
+-- * The file contents is read lazily.
 --
 packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
               -> TarPath  -- ^ Path to use for the tar Entry in the archive
@@ -126,7 +126,7 @@ packDirectoryEntry filepath tarpath = do
 -- contiguous group. This tends to improve file layout an IO performance when
 -- creating or extracting tar archives.
 --
--- * Note: this function returns results lazily. Subdirectories are not scanned
+-- * This function returns results lazily. Subdirectories are not scanned
 -- until the files entries in the parent directory have been consumed.
 --
 getDirectoryContentsRecursive :: FilePath -> IO [FilePath]

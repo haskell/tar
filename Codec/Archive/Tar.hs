@@ -32,12 +32,12 @@ module Codec.Archive.Tar (
   -- linearly and lazily. This makes it possible to do many operations in
   -- constant space rather than having to load the entire archive into memory.
   --
-  -- It can read and write standard and GNU format tar files and can preserve
-  -- all the information in them. The convenience functions that are provided
-  -- for creating achive entries are primarily designed for standard portable
-  -- archives. If you need to construct GNU format archives or exactly preserve
-  -- file ownership and permissions then you will need to write some extra
-  -- helper functions.
+  -- It can read and write standard POSIX tar files and also the GNU and old
+  -- Unix V7 tar formats. The convenience functions that are provided in the
+  -- "Codec.Archive.Tar.Entry" module for creating achive entries are primarily
+  -- designed for standard portable archives. If you need to construct GNU
+  -- format archives or exactly preserve file ownership and permissions then
+  -- you will need to write some extra helper functions.
   --
   -- This module contains just the simple high level operations without
   -- exposing the all the details of tar files. If you need to inspect tar
@@ -65,6 +65,28 @@ module Codec.Archive.Tar (
   --
   -- > Tar.unpack dir . Tar.read . GZip.decompress =<< BS.readFile tar
   --
+
+  -- ** Tarbombs
+  -- | A \"tarbomb\" is a @.tar@ file where not all entries are in a
+  -- subdirectory but instead files extract into the top level directory. The
+  -- 'extract' function does not check for these however if you want to do
+  -- that you can use the 'checkTarbomb' function like so:
+  --
+  -- > Tar.unpack dir . Tar.checkTarbomb expectedDir
+  -- >                . Tar.read =<< BS.readFile tar
+  --
+  -- In this case extraction will fail if any file is outside of @expectedDir@.
+
+  -- ** Security
+  -- | This is pretty important. A maliciously constructed tar archives could
+  -- contain entries that specify bad file names. It could specify absolute
+  -- file names like \"@\/etc\/passwd@\" or relative files outside of the
+  -- archive like \"..\/..\/..\/something\". This security problem is commonly
+  -- called a \"directory traversal vulnerability\". Historically, such
+  -- vulnerabilites have been common in packages handling tar archives.
+  --
+  -- The 'extract' and 'unpack' functions check for bad file names. See the
+  -- 'checkSecurity' function for more detials.
 
   -- * Converting between internal and external representation
   read,
@@ -100,6 +122,8 @@ import Codec.Archive.Tar.Write
 
 import Codec.Archive.Tar.Pack
 import Codec.Archive.Tar.Unpack
+
+import Codec.Archive.Tar.Check
 
 import qualified Data.ByteString.Lazy as BS
 import Prelude hiding (read)
@@ -162,22 +186,12 @@ create tar base dir = BS.writeFile tar . write =<< pack base dir
 -- will be thrown and extraction will not continue.
 --
 -- Since the extraction may fail part way through it is not atomic. For this
--- reason you may want to extract into an empty directory and, if the extraction
--- fails, recursively delete the directory.
+-- reason you may want to extract into an empty directory and, if the
+-- extraction fails, recursively delete the directory.
 --
 -- Security: only files inside the target directory will be written. Tarballs
 -- containing entries that point outside of the tarball (either absolute paths
 -- or relative paths) will be caught and an exception will be thrown.
---
--- Tarbombs: a \"tarbomb\" is a @.tar@ file where not all entries are in a
--- subdirectory but instead files extract into the top level directory. The
--- extract function does not check for these however if you want to do that you
--- can use the 'checkTarbomb' function like so:
---
--- > Tar.unpack dir . Tar.checkTarbomb expectedDir
--- >                . Tar.read =<< BS.readFile tar
---
--- In this case extraction will fail if any file is outside of @expectedDir@.
 --
 extract :: FilePath -- ^ Destination directory
         -> FilePath -- ^ Tarball

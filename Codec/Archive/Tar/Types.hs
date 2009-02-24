@@ -96,7 +96,7 @@ data Entry = Entry {
     -- | The type of this tar entry. Usually just 'NormalFile' or 'Directory'.
     fileType :: FileType,
 
-    -- | If the entry is a hard link or a symbolic link, this is the path of
+    -- | If the entry is a 'HardLink' or a 'SymbolicLink', this is the path of
     -- the link target. For all other entry types this should be @\"\"@.
     -- The maximum length of this is 100 ASCII characters.
     linkTarget :: FilePath,
