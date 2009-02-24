@@ -117,7 +117,8 @@ packDirectoryEntry filepath tarpath = do
 -- until the files entries in the parent directory have been consumed.
 --
 getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
-getDirectoryContentsRecursive dir0 = recurseDirectories [dir0]
+getDirectoryContentsRecursive dir0 =
+  recurseDirectories [FilePath.Native.addTrailingPathSeparator dir0]
 
 recurseDirectories :: [FilePath] -> IO [FilePath]
 recurseDirectories []         = return []
@@ -132,10 +133,11 @@ recurseDirectories (dir:dirs) = unsafeInterleaveIO $ do
     collect files dirs' (entry:entries) | ignore entry
                                         = collect files dirs' entries
     collect files dirs' (entry:entries) = do
-      let dirEntry = dir </> FilePath.Native.addTrailingPathSeparator entry
+      let dirEntry  = dir </> entry
+          dirEntry' = FilePath.Native.addTrailingPathSeparator dirEntry
       isDirectory <- doesDirectoryExist dirEntry
       if isDirectory
-        then collect files (dirEntry:dirs') entries
+        then collect files (dirEntry':dirs') entries
         else collect (dirEntry:files) dirs' entries
 
     ignore ['.']      = True
