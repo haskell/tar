@@ -135,9 +135,11 @@ getOct :: Integral a => Int64 -> Int64 -> ByteString -> Partial a
 getOct off len = parseOct
                . BS.Char8.unpack
                . BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
+               . BS.Char8.dropWhile (== ' ')
                . getBytes off len
   where
     parseOct "" = return 0
+    parseOct ('\128':_) = fail "tar header uses non-standard number encoding"
     parseOct s  = case readOct s of
       [(x,[])] -> return x
       _        -> fail "tar header is malformatted (bad numeric encoding)"
