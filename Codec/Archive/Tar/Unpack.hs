@@ -72,7 +72,7 @@ unpack baseDir entries = extractFiles [] (checkSecurity entries)
       createDirectoryIfMissing False (baseDir </> fileName entry)
 
     saveLink entry links = seq (length name)
-                         $ seq (length name)
+                         $ seq (length target)
                          $ link:links
       where
         name    = fileName entry
