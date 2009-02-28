@@ -10,12 +10,12 @@ import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy  (ByteString)
 import Data.Bits             (testBit)
 import Data.Char             (toUpper)
-import System.Console.GetOpt (OptDescr(..),ArgDescr(..), ArgOrder(..),
+import System.Console.GetOpt (OptDescr(..), ArgDescr(..), ArgOrder(..),
                               getOpt', usageInfo)
 import System.Environment    (getArgs)
 import System.Exit           (exitFailure)
-import System.Locale         (defaultTimeLocale)
 import System.IO             (hPutStrLn, stderr)
+import System.Locale         (defaultTimeLocale)
 import System.Time           (ClockTime(..), toUTCTime, formatCalendarTime)
 
 main :: IO ()
@@ -66,36 +66,35 @@ entryInfo :: Verbosity -> Tar.Entry -> String
 entryInfo Verbose = detailedInfo
 entryInfo Concise = Tar.fileName
 
---TODO: format exactly like gnutar
---      check with larger examples where we sometimes get misaligned columns
 detailedInfo :: Tar.Entry -> String
 detailedInfo entry =
-  unwords [ typ:mode
-          , owner ++ '/' : group
-          , size
+  unwords [ typeCode : permissions
+          , justify 19 (owner ++ '/' : group) size
           , time
-          , name++link ]
+          , name ++ link ]
   where
-    typ = case Tar.fileType entry of
-            Tar.HardLink        -> 'h'
-            Tar.SymbolicLink    -> 'l'
-            Tar.CharacterDevice -> 'c'
-            Tar.BlockDevice     -> 'b'
-            Tar.Directory       -> 'd'
-            Tar.FIFO            -> 'p'
-            _                   -> '-'
-    mode = concat [u,g,o]
-        where m = Tar.fileMode entry
-              f r w x s c = [if testBit m r then 'r' else '-',
-                             if testBit m w then 'w' else '-',
-                             if testBit m s
-                               then if testBit m x then c   else toUpper c
-                               else if testBit m x then 'x' else '-']
-              u = f 8 7 6 11 's'
-              g = f 5 4 3 10 's'
-              o = f 2 1 0  9 't'
-    owner = rpad 7 ' ' $ nameOrID ownerName (Tar.ownerId entry)
-    group = rpad 7 ' ' $ nameOrID groupName (Tar.groupId entry)
+    typeCode = case Tar.fileType entry of
+      Tar.HardLink        -> 'h'
+      Tar.SymbolicLink    -> 'l'
+      Tar.CharacterDevice -> 'c'
+      Tar.BlockDevice     -> 'b'
+      Tar.Directory       -> 'd'
+      Tar.FIFO            -> 'p'
+      _                   -> '-'
+    permissions = concat [userPerms, groupPerms, otherPerms]
+      where
+        userPerms  = formatPerms 8 7 6 11 's'
+        groupPerms = formatPerms 5 4 3 10 's'
+        otherPerms = formatPerms 2 1 0  9 't'
+        formatPerms r w x s c =
+          [if testBit m r then 'r' else '-'
+          ,if testBit m w then 'w' else '-'
+          ,if testBit m s
+             then if testBit m x then c   else toUpper c
+             else if testBit m x then 'x' else '-']
+        m = Tar.fileMode entry
+    owner = nameOrID ownerName (Tar.ownerId entry)
+    group = nameOrID groupName (Tar.groupId entry)
     ownerName = case Tar.headerExt entry of
       Tar.UstarHeader { Tar.ownerName = n } -> n
       Tar.GnuHeader   { Tar.ownerName = n } -> n
@@ -105,7 +104,7 @@ detailedInfo entry =
       Tar.GnuHeader   { Tar.groupName = n } -> n
       _                                      -> ""
     nameOrID n i = if null n then show i else n
-    size = lpad 4 ' ' $ show (Tar.fileSize entry)
+    size = show (Tar.fileSize entry)
     time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.modTime entry)
     name = Tar.fileName entry
     link = case Tar.fileType entry of
@@ -113,11 +112,11 @@ detailedInfo entry =
              Tar.SymbolicLink -> " -> " ++ Tar.linkTarget entry
              _                -> ""
 
-lpad :: Int -> a -> [a] -> [a]
-lpad n x xs = replicate (n - length xs) x ++ xs
-
-rpad :: Int -> a -> [a] -> [a]
-rpad n x xs = xs ++ replicate (n - length xs) x
+justify :: Int -> String -> String -> String
+justify width left right = left ++ padding ++ right
+  where
+    padding  = replicate padWidth ' '
+    padWidth = max 1 (width - length left - length right)
 
 formatEpochTime :: String -> Tar.EpochTime -> String
 formatEpochTime f =
@@ -203,4 +202,3 @@ die errs = do
   mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) $ errs
   hPutStrLn stderr "Try `htar --help' for more information."
   exitFailure
-
