@@ -56,11 +56,12 @@ import qualified Data.ByteString.Lazy.Char8 as BS.Char8
 import Data.ByteString.Lazy (ByteString)
 
 import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories )
+         ( joinPath, splitDirectories, addTrailingPathSeparator )
 import qualified System.FilePath.Posix as FilePath.Posix
-         ( joinPath, splitPath, splitDirectories, addTrailingPathSeparator )
+         ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
+         , addTrailingPathSeparator )
 import qualified System.FilePath.Windows as FilePath.Windows
-         ( joinPath )
+         ( joinPath, addTrailingPathSeparator )
 import System.Posix.Types
          ( FileMode )
 
@@ -321,9 +322,13 @@ data TarPath = TarPath FilePath -- path name, 100 characters max.
 --   responsibility to check for these conditions (eg using 'checkSecurity').
 --
 fromTarPath :: TarPath -> FilePath
-fromTarPath (TarPath name prefix) =
+fromTarPath (TarPath name prefix) = adjustDirectory $
   FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
                           ++ FilePath.Posix.splitDirectories name
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                    = FilePath.Native.addTrailingPathSeparator
+                    | otherwise = id
 
 -- | Convert a 'TarPath' to a Unix/Posix 'FilePath'.
 --
@@ -334,9 +339,13 @@ fromTarPath (TarPath name prefix) =
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath (TarPath name prefix) =
+fromTarPathToPosixPath (TarPath name prefix) = adjustDirectory $
   FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
                          ++ FilePath.Posix.splitDirectories name
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                    = FilePath.Posix.addTrailingPathSeparator
+                    | otherwise = id
 
 -- | Convert a 'TarPath' to a Windows 'FilePath'.
 --
@@ -347,9 +356,13 @@ fromTarPathToPosixPath (TarPath name prefix) =
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToWindowsPath :: TarPath -> FilePath
-fromTarPathToWindowsPath (TarPath name prefix) =
+fromTarPathToWindowsPath (TarPath name prefix) = adjustDirectory $
   FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
                            ++ FilePath.Posix.splitDirectories name
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                    = FilePath.Windows.addTrailingPathSeparator
+                    | otherwise = id
 
 -- | Convert a native 'FilePath' to a 'TarPath'. The 'FileType' parameter is
 -- needed because for directories a 'TarPath' always uses a trailing @\/@.
