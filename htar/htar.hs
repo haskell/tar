@@ -191,7 +191,7 @@ printUsage = putStrLn (usageInfo headder optDescr)
 
 parseOptions :: [String] -> IO (Options, [FilePath])
 parseOptions args =
-  let (fs, files, nonopts, errors) = getOpt' RequireOrder optDescr args
+  let (fs, files, nonopts, errors) = getOpt' Permute optDescr args
   in case (nonopts, errors) of
        ([], [])    -> return $ (foldl (flip ($)) defaultOptions fs, files)
        (_ , (_:_)) -> die errors
