@@ -54,7 +54,7 @@ module Codec.Archive.Tar.Types (
   ) where
 
 import Data.Int      (Int64)
-
+import Data.Monoid   (Monoid(..))
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8
 import Data.ByteString.Lazy (ByteString)
@@ -408,6 +408,9 @@ fromLinkTargetToWindowsPath (LinkTarget path) = adjustDirectory $
 -- back into a list can be done with 'foldEntries' however in that case you
 -- must be prepared to handle the 'Fail' case inherent in the 'Entries' type.
 --
+-- The 'Monoid' instance lets you concatenate archives or append entries to an
+-- archive.
+--
 data Entries = Next Entry Entries
              | Done
              | Fail String
@@ -447,3 +450,7 @@ foldEntries next done fail' = fold
 mapEntries :: (Entry -> Either String Entry) -> Entries -> Entries
 mapEntries f =
   foldEntries (\entry rest -> either Fail (flip Next rest) (f entry)) Done Fail
+
+instance Monoid Entries where
+  mempty      = Done
+  mappend a b = foldEntries Next b Fail a
