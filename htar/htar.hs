@@ -104,9 +104,9 @@ detailedInfo entry =
     time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.entryTime entry)
     name = Tar.entryPath entry
     link = case Tar.entryContent entry of
-      Tar.HardLink     link -> " link to " ++ Tar.fromLinkTarget link
-      Tar.SymbolicLink link -> " -> "      ++ Tar.fromLinkTarget link
-      _                     -> ""
+      Tar.HardLink     l -> " link to " ++ Tar.fromLinkTarget l
+      Tar.SymbolicLink l -> " -> "      ++ Tar.fromLinkTarget l
+      _                  -> ""
 
 justify :: Int -> String -> String -> String
 justify width left right = left ++ padding ++ right
