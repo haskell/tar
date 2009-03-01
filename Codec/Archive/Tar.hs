@@ -144,8 +144,8 @@ import Prelude hiding (read)
 -- @$ tar -f tarball.tar -C base -c dir@
 --
 -- This assumes a directory @.\/base\/dir@ with files inside, eg
--- @./base/dir/foo.txt@. The file names inside the resulting tar file will be
--- relative to @dir@, eg @dir/foo.txt@.
+-- @.\/base\/dir\/foo.txt@. The file names inside the resulting tar file will be
+-- relative to @dir@, eg @dir\/foo.txt@.
 --
 -- This is a high level \"all in one\" operation. Since you may need variations
 -- on this function it is instructive to see how it is written. It is just:
@@ -180,8 +180,8 @@ create tar base paths = BS.writeFile tar . write =<< pack base paths
 --
 -- @$ tar -x -f tarball.tar -C dir@
 --
--- So for example if the @tarball.tar@ file contains @foo/bar.txt@ then this
--- will extract it to @dir/foo/bar.txt@.
+-- So for example if the @tarball.tar@ file contains @foo\/bar.txt@ then this
+-- will extract it to @dir\/foo\/bar.txt@.
 --
 -- This is a high level \"all in one\" operation. Since you may need variations
 -- on this function it is instructive to see how it is written. It is just:
