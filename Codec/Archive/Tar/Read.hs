@@ -50,17 +50,13 @@ getEntry bs
 
   | otherwise  = partial $ do
 
-  case chksum_ of
-    Ok chksum | correctChecksum header chksum -> return ()
-    _ -> fail "tar checksum error"
-  format <- case magic of
-    "\0\0\0\0\0\0\0\0" -> return V7Format
-    "ustar\NUL00"      -> return UstarFormat
-    "ustar  \NUL"      -> return GnuFormat
-    _                  -> fail "tar entry not in a recognised format"
+  case (chksum_, format_) of
+    (Ok chksum, _   ) | correctChecksum header chksum -> return ()
+    (Ok _,      Ok _) -> fail "tar checksum error"
+    _                 -> fail "data is not in tar format"
 
   -- These fields are partial, have to check them
-  mode     <- mode_;
+  format   <- format_;   mode     <- mode_;
   uid      <- uid_;      gid      <- gid_;
   size     <- size_;     mtime    <- mtime_;
   devmajor <- devmajor_; devminor <- devminor_;
@@ -109,6 +105,12 @@ getEntry bs
    devminor_  = getOct    337   8 header
    prefix     = getString 345 155 header
 -- trailing   = getBytes  500  12 header
+
+   format_ = case magic of
+    "\0\0\0\0\0\0\0\0" -> return V7Format
+    "ustar\NUL00"      -> return UstarFormat
+    "ustar  \NUL"      -> return GnuFormat
+    _                  -> fail "tar entry not in a recognised format"
 
 correctChecksum :: ByteString -> Int -> Bool
 correctChecksum header checksum = checksum == checksum'
