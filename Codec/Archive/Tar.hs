@@ -34,10 +34,10 @@ module Codec.Archive.Tar (
   --
   -- It can read and write standard POSIX tar files and also the GNU and old
   -- Unix V7 tar formats. The convenience functions that are provided in the
-  -- "Codec.Archive.Tar.Entry" module for creating achive entries are primarily
-  -- designed for standard portable archives. If you need to construct GNU
-  -- format archives or exactly preserve file ownership and permissions then
-  -- you will need to write some extra helper functions.
+  -- "Codec.Archive.Tar.Entry" module for creating archive entries are
+  -- primarily designed for standard portable archives. If you need to
+  -- construct GNU format archives or exactly preserve file ownership and
+  -- permissions then you will need to write some extra helper functions.
   --
   -- This module contains just the simple high level operations without
   -- exposing the all the details of tar files. If you need to inspect tar
@@ -50,7 +50,7 @@ module Codec.Archive.Tar (
 
   -- * Notes
   -- ** Compressed tar archives
-  -- | Tar files are commonly used in conjuction with gzip compression, as in
+  -- | Tar files are commonly used in conjunction with gzip compression, as in
   -- \"@.tar.gz@\" or \"@.tar.bz2@\" files. This module does not directly
   -- handle compressed tar files however they can be handled easily by
   -- composing functions from this module and the modules
@@ -84,10 +84,10 @@ module Codec.Archive.Tar (
   -- file names like \"@\/etc\/passwd@\" or relative files outside of the
   -- archive like \"..\/..\/..\/something\". This security problem is commonly
   -- called a \"directory traversal vulnerability\". Historically, such
-  -- vulnerabilites have been common in packages handling tar archives.
+  -- vulnerabilities have been common in packages handling tar archives.
   --
   -- The 'extract' and 'unpack' functions check for bad file names. See the
-  -- 'checkSecurity' function for more detials. If you need to do any custom
+  -- 'checkSecurity' function for more details. If you need to do any custom
   -- unpacking then you should use this.
 
   -- * Converting between internal and external representation
@@ -101,7 +101,7 @@ module Codec.Archive.Tar (
   -- * Packing and unpacking files to\/from internal representation
   -- | These functions are for packing and unpacking portable archives. They
   -- are not suitable in cases where it is important to preserve file ownership
-  -- and permissions or to archive special files like named pipes and unix
+  -- and permissions or to archive special files like named pipes and Unix
   -- device files.
   pack,
   unpack,

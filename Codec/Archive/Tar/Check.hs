@@ -35,7 +35,7 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- * file names are valid
 --
 -- These checks are from the perspective of the current OS. That means we check
--- for \"@C:\blah@\" files on Windows and \"\/blah\" files on unix. For archive
+-- for \"@C:\blah@\" files on Windows and \"\/blah\" files on Unix. For archive
 -- entry types 'HardLink' and 'SymbolicLink' the same checks are done for the
 -- link target. A failure in any entry terminates the sequence of entries with
 -- an error.

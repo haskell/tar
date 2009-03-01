@@ -145,7 +145,7 @@ data Format =
      V7Format
 
      -- | The \"USTAR\" format is an extension of the classic V7 format. It was
-     -- later standardised by POSIX. It has some restructions but is the most
+     -- later standardised by POSIX. It has some restrictions but is the most
      -- portable format.
      --
    | UstarFormat
@@ -212,12 +212,12 @@ directoryEntry name = simpleEntry name Directory
 -- * Tar paths
 --
 
--- | The classic tar format allowed just 100 charcters for the file name. The
+-- | The classic tar format allowed just 100 characters for the file name. The
 -- USTAR format extended this with an extra 155 characters, however it uses a
 -- complex method of splitting the name between the two sections.
 --
 -- Instead of just putting any overflow into the extended area, it uses the
--- extended area as a prefix. The agrevating insane bit however is that the
+-- extended area as a prefix. The aggravating insane bit however is that the
 -- prefix (if any) must only contain a directory prefix. That is the split
 -- between the two areas must be on a directory separator boundary. So there is
 -- no simple calculation to work out if a file name is too long. Instead we
@@ -231,7 +231,7 @@ directoryEntry name = simpleEntry name Directory
 --
 -- So it's understandable but rather annoying.
 --
--- * Tar paths use posix format (ie @\'/\'@ directory separators), irrespective
+-- * Tar paths use Posix format (ie @\'/\'@ directory separators), irrespective
 --   of the local path conventions.
 --
 -- * The directory separator between the prefix and name is /not/ stored.
@@ -245,8 +245,8 @@ data TarPath = TarPath FilePath -- path name, 100 characters max.
 -- The native 'FilePath' will use the native directory separator but it is not
 -- otherwise checked for validity or sanity. In particular:
 --
--- * The tar path may be invalid as a native path, eg the filename @\"nul\"@ is
---   not valid on Windows.
+-- * The tar path may be invalid as a native path, eg the file name @\"nul\"@
+--   is not valid on Windows.
 --
 -- * The tar path may be an absolute path or may contain @\"..\"@ components.
 --   For security reasons this should not usually be allowed, but it is your
@@ -311,10 +311,10 @@ toTarPath isDir = splitLongPath
     addTrailingSep | isDir     = FilePath.Posix.addTrailingPathSeparator
                    | otherwise = id
 
--- | Take a sanitized path, split on directory separators and try to pack it
+-- | Take a sanitised path, split on directory separators and try to pack it
 -- into the 155 + 100 tar file name format.
 --
--- The stragey is this: take the name-directory components in reverse order
+-- The strategy is this: take the name-directory components in reverse order
 -- and try to fit as many components into the 100 long name area as possible.
 -- If all the remaining components fit in the 155 name area then we win.
 --
@@ -347,7 +347,7 @@ splitLongPath path =
                                      where n' = n + length c
     packName' _      _ ok    cs  = (FilePath.Posix.joinPath ok, cs)
 
--- | The tar format allows just 100 ASCII charcters for the 'SymbolicLink' and
+-- | The tar format allows just 100 ASCII characters for the 'SymbolicLink' and
 -- 'HardLink' entry types.
 --
 newtype LinkTarget = LinkTarget FilePath
@@ -371,7 +371,7 @@ fromLinkTarget (LinkTarget path) = adjustDirectory $
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
 
--- | Convert a tar 'LinkTarget' to a unix/posix 'FilePath'.
+-- | Convert a tar 'LinkTarget' to a Unix/Posix 'FilePath'.
 --
 fromLinkTargetToPosixPath :: LinkTarget -> FilePath
 fromLinkTargetToPosixPath (LinkTarget path) = adjustDirectory $
@@ -416,7 +416,7 @@ data Entries = Next Entry Entries
              | Fail String
 
 -- | This is like the standard 'unfoldr' function on lists, but for 'Entries'.
--- It includes failure as an extra posibility that the stepper function may
+-- It includes failure as an extra possibility that the stepper function may
 -- return.
 --
 -- It can be used to generate 'Entries' from some other type. For example it is
@@ -431,8 +431,8 @@ unfoldEntries f = unfold
       Right (Just (e, x')) -> Next e (unfold x')
 
 -- | This is like the standard 'foldr' function on lists, but for 'Entries'.
--- Compared to 'foldr' it takes an extra function to account for the posibility
--- of failure.
+-- Compared to 'foldr' it takes an extra function to account for the
+-- possibility of failure.
 --
 -- This is used to consume a sequence of entries. For example it could be used
 -- to scan a tarball for problems or to collect an index of the contents.

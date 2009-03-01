@@ -35,9 +35,10 @@ import System.Directory
 -- exception is raised.
 --
 -- If the 'Entries' ends in an error then it is raised an an IO error. Any
--- files or directories that have been upacked before the error was encountered
--- will not be deleted. For this reason you may want to unpack into an empty
--- directory so that you can easily clean up if unpacking fails part-way.
+-- files or directories that have been unpacked before the error was
+-- encountered will not be deleted. For this reason you may want to unpack
+-- into an empty directory so that you can easily clean up if unpacking fails
+-- part-way.
 --
 -- On its own, this function only checks for security (using 'checkSecurity').
 -- You can do other checks by applying checking functions to the 'Entries' that

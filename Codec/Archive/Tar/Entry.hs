@@ -12,7 +12,7 @@
 -- Types and functions to manipulate tar entries.
 --
 -- While the "Codec.Archive.Tar" module provides only the simple high level
--- api, this module provides full access to the details of tar entries. This
+-- API, this module provides full access to the details of tar entries. This
 -- lets you inspect all the meta-data, construct entries and handle error cases
 -- more precisely.
 --

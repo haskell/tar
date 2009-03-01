@@ -136,7 +136,7 @@ getOct off len = parseOct
     parseOct ('\128':_) = fail "tar header uses non-standard number encoding"
     parseOct s  = case readOct s of
       [(x,[])] -> return x
-      _        -> fail "tar header is malformatted (bad numeric encoding)"
+      _        -> fail "tar header is malformed (bad numeric encoding)"
 
 getBytes :: Int64 -> Int64 -> ByteString -> ByteString
 getBytes off len = BS.take len . BS.drop off
