@@ -1,5 +1,5 @@
 name:            htar
-version:         0.2
+version:         0.3
 license:         BSD3
 license-File:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
@@ -22,7 +22,7 @@ executable htar
   ghc-options: -Wall
   build-depends:
     base  >= 2,
-    tar   >= 0.2 && < 0.3,
+    tar   >= 0.3 && < 0.4,
     zlib  >= 0.4 && < 0.6,
     bzlib >= 0.4 && < 0.6,
     filepath >= 1
