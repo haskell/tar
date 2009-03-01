@@ -48,6 +48,7 @@ module Codec.Archive.Tar (
   create,
   extract,
 
+  -- * Notes
   -- ** Compressed tar archives
   -- | Tar files are commonly used in conjuction with gzip compression, as in
   -- \"@.tar.gz@\" or \"@.tar.bz2@\" files. This module does not directly
