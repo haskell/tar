@@ -150,11 +150,11 @@ import Prelude hiding (read)
 -- This is a high level \"all in one\" operation. Since you may need variations
 -- on this function it is instructive to see how it is written. It is just:
 --
--- > BS.writeFile tar . Tar.write =<< Tar.pack base dir
+-- > BS.writeFile tar . Tar.write =<< Tar.pack base paths
 --
 -- Notes:
 --
--- The files in the directory must not change during this operation or the
+-- The files and directories must not change during this operation or the
 -- result is not well defined.
 --
 -- The intention of this function is to create tarballs that are portable
@@ -168,11 +168,11 @@ import Prelude hiding (read)
 --
 -- * @rwxr-xr-x@ for directories
 --
-create :: FilePath  -- ^ Path of the \".tar\" file to write.
-       -> FilePath  -- ^ Base directory
-       -> FilePath  -- ^ Directory to archive, relative to base dir
+create :: FilePath   -- ^ Path of the \".tar\" file to write.
+       -> FilePath   -- ^ Base directory
+       -> [FilePath] -- ^ Files and directories to archive, relative to base dir
        -> IO ()
-create tar base dir = BS.writeFile tar . write =<< pack base dir
+create tar base paths = BS.writeFile tar . write =<< pack base paths
 
 -- | Extract all the files contained in a @\".tar\"@ file.
 --

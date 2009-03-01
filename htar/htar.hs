@@ -32,8 +32,7 @@ main' (Options { optFile        = file,
     NoAction -> die ["No action given. Specify one of -c, -t or -x."]
     Help     -> printUsage
     Create   -> output . compress compression
-                       . Tar.write =<< Tar.pack "." (head files)
-                       --FIXME: don't use head here, allow all files
+                       . Tar.write =<< Tar.pack "" files
     Extract  -> Tar.unpack "." . Tar.read . decompress compression =<< input
     List     -> printEntries . Tar.read . decompress compression =<< input
   where

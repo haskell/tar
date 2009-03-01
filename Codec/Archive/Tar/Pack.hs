@@ -36,8 +36,9 @@ import System.IO
          ( IOMode(ReadMode), openBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 
--- | Creates a tar archive from a directory of files, the paths in the archive
--- will be relative to the given base directory.
+-- | Creates a tar archive from a list of directory or files. Any directories
+-- specified will have their contents included recursively. Paths in the
+-- archive will be relative to the given base directory.
 --
 -- This is a portable implementation of packing suitable for portable archives.
 -- In particular it only constructs 'NormalFile' and 'Directory' entries. Hard
@@ -45,31 +46,43 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 -- to pack directories containing recursive symbolic links. Special files like
 -- FIFOs (named pipes), sockets or device files will also cause problems.
 --
+-- An exception will be thrown for any file names that are too long to
+-- represent as a 'TarPath'.
+--
 -- * This function returns results lazily. Subdirectories are scanned
 -- and files are read one by one as the list of entries is consumed.
 --
-pack :: FilePath    -- ^ Base directory
-     -> FilePath    -- ^ Directory to pack, relative to the base dir
+pack :: FilePath   -- ^ Base directory
+     -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
      -> IO [Entry]
-pack baseDir sourceDir = do
-  files <- getDirectoryContentsRecursive (baseDir </> sourceDir)
+pack baseDir paths0 = preparePaths baseDir paths0 >>= packPaths baseDir
+
+preparePaths :: FilePath -> [FilePath] -> IO [FilePath]
+preparePaths baseDir paths =
+  fmap concat $ interleave
+    [ do isDir  <- doesDirectoryExist path
+         if isDir then getDirectoryContentsRecursive (baseDir </> path)
+                  else return [path]
+    | path <- paths ]
+
+packPaths :: FilePath -> [FilePath] -> IO [Entry]
+packPaths baseDir paths =
   interleave
     [ do tarpath <- either fail return (toTarPath isDir relPath)
          if isDir then packDirectoryEntry filepath tarpath
                   else packFileEntry      filepath tarpath
-    | filepath <- files
+    | filepath <- paths
     , let isDir   = FilePath.Native.hasTrailingPathSeparator filepath
           relPath = FilePath.Native.makeRelative baseDir filepath ]
 
+interleave :: [IO a] -> IO [a]
+interleave = unsafeInterleaveIO . go
   where
-    interleave :: [IO a] -> IO [a]
-    interleave = unsafeInterleaveIO . go
-      where
-        go []     = return []
-        go (x:xs) = do
-          x'  <- x
-          xs' <- interleave xs
-          return (x':xs')
+    go []     = return []
+    go (x:xs) = do
+      x'  <- x
+      xs' <- interleave xs
+      return (x':xs')
 
 -- | Construct a tar 'Entry' based on a local file.
 --
