@@ -51,10 +51,12 @@ checkPortability = checkEntries checkEntryPortability
 
 
 checkEntrySecurity :: Entry -> Maybe String
-checkEntrySecurity entry = case fileType entry of
-    HardLink     -> check (fileName entry) `mplus` check (linkTarget entry)
-    SymbolicLink -> check (fileName entry) `mplus` check (linkTarget entry)
-    _            -> check (fileName entry)
+checkEntrySecurity entry = case entryContent entry of
+    HardLink     link -> check (entryPath entry)
+                 `mplus` check (fromLinkTarget link)
+    SymbolicLink link -> check (entryPath entry)
+                 `mplus` check (fromLinkTarget link)
+    _                 -> check (entryPath entry)
 
   where
     check name
@@ -71,20 +73,20 @@ checkEntrySecurity entry = case fileType entry of
 
 checkEntryTarbomb :: FilePath -> Entry -> Maybe String
 checkEntryTarbomb expectedTopDir entry =
-  case FilePath.Native.splitDirectories (fileName entry) of
+  case FilePath.Native.splitDirectories (entryPath entry) of
     (topDir:_) | topDir == expectedTopDir -> Nothing
     _ -> Just $ "File in tar archive is not in the expected directory "
              ++ show expectedTopDir
 
 checkEntryPortability :: Entry -> Maybe String
 checkEntryPortability entry
-  | isV7 (headerExt entry)
+  | entryFormat entry == V7Format
   = Just "Archive is in the old Unix V7 tar format"
 
-  | isGNU (headerExt entry)
+  | entryFormat entry == GnuFormat
   = Just "Archive is in the GNU tar format"
 
-  | not (portableFileType (fileType entry))
+  | not (portableFileType (entryContent entry))
   = Just "Non-portable file type in archive"
 
   | not (all portableChar posixPath)
@@ -108,20 +110,15 @@ checkEntryPortability entry
   | otherwise = Nothing
 
   where
-    posixPath   = fromTarPathToPosixPath   (filePath entry)
-    windowsPath = fromTarPathToWindowsPath (filePath entry)
-
-    isV7  V7Header  {} = True
-    isV7  _            = False
-    isGNU GnuHeader {} = True
-    isGNU _            = False
+    posixPath   = fromTarPathToPosixPath   (entryTarPath entry)
+    windowsPath = fromTarPathToWindowsPath (entryTarPath entry)
 
     portableFileType ftype = case ftype of
-      NormalFile   -> True
-      HardLink     -> True
-      SymbolicLink -> True
-      Directory    -> True
-      _            -> False
+      NormalFile   {} -> True
+      HardLink     {} -> True
+      SymbolicLink {} -> True
+      Directory       -> True
+      _               -> False
 
     portableChar c = c <= '\127'
 

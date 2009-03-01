@@ -64,7 +64,7 @@ data Verbosity = Verbose | Concise
 
 entryInfo :: Verbosity -> Tar.Entry -> String
 entryInfo Verbose = detailedInfo
-entryInfo Concise = Tar.fileName
+entryInfo Concise = Tar.entryPath
 
 detailedInfo :: Tar.Entry -> String
 detailedInfo entry =
@@ -73,14 +73,14 @@ detailedInfo entry =
           , time
           , name ++ link ]
   where
-    typeCode = case Tar.fileType entry of
-      Tar.HardLink        -> 'h'
-      Tar.SymbolicLink    -> 'l'
-      Tar.CharacterDevice -> 'c'
-      Tar.BlockDevice     -> 'b'
-      Tar.Directory       -> 'd'
-      Tar.FIFO            -> 'p'
-      _                   -> '-'
+    typeCode = case Tar.entryContent entry of
+      Tar.HardLink        _   -> 'h'
+      Tar.SymbolicLink    _   -> 'l'
+      Tar.CharacterDevice _ _ -> 'c'
+      Tar.BlockDevice     _ _ -> 'b'
+      Tar.Directory           -> 'd'
+      Tar.NamedPipe           -> 'p'
+      _                       -> '-'
     permissions = concat [userPerms, groupPerms, otherPerms]
       where
         userPerms  = formatPerms 8 7 6 11 's'
@@ -92,25 +92,22 @@ detailedInfo entry =
           ,if testBit m s
              then if testBit m x then c   else toUpper c
              else if testBit m x then 'x' else '-']
-        m = Tar.fileMode entry
-    owner = nameOrID ownerName (Tar.ownerId entry)
-    group = nameOrID groupName (Tar.groupId entry)
-    ownerName = case Tar.headerExt entry of
-      Tar.UstarHeader { Tar.ownerName = n } -> n
-      Tar.GnuHeader   { Tar.ownerName = n } -> n
-      _                                      -> ""
-    groupName = case Tar.headerExt entry of
-      Tar.UstarHeader { Tar.groupName = n } -> n
-      Tar.GnuHeader   { Tar.groupName = n } -> n
-      _                                      -> ""
+        m = Tar.entryPermissions entry
+    owner = nameOrID ownerName ownerId
+    group = nameOrID groupName groupId
+    (Tar.Ownership ownerName groupName ownerId groupId) =
+      Tar.entryOwnership entry
     nameOrID n i = if null n then show i else n
-    size = show (Tar.fileSize entry)
-    time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.modTime entry)
-    name = Tar.fileName entry
-    link = case Tar.fileType entry of
-             Tar.HardLink     -> " link to " ++ Tar.linkTarget entry
-             Tar.SymbolicLink -> " -> " ++ Tar.linkTarget entry
-             _                -> ""
+    size = case Tar.entryContent entry of
+             Tar.NormalFile _ fileSize -> show fileSize
+             _                         -> "0"
+
+    time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.entryTime entry)
+    name = Tar.entryPath entry
+    link = case Tar.entryContent entry of
+      Tar.HardLink     link -> " link to " ++ Tar.fromLinkTarget link
+      Tar.SymbolicLink link -> " -> "      ++ Tar.fromLinkTarget link
+      _                     -> ""
 
 justify :: Int -> String -> String -> String
 justify width left right = left ++ padding ++ right

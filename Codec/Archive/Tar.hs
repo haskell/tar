@@ -86,26 +86,34 @@ module Codec.Archive.Tar (
   -- vulnerabilites have been common in packages handling tar archives.
   --
   -- The 'extract' and 'unpack' functions check for bad file names. See the
-  -- 'checkSecurity' function for more detials.
+  -- 'checkSecurity' function for more detials. If you need to do any custom
+  -- unpacking then you should use this.
 
   -- * Converting between internal and external representation
+  -- | Note, you cannot expect @write . read@ to give exactly the same output
+  -- as input. You can expect the information to be preserved exactly however.
+  -- This is because 'read' accepts common format variations while 'write'
+  -- produces the standard format.
   read,
   write,
 
   -- * Packing and unpacking files to\/from internal representation
+  -- | These functions are for packing and unpacking portable archives. They
+  -- are not suitable in cases where it is important to preserve file ownership
+  -- and permissions or to archive special files like named pipes and unix
+  -- device files.
   pack,
   unpack,
 
   -- * Types
   -- ** Tar entry type
   -- | This module provides only very simple and limited read-only access to
-  -- the 'Entry' type. If you need access to the details or you need to
+  -- the 'Entry' type. If you need access to the details or if you need to
   -- construct your own entries then also import "Codec.Archive.Tar.Entry".
   Entry,
-  fileName,
-  fileType,
-  fileContent,
-  FileType(..),
+  entryPath,
+  entryContent,
+  EntryContent(..),
 
   -- ** Sequences of tar entries
   Entries(..),

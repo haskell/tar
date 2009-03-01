@@ -49,36 +49,38 @@ import System.Directory
 -- use 'checkSecurity' before 'checkTarbomb' or other checks.
 --
 unpack :: FilePath -> Entries -> IO ()
-unpack baseDir entries = extractFiles [] (checkSecurity entries)
-                     >>= extractLinks
+unpack baseDir entries = unpackEntries [] (checkSecurity entries)
+                     >>= emulateLinks
+
   where
-    extractFiles _     (Fail err)            = fail err
-    extractFiles links Done                  = return links
-    extractFiles links (Next entry entries') = case fileType entry of
-      NormalFile   -> extractFile entry >> extractFiles links entries'
-      HardLink     -> extractFiles (saveLink entry links) entries'
-      SymbolicLink -> extractFiles (saveLink entry links) entries'
-      Directory    -> extractDir entry >> extractFiles links entries'
-      _            -> extractFiles links entries' --ignore other file types
-
-    extractFile entry = do
-      createDirectoryIfMissing False fileDir
-      BS.writeFile fullPath (fileContent entry)
+    unpackEntries _     (Fail err)      = fail err
+    unpackEntries links Done            = return links
+    unpackEntries links (Next entry es) = case entryContent entry of
+      NormalFile file _ -> extractFile path file
+                        >> unpackEntries links es
+      Directory         -> extractDir path
+                        >> unpackEntries links es
+      HardLink     link -> (unpackEntries $! saveLink path link links) es
+      SymbolicLink link -> (unpackEntries $! saveLink path link links) es
+      _                 -> unpackEntries links es --ignore other file types
       where
-        fileDir  = baseDir </> FilePath.Native.takeDirectory (fileName entry)
-        fullPath = baseDir </> fileName entry
+        path = entryPath entry
 
-    extractDir entry =
-      createDirectoryIfMissing False (baseDir </> fileName entry)
-
-    saveLink entry links = seq (length name)
-                         $ seq (length target)
-                         $ link:links
+    extractFile path content = do
+      createDirectoryIfMissing False absDir
+      BS.writeFile absPath content
       where
-        name    = fileName entry
-        target  = linkTarget entry
-        link    = (name, target)
+        absDir  = baseDir </> FilePath.Native.takeDirectory path
+        absPath = baseDir </> path
 
-    extractLinks = mapM_ $ \(name, target) ->
-      let path      = baseDir </> name
-       in copyFile (FilePath.Native.takeDirectory path </> target) path
+    extractDir path = createDirectoryIfMissing False (baseDir </> path)
+
+    saveLink path link links = seq (length path)
+                             $ seq (length link')
+                             $ (path, link'):links
+      where link' = fromLinkTarget link
+
+    emulateLinks = mapM_ $ \(relPath, relLinkTarget) ->
+      let absPath   = baseDir </> relPath
+          absTarget = FilePath.Native.takeDirectory absPath </> relLinkTarget
+       in copyFile absTarget absPath

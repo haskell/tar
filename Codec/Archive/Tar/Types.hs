@@ -15,32 +15,36 @@
 module Codec.Archive.Tar.Types (
 
   Entry(..),
-  fileName,
-  ExtendedHeader(..),
+  entryPath,
+  EntryContent(..),
   FileSize,
-  FileMode,
+  Permissions,
+  Ownership(..),
   EpochTime,
-  UserId,
-  GroupId,
+  TypeCode,
   DevMajor,
   DevMinor,
-  FileType(..),
-  toFileTypeCode,
-  fromFileTypeCode,
+  Format(..),
 
-  emptyEntry,
+  simpleEntry,
   fileEntry,
   directoryEntry,
 
-  ordinaryFileMode,
-  executableFileMode,
-  directoryFileMode,
+  ordinaryFilePermissions,
+  executableFilePermissions,
+  directoryPermissions,
 
   TarPath(..),
   toTarPath,
   fromTarPath,
   fromTarPathToPosixPath,
   fromTarPathToWindowsPath,
+
+  LinkTarget(..),
+  toLinkTarget,
+  fromLinkTarget,
+  fromLinkTargetToPosixPath,
+  fromLinkTargetToWindowsPath,
 
   Entries(..),
   mapEntries,
@@ -66,194 +70,122 @@ import System.Posix.Types
          ( FileMode )
 
 type FileSize  = Int64
-type UserId    = Int
-type GroupId   = Int
 -- | The number of seconds since the UNIX epoch
-type EpochTime = Int
+type EpochTime = Int64
 type DevMajor  = Int
 type DevMinor  = Int
+type TypeCode  = Char
+type Permissions = FileMode
 
--- | Tar archive entry
+-- | Tar archive entry.
+--
 data Entry = Entry {
 
-    -- | Path of the file or directory.
-    filePath :: !TarPath,
+    -- | The path of the file or directory within the archive. This is in a
+    -- tar-specific form. Use 'entryPath' to get a native 'FilePath'.
+    entryTarPath :: !TarPath,
 
-    -- | UNIX file mode (file permissions).
-    fileMode :: !FileMode,
+    -- | The real content of the entry. For 'NormalFile' this includes the
+    -- file data. An entry usually contains a 'NormalFile' or a 'Directory'.
+    entryContent :: !EntryContent,
 
-    -- | Numeric owner user id. Should be set to @0@ if unknown.
-    ownerId :: !UserId,
+    -- | File permissions (Unix style file mode).
+    entryPermissions :: !Permissions,
 
-    -- | Numeric owner group id. Should be set to @0@ if unknown.
-    groupId :: !GroupId,
+    -- | The user and group to which this file belongs.
+    entryOwnership :: !Ownership,
 
-    -- | File size in bytes. Should be 0 for entries other than normal files.
-    fileSize :: !FileSize,
+    -- | The time the file was last modified.
+    entryTime :: !EpochTime,
 
-    -- | Last modification time.
-    modTime :: !EpochTime,
-
-    -- | The type of this tar entry. Usually just 'NormalFile' or 'Directory'.
-    fileType :: FileType,
-
-    -- | If the entry is a 'HardLink' or a 'SymbolicLink', this is the path of
-    -- the link target. For all other entry types this should be @\"\"@.
-    -- The maximum length of this is 100 ASCII characters.
-    linkTarget :: FilePath,
-
-    -- | The remaining meta-data is in the V7, USTAR/POSIX or GNU formats.
-    -- For V7 there is no extended info at all. The information for USTAR/POSIX
-    -- and the GNU format is the same though the kind affects the way the
-    -- information is encoded.
-    headerExt :: ExtendedHeader,
-
-    -- | Tar entry contents. For entries other than 'NormalFile', this should
-    -- be an empty string.
-    fileContent :: ByteString
+    -- | The tar format the archive is using.
+    entryFormat :: !Format
   }
 
 -- | Native 'FilePath' of the file or directory within the archive.
 --
-fileName :: Entry -> FilePath
-fileName = fromTarPath . filePath
+entryPath :: Entry -> FilePath
+entryPath = fromTarPath . entryTarPath
+
+-- | The content of a tar archive entry, which depends on the type of entry.
+--
+-- Portable archives should contain only 'NormalFile' and 'Directory'.
+--
+data EntryContent = NormalFile      ByteString !FileSize
+                  | Directory
+                  | SymbolicLink    !LinkTarget
+                  | HardLink        !LinkTarget
+                  | CharacterDevice !DevMajor !DevMinor
+                  | BlockDevice     !DevMajor !DevMinor
+                  | NamedPipe
+                  | OtherEntryType  !TypeCode ByteString !FileSize
+
+data Ownership = Ownership {
+    -- | The owner user name. Should be set to @\"\"@ if unknown.
+    ownerName :: String,
+
+    -- | The owner group name. Should be set to @\"\"@ if unknown.
+    groupName :: String,
+
+    -- | Numeric owner user id. Should be set to @0@ if unknown.
+    ownerId :: !Int,
+
+    -- | Numeric owner group id. Should be set to @0@ if unknown.
+    groupId :: !Int
+  }
 
 -- | There have been a number of extensions to the tar file format over the
--- years. They all share the basic 'Entry' fields and put more meta-data in
+-- years. They all share the basic entry fields and put more meta-data in
 -- different extended headers.
 --
-data ExtendedHeader =
+data Format =
 
-     -- | This is the classic Unix V7 tar header format. This format contains
-     -- just the basic 'Entry' fields.
-     V7Header
+     -- | This is the classic Unix V7 tar format. It does not support owner and
+     -- group names, just numeric Ids. It also does not support device numbers.
+     V7Format
 
      -- | The \"USTAR\" format is an extension of the classic V7 format. It was
      -- later standardised by POSIX. It has some restructions but is the most
      -- portable format.
      --
-   | UstarHeader {
-    -- | The owner user name. Should be set to @\"\"@ if unknown.
-    ownerName :: String,
-
-    -- | The owner group name. Should be set to @\"\"@ if unknown.
-    groupName :: String,
-
-    -- | For character and block device entries, this is the
-    -- major number of the device. For all other entry types, it
-    -- should be set to @0@.
-    deviceMajor :: !DevMajor,
-
-    -- | For character and block device entries, this is the
-    -- minor number of the device. For all other entry types, it
-    -- should be set to @0@.
-    deviceMinor :: !DevMinor
-   }
+   | UstarFormat
 
      -- | The GNU tar implementation also extends the classic V7 format, though
      -- in a slightly different way from the USTAR format. In general for new
      -- archives the standard USTAR/POSIX should be used.
      --
-   | GnuHeader {
-    -- | The owner user name. Should be set to @\"\"@ if unknown.
-    ownerName :: String,
-
-    -- | The owner group name. Should be set to @\"\"@ if unknown.
-    groupName :: String,
-
-    -- | For unix character and block device entries, this is the major number
-    -- of the device. For all other entry types, it should be set to @0@.
-    deviceMajor :: !DevMajor,
-
-    -- | For unix character and block device entries, this is the minor number
-    -- of the device. For all other entry types, it should be set to @0@.
-    deviceMinor :: !DevMinor
-   }
-
--- | Tar archive entry types.
---
--- Portable archives should contain only 'NormalFile' and 'Directory'.
---
-data FileType = NormalFile
-              | Directory
-              | SymbolicLink
-              | HardLink
-              | CharacterDevice
-              | BlockDevice
-              | FIFO
-              | ExtendedHeader
-              | GlobalHeader
-              | Custom Char   -- ^ 'A' .. 'Z'
-              | Reserved Char -- ^ other \/ reserved \/ unknown
+   | GnuFormat
   deriving Eq
 
-toFileTypeCode :: FileType -> Char
-toFileTypeCode NormalFile      = '0'
-toFileTypeCode HardLink        = '1'
-toFileTypeCode SymbolicLink    = '2'
-toFileTypeCode CharacterDevice = '3'
-toFileTypeCode BlockDevice     = '4'
-toFileTypeCode Directory       = '5'
-toFileTypeCode FIFO            = '6'
-toFileTypeCode ExtendedHeader  = 'x'
-toFileTypeCode GlobalHeader    = 'g'
-toFileTypeCode (Custom   c)    = c
-toFileTypeCode (Reserved c)    = c
-
-fromFileTypeCode :: Char -> FileType
-fromFileTypeCode '0'  = NormalFile
-fromFileTypeCode '\0' = NormalFile
-fromFileTypeCode '1'  = HardLink
-fromFileTypeCode '2'  = SymbolicLink
-fromFileTypeCode '3'  = CharacterDevice
-fromFileTypeCode '4'  = BlockDevice
-fromFileTypeCode '5'  = Directory
-fromFileTypeCode '6'  = FIFO
-fromFileTypeCode '7'  = NormalFile
-fromFileTypeCode 'x'  = ExtendedHeader
-fromFileTypeCode 'g'  = GlobalHeader
-fromFileTypeCode  c   | c >= 'A' && c <= 'Z'
-                      = Custom c
-fromFileTypeCode  c   = Reserved c
-
 -- | @rw-r--r--@ for normal files
-ordinaryFileMode :: FileMode
-ordinaryFileMode   = 0o0644
+ordinaryFilePermissions :: Permissions
+ordinaryFilePermissions   = 0o0644
 
 -- | @rwxr-xr-x@ for executable files
-executableFileMode :: FileMode
-executableFileMode = 0o0755
+executableFilePermissions :: Permissions
+executableFilePermissions = 0o0755
 
 -- | @rwxr-xr-x@ for directories
-directoryFileMode :: FileMode
-directoryFileMode  = 0o0755
+directoryPermissions :: Permissions
+directoryPermissions  = 0o0755
 
 -- | An 'Entry' with all default values except for the file name and type. It
 -- uses the portable USTAR/POSIX format (see 'UstarHeader').
 --
 -- You can use this as a basis and override specific fields, eg:
 --
--- > (emptyEntry HardLink name) { linkTarget = target }
+-- > (emptyEntry name HardLink) { linkTarget = target }
 --
-emptyEntry :: FileType -> TarPath -> Entry
-emptyEntry ftype tarpath = Entry {
-    filePath = tarpath,
-    fileMode = case ftype of
-                 Directory -> directoryFileMode
-                 _         -> ordinaryFileMode,
-    ownerId  = 0,
-    groupId  = 0,
-    fileSize = 0,
-    modTime  = 0,
-    fileType = ftype,
-    linkTarget = "",
-    headerExt  = UstarHeader {
-      ownerName = "",
-      groupName = "",
-      deviceMajor = 0,
-      deviceMinor = 0
-    },
-    fileContent = BS.empty
+simpleEntry :: TarPath -> EntryContent -> Entry
+simpleEntry tarpath content = Entry {
+    entryTarPath     = tarpath,
+    entryContent     = content,
+    entryPermissions = case content of
+                         Directory -> directoryPermissions
+                         _         -> ordinaryFilePermissions,
+    entryOwnership   = Ownership "" "" 0 0,
+    entryTime        = 0,
+    entryFormat      = UstarFormat
   }
 
 -- | A tar 'Entry' for a file.
@@ -266,17 +198,15 @@ emptyEntry ftype tarpath = Entry {
 -- > (fileEntry name content) { fileMode = executableFileMode }
 --
 fileEntry :: TarPath -> ByteString -> Entry
-fileEntry name content = (emptyEntry NormalFile name) {
-    fileSize = BS.length content,
-    fileContent = content
-  }
+fileEntry name fileContent =
+  simpleEntry name (NormalFile fileContent (BS.length fileContent))
 
 -- | A tar 'Entry' for a directory.
 --
 -- Entry fields such as file permissions and ownership have default values.
 --
 directoryEntry :: TarPath -> Entry
-directoryEntry name = emptyEntry Directory name
+directoryEntry name = simpleEntry name Directory
 
 --
 -- * Tar paths
@@ -308,6 +238,7 @@ directoryEntry name = emptyEntry Directory name
 --
 data TarPath = TarPath FilePath -- path name, 100 characters max.
                        FilePath -- path prefix, 155 characters max.
+  deriving (Eq, Ord)
 
 -- | Convert a 'TarPath' to a native 'FilePath'.
 --
@@ -364,20 +295,21 @@ fromTarPathToWindowsPath (TarPath name prefix) = adjustDirectory $
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id
 
--- | Convert a native 'FilePath' to a 'TarPath'. The 'FileType' parameter is
--- needed because for directories a 'TarPath' always uses a trailing @\/@.
+-- | Convert a native 'FilePath' to a 'TarPath'.
 --
 -- The conversion may fail if the 'FilePath' is too long. See 'TarPath' for a
 -- description of the problem with splitting long 'FilePath's.
 --
-toTarPath :: FileType -> FilePath -> Either String TarPath
-toTarPath ftype = splitLongPath
-                . addTrailingSep ftype
+toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
+                  -- directories a 'TarPath' must always use a trailing @\/@.
+          -> FilePath -> Either String TarPath
+toTarPath isDir = splitLongPath
+                . addTrailingSep
                 . FilePath.Posix.joinPath
                 . FilePath.Native.splitDirectories
   where
-    addTrailingSep Directory = FilePath.Posix.addTrailingPathSeparator
-    addTrailingSep _         = id
+    addTrailingSep | isDir     = FilePath.Posix.addTrailingPathSeparator
+                   | otherwise = id
 
 -- | Take a sanitized path, split on directory separators and try to pack it
 -- into the 155 + 100 tar file name format.
@@ -414,6 +346,50 @@ splitLongPath path =
       | n' <= maxLen             = packName' maxLen n' (c:ok) cs
                                      where n' = n + length c
     packName' _      _ ok    cs  = (FilePath.Posix.joinPath ok, cs)
+
+-- | The tar format allows just 100 ASCII charcters for the 'SymbolicLink' and
+-- 'HardLink' entry types.
+--
+newtype LinkTarget = LinkTarget FilePath
+  deriving (Eq, Ord)
+
+-- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the
+-- string is longer than 100 characters or if it contains non-portable
+-- characters.
+--
+toLinkTarget   :: FilePath -> Maybe LinkTarget
+toLinkTarget path | length path <= 100 = Just (LinkTarget path)
+                  | otherwise          = Nothing
+
+-- | Convert a tar 'LinkTarget' to a native 'FilePath'.
+--
+fromLinkTarget :: LinkTarget -> FilePath
+fromLinkTarget (LinkTarget path) = adjustDirectory $
+  FilePath.Native.joinPath $ FilePath.Posix.splitDirectories path
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
+                    = FilePath.Native.addTrailingPathSeparator
+                    | otherwise = id
+
+-- | Convert a tar 'LinkTarget' to a unix/posix 'FilePath'.
+--
+fromLinkTargetToPosixPath :: LinkTarget -> FilePath
+fromLinkTargetToPosixPath (LinkTarget path) = adjustDirectory $
+  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories path
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
+                    = FilePath.Native.addTrailingPathSeparator
+                    | otherwise = id
+
+-- | Convert a tar 'LinkTarget' to a Windows 'FilePath'.
+--
+fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
+fromLinkTargetToWindowsPath (LinkTarget path) = adjustDirectory $
+  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories path
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
+                    = FilePath.Windows.addTrailingPathSeparator
+                    | otherwise = id
 
 --
 -- * Entries type

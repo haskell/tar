@@ -31,40 +31,48 @@ module Codec.Archive.Tar.Entry (
   --      see http://trac.haskell.org/haddock/ticket/3
   --Entry(filePath, fileMode, ownerId, groupId, fileSize, modTime,
   --      fileType, linkTarget, headerExt, fileContent),
-  fileName,
-  ExtendedHeader(..),
+  entryPath,
+  EntryContent(..),
+  Ownership(..),
+
   FileSize,
-  FileMode,
+  Permissions,
   EpochTime,
-  UserId,
-  GroupId,
   DevMajor,
   DevMinor,
-  FileType(..),
+  TypeCode,
+  Format(..),
 
   -- * Constructing simple entry values
-  emptyEntry,
+  simpleEntry,
   fileEntry,
   directoryEntry,
 
-  -- * Standard file modes
+  -- * Standard file permissions
   -- | For maximum portability when constructing archives use only these file
-  -- modes.
-  ordinaryFileMode,
-  executableFileMode,
-  directoryFileMode,
+  -- permissions.
+  ordinaryFilePermissions,
+  executableFilePermissions,
+  directoryPermissions,
 
   -- * Constructing entries from disk files
   packFileEntry,
   packDirectoryEntry,
   getDirectoryContentsRecursive,
 
-  -- * TarPaths
+  -- * TarPath type
   TarPath,
   toTarPath,
   fromTarPath,
   fromTarPathToPosixPath,
   fromTarPathToWindowsPath,
+
+  -- * LinkTarget type
+  LinkTarget,
+  toLinkTarget,
+  fromLinkTarget,
+  fromLinkTargetToPosixPath,
+  fromLinkTargetToWindowsPath,
 
   ) where
 

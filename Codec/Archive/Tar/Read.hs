@@ -50,12 +50,13 @@ getEntry bs
 
   | otherwise  = partial $ do
 
-  chksum <- chksum_
-  unless (correctChecksum header chksum) (fail "tar checksum error")
+  case chksum_ of
+    Ok chksum | correctChecksum header chksum -> return ()
+    _ -> fail "tar checksum error"
   format <- case magic of
-    "\0\0\0\0\0\0\0\0" -> return V7
-    "ustar\NUL00"      -> return USTAR
-    "ustar  \NUL"      -> return GNU
+    "\0\0\0\0\0\0\0\0" -> return V7Format
+    "ustar\NUL00"      -> return UstarFormat
+    "ustar  \NUL"      -> return GnuFormat
     _                  -> fail "tar entry not in a recognised format"
 
   -- These fields are partial, have to check them
@@ -64,40 +65,33 @@ getEntry bs
   size     <- size_;     mtime    <- mtime_;
   devmajor <- devmajor_; devminor <- devminor_;
 
-  let padding    = (512 - size) `mod` 512
-      (cnt,bs'') = BS.splitAt size bs'
-      bs'''      = BS.drop padding bs''
+  let content = BS.take size (BS.drop 512 bs)
+      padding = (512 - size) `mod` 512
+      bs'     = BS.drop (512 + size + padding) bs
 
       entry = Entry {
-        filePath    = TarPath name prefix,
-        fileMode    = mode,
-        ownerId     = uid,
-        groupId     = gid,
-        fileSize    = size,
-        modTime     = mtime,
-        fileType    = fromFileTypeCode typecode,
-        linkTarget  = linkname,
-        headerExt   = case format of
-          V7 -> V7Header
-          USTAR -> UstarHeader {
-            ownerName   = uname,
-            groupName   = gname,
-            deviceMajor = devmajor,
-            deviceMinor = devminor
-          }
-          GNU -> GnuHeader {
-            ownerName   = uname,
-            groupName   = gname,
-            deviceMajor = devmajor,
-            deviceMinor = devminor
-          },
-        fileContent = cnt
-      }
+        entryTarPath     = TarPath name prefix,
+        entryContent     = case typecode of
+                   '\0' -> NormalFile      content size
+                   '0'  -> NormalFile      content size
+                   '1'  -> HardLink        (LinkTarget linkname)
+                   '2'  -> SymbolicLink    (LinkTarget linkname)
+                   '3'  -> CharacterDevice devmajor devminor
+                   '4'  -> BlockDevice     devmajor devminor
+                   '5'  -> Directory
+                   '6'  -> NamedPipe
+                   '7'  -> NormalFile      content size
+                   _    -> OtherEntryType  typecode content size,
+        entryPermissions = mode,
+        entryOwnership   = Ownership uname gname uid gid,
+        entryTime        = mtime,
+        entryFormat      = format
+    }
 
-  return (Just (entry, bs'''))
+  return (Just (entry, bs'))
 
   where
-   (header, bs') = BS.splitAt 512 bs
+   header = BS.take 512 bs
 
    name       = getString   0 100 header
    mode_      = getOct    100   8 header
@@ -115,8 +109,6 @@ getEntry bs
    devminor_  = getOct    337   8 header
    prefix     = getString 345 155 header
 -- trailing   = getBytes  500  12 header
-
-data EntryFormat = V7 | USTAR | GNU
 
 correctChecksum :: ByteString -> Int -> Bool
 correctChecksum header checksum = checksum == checksum'

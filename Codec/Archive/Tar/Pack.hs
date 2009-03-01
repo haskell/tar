@@ -54,12 +54,11 @@ pack :: FilePath    -- ^ Base directory
 pack baseDir sourceDir = do
   files <- getDirectoryContentsRecursive (baseDir </> sourceDir)
   interleave
-    [ do tarpath <- either fail return (toTarPath ftype relPath)
+    [ do tarpath <- either fail return (toTarPath isDir relPath)
          if isDir then packDirectoryEntry filepath tarpath
                   else packFileEntry      filepath tarpath
     | filepath <- files
     , let isDir   = FilePath.Native.hasTrailingPathSeparator filepath
-          ftype   = if isDir then Directory else NormalFile
           relPath = FilePath.Native.makeRelative baseDir filepath ]
 
   where
@@ -85,18 +84,14 @@ packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
               -> IO Entry
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
-  mode    <- getFileMode filepath
+  perms   <- getPermissions filepath
   file    <- openBinaryFile filepath ReadMode
   size    <- hFileSize file
   content <- BS.hGetContents file
-  return (fileEntry tarpath content) {
-    fileMode    = mode,
-    modTime     = mtime,
-
-    -- Note: we explicitly set the fileSize here, even though fileEntry sets it
-    -- too. The reason is that fileEntry does it using BS.length and we would
-    -- rather not force the whole file into memory immediately.
-    fileSize    = fromIntegral size
+  return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
+    entryPermissions = if executable perms then executableFilePermissions
+                                           else ordinaryFilePermissions,
+    entryTime = mtime
   }
 
 -- | Construct a tar 'Entry' based on a local directory (but not its contents).
@@ -110,7 +105,7 @@ packDirectoryEntry :: FilePath -- ^ Full path to find the file on the local disk
 packDirectoryEntry filepath tarpath = do
   mtime   <- getModTime filepath
   return (directoryEntry tarpath) {
-    modTime     = mtime
+    entryTime = mtime
   }
 
 -- | This is a utility function, much like 'getDirectoryContents'. The
@@ -157,15 +152,7 @@ recurseDirectories (dir:dirs) = unsafeInterleaveIO $ do
     ignore ['.', '.'] = True
     ignore _          = False
 
--- | We can't be precise because of portability, so we default to rw-r--r-- for
--- normal files and rwxr-xr-x for executables.
---
-getFileMode :: FilePath -> IO FileMode
-getFileMode path = do
-  perms <- getPermissions path
-  return $! if executable perms then executableFileMode else ordinaryFileMode
-
 getModTime :: FilePath -> IO EpochTime
-getModTime path =
-    do (TOD s _) <- getModificationTime path
-       return $! fromIntegral s
+getModTime path = do
+  (TOD s _) <- getModificationTime path
+  return $! fromIntegral s
