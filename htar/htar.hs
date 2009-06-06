@@ -25,6 +25,7 @@ main = do
 
 main' :: Options -> [FilePath] -> IO ()
 main' (Options { optFile        = file,
+                 optDir         = dir,
                  optAction      = action,
                  optCompression = compression,
                  optVerbosity   = verbosity }) files =
@@ -32,8 +33,8 @@ main' (Options { optFile        = file,
     NoAction -> die ["No action given. Specify one of -c, -t or -x."]
     Help     -> printUsage
     Create   -> output . compress compression
-                       . Tar.write =<< Tar.pack "" files
-    Extract  -> Tar.unpack "." . Tar.read . decompress compression =<< input
+                       . Tar.write =<< Tar.pack dir files
+    Extract  -> Tar.unpack dir . Tar.read . decompress compression =<< input
     List     -> printEntries . Tar.read . decompress compression =<< input
   where
     input  = if file == "-" then BS.getContents else BS.readFile  file
@@ -127,6 +128,7 @@ epochTimeToClockTime e = TOD s (truncate (1000000000 * f))
 
 data Options = Options {
     optFile        :: FilePath, -- "-" means stdin/stdout
+    optDir         :: FilePath,
     optAction      :: Action,
     optCompression :: Compression,
     optVerbosity   :: Verbosity
@@ -135,6 +137,7 @@ data Options = Options {
 defaultOptions :: Options
 defaultOptions = Options {
     optFile        = "-",
+    optDir         = "",
     optAction      = NoAction,
     optCompression = None,
     optVerbosity   = Concise
@@ -161,6 +164,9 @@ optDescr =
   , Option ['f'] ["file"]
       (ReqArg (\f o -> o { optFile = f}) "ARCHIVE")
       "Use archive file ARCHIVE."
+  , Option ['C'] ["directory"]
+      (ReqArg (\d o -> o { optDir = d }) "DIR")
+      "Create or extract relative to DIR."
   , Option ['z'] ["gzip", "gunzip", "ungzip"]
       (compression GZip)
       "Use gzip compression."
