@@ -97,9 +97,9 @@ checkEntryPortability entry
   | not (FilePath.Windows.isValid windowsPath)
   = Just $ "Invalid windows file name in tar archive: " ++ show windowsPath
 
-  | not (FilePath.Posix.isAbsolute posixPath)
+  | FilePath.Posix.isAbsolute posixPath
   = Just $ "Absolute unix file name in tar archive: " ++ show posixPath
-  | not (FilePath.Windows.isAbsolute windowsPath)
+  | FilePath.Windows.isAbsolute windowsPath
   = Just $ "Absolute windows file name in tar archive: " ++ show windowsPath
 
   | any (=="..") (FilePath.Posix.splitDirectories posixPath)
