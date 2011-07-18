@@ -54,6 +54,9 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
                      >>= emulateLinks
 
   where
+    -- We're relying here on 'checkSecurity' to make sure we're not scribbling
+    -- files all over the place.
+
     unpackEntries _     (Fail err)      = fail err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = case entryContent entry of
@@ -68,13 +71,16 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
         path = entryPath entry
 
     extractFile path content = do
-      createDirectoryIfMissing False absDir
+      -- Note that tar archives do not make sure each directory is created
+      -- before files they contain, indeed we may have to create several
+      -- levels of directory.
+      createDirectoryIfMissing True absDir
       BS.writeFile absPath content
       where
         absDir  = baseDir </> FilePath.Native.takeDirectory path
         absPath = baseDir </> path
 
-    extractDir path = createDirectoryIfMissing False (baseDir </> path)
+    extractDir path = createDirectoryIfMissing True (baseDir </> path)
 
     saveLink path link links = seq (length path)
                              $ seq (length link')
