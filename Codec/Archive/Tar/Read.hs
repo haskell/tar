@@ -132,10 +132,26 @@ getOct off len = parseOct
                . getBytes off len
   where
     parseOct "" = return 0
-    parseOct ('\128':_) = fail "tar header uses non-standard number encoding"
+    -- As a star extension, octal fields can hold a base-256 value if the high
+    -- bit of the initial character is set. The initial character can be:
+    --   0x80 ==> trailing characters hold a positive base-256 value
+    --   0xFF ==> trailing characters hold a negative base-256 value
+    --
+    -- In both cases, there won't be a trailing NUL/space.
+    --
+    -- GNU tar seems to contain a half-implementation of code that deals with
+    -- extra bits in the first character, but I don't think it works and the
+    -- docs I can find on star seem to suggest that these will always be 0,
+    -- which is what I will assume.
+    parseOct ('\128':xs) = return (readBytes xs)
+    parseOct ('\255':xs) = return (negate (readBytes xs))
     parseOct s  = case readOct s of
       [(x,[])] -> return x
       _        -> fail "tar header is malformed (bad numeric encoding)"
+    
+    readBytes = go 0
+      where go acc []     = acc
+            go acc (x:xs) = go (acc * 256 + fromIntegral (ord x)) xs
 
 getBytes :: Int64 -> Int64 -> ByteString -> ByteString
 getBytes off len = BS.take len . BS.drop off
