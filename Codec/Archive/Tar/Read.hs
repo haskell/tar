@@ -17,7 +17,6 @@ import Codec.Archive.Tar.Types
 import Data.Char     (ord)
 import Data.Int      (Int64)
 import Numeric       (readOct)
-import Control.Monad (unless)
 
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8

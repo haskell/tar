@@ -35,4 +35,4 @@ library
     Codec.Archive.Tar.Pack
     Codec.Archive.Tar.Unpack
 
-  ghc-options: -Wall -fno-warn-unused-imports
+  ghc-options: -Wall

@@ -21,7 +21,7 @@ import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
 import qualified System.FilePath as FilePath.Native
-         ( (</>), takeDirectory )
+         ( takeDirectory )
 import System.Directory
          ( createDirectoryIfMissing, copyFile )
 

@@ -56,7 +56,6 @@ module Codec.Archive.Tar.Types (
 import Data.Int      (Int64)
 import Data.Monoid   (Monoid(..))
 import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BS.Char8
 import Data.ByteString.Lazy (ByteString)
 
 import qualified System.FilePath as FilePath.Native

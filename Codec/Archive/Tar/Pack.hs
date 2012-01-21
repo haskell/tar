@@ -24,12 +24,10 @@ import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
 import qualified System.FilePath as FilePath.Native
-         ( makeRelative, addTrailingPathSeparator, hasTrailingPathSeparator )
+         ( addTrailingPathSeparator, hasTrailingPathSeparator )
 import System.Directory
          ( getDirectoryContents, doesDirectoryExist, getModificationTime
          , Permissions(..), getPermissions )
-import System.Posix.Types
-         ( FileMode )
 import System.Time
          ( ClockTime(..) )
 import System.IO
