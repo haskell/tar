@@ -4,7 +4,7 @@
 -- Copyright   :  (c) 2008-2009 Duncan Coutts
 -- License     :  BSD3
 --
--- Maintainer  :  duncan@haskell.org
+-- Maintainer  :  duncan@community.haskell.org
 -- Portability :  portable
 --
 -- Perform various checks on tar file entries.
