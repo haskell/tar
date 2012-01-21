@@ -1,7 +1,7 @@
 name:            tar
 version:         0.3.1.0
 license:         BSD3
-license-File:    LICENSE
+license-file:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
                  Duncan Coutts <duncan@haskell.org>
 maintainer:      Duncan Coutts <duncan@haskell.org>
@@ -17,16 +17,11 @@ description:     This library is for working with \"@.tar@\" archive files. It
                  details like file ownership and exact permissions are not
                  preserved.
 build-type:      Simple
-cabal-version:   >=1.2
-
-flag base3
+cabal-version:   >=1.8
 
 library
-  build-depends: base >= 2 && < 5, filepath
-  if flag(base3)
-    build-depends: base >= 3, directory, old-time, bytestring
-  else
-    build-depends: base < 3
+  build-depends: base >= 3 && < 5, filepath,
+                 directory, old-time, bytestring
 
   exposed-modules:
     Codec.Archive.Tar
