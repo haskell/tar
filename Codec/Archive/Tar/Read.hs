@@ -10,13 +10,15 @@
 -- Portability :  portable
 --
 -----------------------------------------------------------------------------
-module Codec.Archive.Tar.Read (read) where
+module Codec.Archive.Tar.Read (read, FormatError(..)) where
 
 import Codec.Archive.Tar.Types
 
 import Data.Char     (ord)
 import Data.Int      (Int64)
 import Numeric       (readOct)
+import Control.Exception (Exception)
+import Data.Typeable (Typeable)
 
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8
@@ -24,35 +26,61 @@ import Data.ByteString.Lazy (ByteString)
 
 import Prelude hiding (read)
 
+
+-- | Errors that can be encountered when parsing a Tar archive.
+data FormatError
+  = TruncatedArchive
+  | ShortTrailer
+  | BadTrailer
+  | TrailingJunk
+  | ChecksumIncorrect
+  | NotTarFormat
+  | UnrecognisedTarFormat
+  | HeaderBadNumericEncoding
+  deriving (Typeable)
+
+instance Show FormatError where
+  show TruncatedArchive         = "truncated tar archive"
+  show ShortTrailer             = "short tar trailer"
+  show BadTrailer               = "bad tar trailer"
+  show TrailingJunk             = "tar file has trailing junk"
+  show ChecksumIncorrect        = "tar checksum error"
+  show NotTarFormat             = "data is not in tar format"
+  show UnrecognisedTarFormat    = "tar entry not in a recognised format"
+  show HeaderBadNumericEncoding = "tar header is malformed (bad numeric encoding)"
+
+instance Exception FormatError
+
+
 -- | Convert a data stream in the tar file format into an internal data
 -- structure. Decoding errors are reported by the 'Fail' constructor of the
 -- 'Entries' type.
 --
 -- * The conversion is done lazily.
 --
-read :: ByteString -> Entries
+read :: ByteString -> Entries FormatError
 read = unfoldEntries getEntry
 
-getEntry :: ByteString -> Either String (Maybe (Entry, ByteString))
+getEntry :: ByteString -> Either FormatError (Maybe (Entry, ByteString))
 getEntry bs
-  | BS.length header < 512 = Left "truncated tar archive"
+  | BS.length header < 512 = Left TruncatedArchive
 
   -- Tar files end with at least two blocks of all '0'. Checking this serves
   -- two purposes. It checks the format but also forces the tail of the data
   -- which is necessary to close the file if it came from a lazily read file.
   | BS.head bs == 0 = case BS.splitAt 1024 bs of
       (end, trailing)
-        | BS.length end /= 1024        -> Left "short tar trailer"
-        | not (BS.all (== 0) end)      -> Left "bad tar trailer"
-        | not (BS.all (== 0) trailing) -> Left "tar file has trailing junk"
+        | BS.length end /= 1024        -> Left ShortTrailer
+        | not (BS.all (== 0) end)      -> Left BadTrailer
+        | not (BS.all (== 0) trailing) -> Left TrailingJunk
         | otherwise                    -> Right Nothing
 
   | otherwise  = partial $ do
 
   case (chksum_, format_) of
     (Ok chksum, _   ) | correctChecksum header chksum -> return ()
-    (Ok _,      Ok _) -> fail "tar checksum error"
-    _                 -> fail "data is not in tar format"
+    (Ok _,      Ok _) -> Error ChecksumIncorrect
+    _                 -> Error NotTarFormat
 
   -- These fields are partial, have to check them
   format   <- format_;   mode     <- mode_;
@@ -109,7 +137,7 @@ getEntry bs
     "\0\0\0\0\0\0\0\0" -> return V7Format
     "ustar\NUL00"      -> return UstarFormat
     "ustar  \NUL"      -> return GnuFormat
-    _                  -> fail "tar entry not in a recognised format"
+    _                  -> Error UnrecognisedTarFormat
 
 correctChecksum :: ByteString -> Int -> Bool
 correctChecksum header checksum = checksum == checksum'
@@ -124,7 +152,7 @@ correctChecksum header checksum = checksum == checksum'
 
 -- * TAR format primitive input
 
-getOct :: Integral a => Int64 -> Int64 -> ByteString -> Partial a
+getOct :: Integral a => Int64 -> Int64 -> ByteString -> Partial FormatError a
 getOct off len = parseOct
                . BS.Char8.unpack
                . BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
@@ -147,7 +175,7 @@ getOct off len = parseOct
     parseOct ('\255':xs) = return (negate (readBytes xs))
     parseOct s  = case readOct s of
       [(x,[])] -> return x
-      _        -> fail "tar header is malformed (bad numeric encoding)"
+      _        -> Error HeaderBadNumericEncoding
     
     readBytes = go 0
       where go acc []     = acc
@@ -165,14 +193,14 @@ getChars off len = BS.Char8.unpack . getBytes off len
 getString :: Int64 -> Int64 -> ByteString -> String
 getString off len = BS.Char8.unpack . BS.Char8.takeWhile (/='\0') . getBytes off len
 
-data Partial a = Error String | Ok a
+data Partial e a = Error e | Ok a
 
-partial :: Partial a -> Either String a
+partial :: Partial e a -> Either e a
 partial (Error msg) = Left msg
 partial (Ok x)      = Right x
 
-instance Monad Partial where
+instance Monad (Partial e) where
     return        = Ok
     Error m >>= _ = Error m
     Ok    x >>= k = k x
-    fail          = Error
+    fail          = error "fail @(Partial e)"

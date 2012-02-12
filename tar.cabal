@@ -39,4 +39,7 @@ library
     Codec.Archive.Tar.Pack
     Codec.Archive.Tar.Unpack
 
+  extensions:
+    DeriveDataTypeable
+
   ghc-options: -Wall

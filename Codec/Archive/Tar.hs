@@ -122,6 +122,8 @@ module Codec.Archive.Tar (
   foldEntries,
   unfoldEntries,
 
+  -- ** Errors that can arise from reading tar files
+  FormatError(..),
   ) where
 
 import Codec.Archive.Tar.Types

@@ -24,6 +24,8 @@ import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
          ( createDirectoryIfMissing, copyFile )
+import Control.Exception
+         ( Exception, throwIO )
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -49,7 +51,7 @@ import System.Directory
 -- If you care about the priority of the reported errors then you may want to
 -- use 'checkSecurity' before 'checkTarbomb' or other checks.
 --
-unpack :: FilePath -> Entries -> IO ()
+unpack :: Exception e => FilePath -> Entries e -> IO ()
 unpack baseDir entries = unpackEntries [] (checkSecurity entries)
                      >>= emulateLinks
 
@@ -57,7 +59,7 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
     -- We're relying here on 'checkSecurity' to make sure we're not scribbling
     -- files all over the place.
 
-    unpackEntries _     (Fail err)      = fail err
+    unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = case entryContent entry of
       NormalFile file _ -> extractFile path file

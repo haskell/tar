@@ -48,6 +48,7 @@ module Codec.Archive.Tar.Types (
 
   Entries(..),
   mapEntries,
+  mapEntriesNoFail,
   foldEntries,
   unfoldEntries,
 
@@ -410,9 +411,9 @@ fromLinkTargetToWindowsPath (LinkTarget path) = adjustDirectory $
 -- The 'Monoid' instance lets you concatenate archives or append entries to an
 -- archive.
 --
-data Entries = Next Entry Entries
-             | Done
-             | Fail String
+data Entries e = Next Entry (Entries e)
+               | Done
+               | Fail e
 
 -- | This is like the standard 'unfoldr' function on lists, but for 'Entries'.
 -- It includes failure as an extra possibility that the stepper function may
@@ -421,7 +422,7 @@ data Entries = Next Entry Entries
 -- It can be used to generate 'Entries' from some other type. For example it is
 -- used internally to lazily unfold entries from a 'ByteString'.
 --
-unfoldEntries :: (a -> Either String (Maybe (Entry, a))) -> a -> Entries
+unfoldEntries :: (a -> Either e (Maybe (Entry, a))) -> a -> Entries e
 unfoldEntries f = unfold
   where
     unfold x = case f x of
@@ -436,7 +437,7 @@ unfoldEntries f = unfold
 -- This is used to consume a sequence of entries. For example it could be used
 -- to scan a tarball for problems or to collect an index of the contents.
 --
-foldEntries :: (Entry -> a -> a) -> a -> (String -> a) -> Entries -> a
+foldEntries :: (Entry -> a -> a) -> a -> (e -> a) -> Entries e -> a
 foldEntries next done fail' = fold
   where
     fold (Next e es) = next e (fold es)
@@ -446,10 +447,19 @@ foldEntries next done fail' = fold
 -- | This is like the standard 'map' function on lists, but for 'Entries'. It
 -- includes failure as a extra possible outcome of the mapping function.
 --
-mapEntries :: (Entry -> Either String Entry) -> Entries -> Entries
+-- If your mapping function can't fail, it may be more convenient to use
+-- 'mapEntriesNoFail'
+mapEntries :: (Entry -> Either e' Entry) -> Entries e -> Entries (Either e e')
 mapEntries f =
-  foldEntries (\entry rest -> either Fail (flip Next rest) (f entry)) Done Fail
+  foldEntries (\entry rest -> either (Fail . Right) (flip Next rest) (f entry)) Done (Fail . Left)
 
-instance Monoid Entries where
+-- | Like 'map' on lists, but for 'Entries'.
+--
+-- Use 'mapEntries' if your mapping function may itself fail.
+mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
+mapEntriesNoFail f =
+  foldEntries (\entry -> Next (f entry)) Done Fail
+
+instance Monoid (Entries e) where
   mempty      = Done
   mappend a b = foldEntries Next b Fail a
