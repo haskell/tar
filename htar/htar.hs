@@ -6,6 +6,7 @@ import qualified Codec.Archive.Tar.Entry as Tar
 import qualified Codec.Compression.GZip as GZip (compress, decompress)
 import qualified Codec.Compression.BZip as BZip (compress, decompress)
 
+import Control.Exception     (throwIO)
 import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy  (ByteString)
 import Data.Bits             (testBit)
@@ -41,7 +42,7 @@ main' (Options { optFile        = file,
     output = if file == "-" then BS.putStr      else BS.writeFile file
 
     printEntries = Tar.foldEntries (\entry rest -> printEntry entry >> rest)
-                                   (return ()) fail
+                                   (return ()) throwIO
     printEntry = putStrLn . entryInfo verbosity
 
 data Compression = None | GZip | BZip

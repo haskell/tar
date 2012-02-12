@@ -22,7 +22,7 @@ executable htar
   ghc-options: -Wall
   build-depends:
     base  >= 2   && < 5,
-    tar   >= 0.3 && < 0.4,
+    tar   >= 0.4 && < 0.5,
     zlib  >= 0.4 && < 0.6,
     bzlib >= 0.4 && < 0.6,
     filepath >= 1
