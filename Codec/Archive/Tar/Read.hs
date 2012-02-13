@@ -3,7 +3,8 @@
 -- Module      :  Codec.Archive.Tar.Read
 -- Copyright   :  (c) 2007 Bjorn Bringert,
 --                    2008 Andrea Vezzosi,
---                    2008-2009 Duncan Coutts
+--                    2008-2009 Duncan Coutts,
+--                    2011 Max Bolingbroke
 -- License     :  BSD3
 --
 -- Maintainer  :  duncan@community.haskell.org

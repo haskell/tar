@@ -1,7 +1,8 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
--- Copyright   :  (c) 2008-2009 Duncan Coutts
+-- Copyright   :  (c) 2008-2012 Duncan Coutts
+--                    2011 Max Bolingbroke
 -- License     :  BSD3
 --
 -- Maintainer  :  duncan@community.haskell.org

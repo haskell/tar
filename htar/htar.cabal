@@ -3,10 +3,10 @@ version:         0.3.1
 license:         BSD3
 license-File:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
-                 Duncan Coutts <duncan@haskell.org>
-maintainer:      Duncan Coutts <duncan@haskell.org>
+                 Duncan Coutts <duncan@community.haskell.org>
+maintainer:      Duncan Coutts <duncan@community.haskell.org>
 copyright:       2007 Bjorn Bringert <bjorn@bringert.net>
-                 2008-2009 Duncan Coutts <duncan@haskell.org>
+                 2008-2012 Duncan Coutts <duncan@community.haskell.org>
 category:        Codec
 synopsis:        Command-line tar archive utility.
 description:     A Command-line utility to create, extract and list the
