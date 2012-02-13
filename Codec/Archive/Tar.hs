@@ -54,7 +54,8 @@ module Codec.Archive.Tar (
   -- \"@.tar.gz@\" or \"@.tar.bz2@\" files. This module does not directly
   -- handle compressed tar files however they can be handled easily by
   -- composing functions from this module and the modules
-  -- "Codec.Compression.GZip" or "Codec.Compression.BZip".
+  -- @Codec.Compression.GZip@ or @Codec.Compression.BZip@
+  -- (see @zlib@ or @bzlib@ packages).
   --
   -- Creating a compressed \"@.tar.gz@\" file is just a minor variation on the
   -- 'create' function, but where throw compression into the pipeline:
@@ -67,17 +68,6 @@ module Codec.Archive.Tar (
   -- > Tar.unpack dir . Tar.read . GZip.decompress =<< BS.readFile tar
   --
 
-  -- ** Tarbombs
-  -- | A \"tarbomb\" is a @.tar@ file where not all entries are in a
-  -- subdirectory but instead files extract into the top level directory. The
-  -- 'extract' function does not check for these however if you want to do
-  -- that you can use the 'checkTarbomb' function like so:
-  --
-  -- > Tar.unpack dir . Tar.checkTarbomb expectedDir
-  -- >                . Tar.read =<< BS.readFile tar
-  --
-  -- In this case extraction will fail if any file is outside of @expectedDir@.
-
   -- ** Security
   -- | This is pretty important. A maliciously constructed tar archives could
   -- contain entries that specify bad file names. It could specify absolute
@@ -89,6 +79,17 @@ module Codec.Archive.Tar (
   -- The 'extract' and 'unpack' functions check for bad file names. See the
   -- 'checkSecurity' function for more details. If you need to do any custom
   -- unpacking then you should use this.
+
+  -- ** Tarbombs
+  -- | A \"tarbomb\" is a @.tar@ file where not all entries are in a
+  -- subdirectory but instead files extract into the top level directory. The
+  -- 'extract' function does not check for these however if you want to do
+  -- that you can use the 'checkTarbomb' function like so:
+  --
+  -- > Tar.unpack dir . Tar.checkTarbomb expectedDir
+  -- >                . Tar.read =<< BS.readFile tar
+  --
+  -- In this case extraction will fail if any file is outside of @expectedDir@.
 
   -- * Converting between internal and external representation
   -- | Note, you cannot expect @write . read@ to give exactly the same output
@@ -119,10 +120,22 @@ module Codec.Archive.Tar (
   -- ** Sequences of tar entries
   Entries(..),
   mapEntries,
+  mapEntriesNoFail,
   foldEntries,
   unfoldEntries,
 
-  -- ** Errors that can arise from reading tar files
+  -- * Error handling
+  -- | Reading tar files can fail if the data does not match the tar file
+  -- format correctly.
+  --
+  -- The style of error handling by returning structured errors. The pure
+  -- functions in the library do not throw exceptions, they return the errors
+  -- as data. The IO actions in the library can throw exceptions, in particular
+  -- the 'unpack' action does this. All the error types used are an instance of
+  -- the standard 'Exception' class so it is possible to 'throw' and 'catch'
+  -- them.
+
+  -- ** Errors from reading tar files
   FormatError(..),
   ) where
 
@@ -134,8 +147,9 @@ import Codec.Archive.Tar.Write
 import Codec.Archive.Tar.Pack
 import Codec.Archive.Tar.Unpack
 
-import Codec.Archive.Tar.Check ()
+import Codec.Archive.Tar.Check
 
+import Control.Exception (Exception, throw, catch)
 import qualified Data.ByteString.Lazy as BS
 import Prelude hiding (read)
 

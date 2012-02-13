@@ -42,4 +42,4 @@ library
   extensions:
     DeriveDataTypeable
 
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-unused-imports

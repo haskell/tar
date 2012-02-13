@@ -12,13 +12,19 @@
 --
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Check (
-  TarBombError(..),
-  FileNameError(..),
-  PortabilityError(..),
 
+  -- * Security
   checkSecurity,
+  FileNameError(..),
+
+  -- * Tarbombs
   checkTarbomb,
+  TarBombError(..),
+
+  -- * Portability
   checkPortability,
+  PortabilityError(..),
+  PortabilityPlatform,
   ) where
 
 import Codec.Archive.Tar.Types
@@ -33,60 +39,9 @@ import qualified System.FilePath.Windows as FilePath.Windows
 import qualified System.FilePath.Posix   as FilePath.Posix
 
 
--- | An error that occurs if a tar file is a "tar bomb", designed to extract
--- files outside of the intended directory
-data TarBombError = TarBombError FilePath
-                  deriving (Typeable)
-
-instance Exception TarBombError
-
-instance Show TarBombError where
-  show (TarBombError expectedTopDir)
-    = "File in tar archive is not in the expected directory " ++ show expectedTopDir
-
-
--- | Errors arising from tar file names being in some way invalid or dangerous
-data FileNameError
-  = InvalidFileName FilePath
-  | AbsoluteFileName FilePath
-  deriving (Typeable)
-
-instance Show FileNameError where
-  show = showFileNameError Nothing
-
-instance Exception FileNameError
-
-showFileNameError :: Maybe PortabilityPlatform -> FileNameError -> String
-showFileNameError mb_plat err = case err of
-    InvalidFileName  path -> "Invalid"  ++ plat ++ " file name in tar archive: " ++ show path
-    AbsoluteFileName path -> "Absolute" ++ plat ++ " file name in tar archive: " ++ show path
-  where plat = maybe "" (' ':) mb_plat
-
-
--- | The name of a platform that portability issues arise from
-type PortabilityPlatform = String
-
--- | Potential portability issues in a tar archive
-data PortabilityError
-  = NonPortableFormat Format
-  | NonPortableFileType
-  | NonPortableEntryNameChar FilePath
-  | NonPortableFileName PortabilityPlatform FileNameError
-  deriving (Typeable)
-
-instance Exception PortabilityError
-
-instance Show PortabilityError where
-  show (NonPortableFormat format) = "Archive is in the " ++ fmt ++ " format"
-    where fmt = case format of V7Format    -> "old Unix V7 tar"
-                               UstarFormat -> "ustar" -- I never generate this but a user might
-                               GnuFormat   -> "GNU tar"
-  show NonPortableFileType        = "Non-portable file type in archive"
-  show (NonPortableEntryNameChar posixPath)
-    = "Non-portable character in archive entry name: " ++ show posixPath
-  show (NonPortableFileName platform err)
-    = showFileNameError (Just platform) err
-
+--------------------------
+-- Security
+--
 
 -- | This function checks a sequence of tar entries for file name security
 -- problems. It checks that:
@@ -105,13 +60,6 @@ instance Show PortabilityError where
 --
 checkSecurity :: Entries e -> Entries (Either e FileNameError)
 checkSecurity = checkEntries checkEntrySecurity
-
-checkTarbomb :: FilePath -> Entries e -> Entries (Either e TarBombError)
-checkTarbomb expectedTopDir = checkEntries (checkEntryTarbomb expectedTopDir)
-
-checkPortability :: Entries e -> Entries (Either e PortabilityError)
-checkPortability = checkEntries checkEntryPortability
-
 
 checkEntrySecurity :: Entry -> Maybe FileNameError
 checkEntrySecurity entry = case entryContent entry of
@@ -134,11 +82,83 @@ checkEntrySecurity entry = case entryContent entry of
 
       | otherwise = Nothing
 
+-- | Errors arising from tar file names being in some way invalid or dangerous
+data FileNameError
+  = InvalidFileName FilePath
+  | AbsoluteFileName FilePath
+  deriving (Typeable)
+
+instance Show FileNameError where
+  show = showFileNameError Nothing
+
+instance Exception FileNameError
+
+showFileNameError :: Maybe PortabilityPlatform -> FileNameError -> String
+showFileNameError mb_plat err = case err of
+    InvalidFileName  path -> "Invalid"  ++ plat ++ " file name in tar archive: " ++ show path
+    AbsoluteFileName path -> "Absolute" ++ plat ++ " file name in tar archive: " ++ show path
+  where plat = maybe "" (' ':) mb_plat
+
+
+--------------------------
+-- Tarbombs
+--
+
+-- | This function checks a sequence of tar entries for being a \"tar bomb\".
+-- This means that the tar file does not follow the standard convention that
+-- all entries are within a single subdirectory, e.g. a file \"foo.tar\" would
+-- usually have all entries within the \"foo/\" subdirectory.
+--
+-- Given the expected subdirectory, this function checks all entries are within
+-- that subdirectroy.
+--
+-- Note: This check must be used in conjunction with 'checkSecurity'.
+--
+checkTarbomb :: FilePath -> Entries e -> Entries (Either e TarBombError)
+checkTarbomb expectedTopDir = checkEntries (checkEntryTarbomb expectedTopDir)
+
 checkEntryTarbomb :: FilePath -> Entry -> Maybe TarBombError
 checkEntryTarbomb expectedTopDir entry =
   case FilePath.Native.splitDirectories (entryPath entry) of
     (topDir:_) | topDir == expectedTopDir -> Nothing
     _ -> Just $ TarBombError expectedTopDir
+
+-- | An error that occurs if a tar file is a \"tar bomb\" that would extract
+-- files outside of the intended directory.
+data TarBombError = TarBombError FilePath
+                  deriving (Typeable)
+
+instance Exception TarBombError
+
+instance Show TarBombError where
+  show (TarBombError expectedTopDir)
+    = "File in tar archive is not in the expected directory " ++ show expectedTopDir
+
+
+--------------------------
+-- Portability
+--
+
+-- | This function checks a sequence of tar entries for a number of portability
+-- issues. It will complain if:
+--
+-- * The old \"Unix V7\" or \"gnu\" formats are used. For maximum portability
+--   only the POSIX standard \"ustar\" format should be used.
+--
+-- * A non-portable entry type is used. Only ordinary files, hard links,
+--   symlinks and directories are portable. Device files, pipes and others are
+--   not portable between all common operating systems.
+--
+-- * Non-ASCII characters are used in file names. There is no agreed portable
+--   convention for Unicode or other extended character sets in file names in
+--   tar archives.
+--
+-- * File names that would not be portable to both Unix and Windows. This check
+--   includes characters that are valid in both systems and the \'/\' vs \'\\\'
+--   directory separator conventions.
+--
+checkPortability :: Entries e -> Entries (Either e PortabilityError)
+checkPortability = checkEntries checkEntryPortability
 
 checkEntryPortability :: Entry -> Maybe PortabilityError
 checkEntryPortability entry
@@ -181,6 +201,34 @@ checkEntryPortability entry
 
     portableChar c = c <= '\127'
 
+-- | Potential portability issues in a tar archive
+data PortabilityError
+  = NonPortableFormat Format
+  | NonPortableFileType
+  | NonPortableEntryNameChar FilePath
+  | NonPortableFileName PortabilityPlatform FileNameError
+  deriving (Typeable)
+
+-- | The name of a platform that portability issues arise from
+type PortabilityPlatform = String
+
+instance Exception PortabilityError
+
+instance Show PortabilityError where
+  show (NonPortableFormat format) = "Archive is in the " ++ fmt ++ " format"
+    where fmt = case format of V7Format    -> "old Unix V7 tar"
+                               UstarFormat -> "ustar" -- I never generate this but a user might
+                               GnuFormat   -> "GNU tar"
+  show NonPortableFileType        = "Non-portable file type in archive"
+  show (NonPortableEntryNameChar posixPath)
+    = "Non-portable character in archive entry name: " ++ show posixPath
+  show (NonPortableFileName platform err)
+    = showFileNameError (Just platform) err
+
+
+--------------------------
+-- Utils
+--
 
 checkEntries :: (Entry -> Maybe e') -> Entries e -> Entries (Either e e')
 checkEntries checkEntry =

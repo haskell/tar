@@ -177,7 +177,7 @@ getOct off len = parseOct
     parseOct s  = case readOct s of
       [(x,[])] -> return x
       _        -> Error HeaderBadNumericEncoding
-    
+
     readBytes = go 0
       where go acc []     = acc
             go acc (x:xs) = go (acc * 256 + fromIntegral (ord x)) xs

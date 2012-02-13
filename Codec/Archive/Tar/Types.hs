@@ -448,15 +448,14 @@ foldEntries next done fail' = fold
 -- | This is like the standard 'map' function on lists, but for 'Entries'. It
 -- includes failure as a extra possible outcome of the mapping function.
 --
--- If your mapping function can't fail, it may be more convenient to use
+-- If your mapping function cannot fail it may be more convenient to use
 -- 'mapEntriesNoFail'
 mapEntries :: (Entry -> Either e' Entry) -> Entries e -> Entries (Either e e')
 mapEntries f =
   foldEntries (\entry rest -> either (Fail . Right) (flip Next rest) (f entry)) Done (Fail . Left)
 
--- | Like 'map' on lists, but for 'Entries'.
+-- | Like 'mapEntries' but the mapping function itself cannot fail.
 --
--- Use 'mapEntries' if your mapping function may itself fail.
 mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
 mapEntriesNoFail f =
   foldEntries (\entry -> Next (f entry)) Done Fail
