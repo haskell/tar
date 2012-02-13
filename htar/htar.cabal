@@ -1,5 +1,5 @@
 name:            htar
-version:         0.3.1
+version:         0.4
 license:         BSD3
 license-File:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
@@ -12,28 +12,24 @@ synopsis:        Command-line tar archive utility.
 description:     A Command-line utility to create, extract and list the
                  contents of tar archives. It can work with compressed
                  archives using gzip or bzip2 compression.
+                 .
+                 This is in part a demo of the @tar@ library but it is also
+                 usable in place of the ordinary @tar@ program for systems
+                 like Windows that do not come with it as standard.
 build-type:      Simple
-cabal-version:   >= 1.2
-
-flag base3
+cabal-version:   >= 1.6
 
 executable htar
   main-is: htar.hs
   ghc-options: -Wall
   build-depends:
-    base  >= 2   && < 5,
-    tar   >= 0.4 && < 0.5,
-    zlib  >= 0.4 && < 0.6,
-    bzlib >= 0.4 && < 0.6,
-    filepath >= 1
+    base       == 4.*,
+    old-time   >= 1.0,
+    old-locale >= 1.0,
+    directory  >= 1.0,
+    filepath   >= 1.0,
+    bytestring >= 0.9,
+    tar        == 0.4.*,
+    zlib       >= 0.4 && < 0.6,
+    bzlib      >= 0.4 && < 0.6
 
-  if flag(base3)
-    build-depends:
-      base >= 3,
-      old-time   >= 1.0,
-      old-locale >= 1.0,
-      directory  >= 1.0,
-      bytestring >= 0.9
-  else
-    build-depends:
-      base < 3
