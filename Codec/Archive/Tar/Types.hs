@@ -120,6 +120,7 @@ data EntryContent = NormalFile      ByteString !FileSize
                   | BlockDevice     !DevMajor !DevMinor
                   | NamedPipe
                   | OtherEntryType  !TypeCode ByteString !FileSize
+    deriving (Eq, Ord)
 
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
@@ -134,6 +135,7 @@ data Ownership = Ownership {
     -- | Numeric owner group id. Should be set to @0@ if unknown.
     groupId :: !Int
   }
+    deriving (Eq, Ord)
 
 -- | There have been a number of extensions to the tar file format over the
 -- years. They all share the basic entry fields and put more meta-data in
@@ -156,7 +158,7 @@ data Format =
      -- archives the standard USTAR/POSIX should be used.
      --
    | GnuFormat
-  deriving Eq
+  deriving (Eq, Ord)
 
 -- | @rw-r--r--@ for normal files
 ordinaryFilePermissions :: Permissions
