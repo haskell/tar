@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -28,8 +29,15 @@ import qualified System.FilePath as FilePath.Native
 import System.Directory
          ( getDirectoryContents, doesDirectoryExist, getModificationTime
          , Permissions(..), getPermissions )
+#ifdef OLD_TIME
 import System.Time
          ( ClockTime(..) )
+#else
+import Data.Time.Clock
+         ( UTCTime )
+import Data.Time.Clock.POSIX
+         ( utcTimeToPOSIXSeconds )
+#endif
 import System.IO
          ( IOMode(ReadMode), openBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
@@ -170,5 +178,10 @@ recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
 
 getModTime :: FilePath -> IO EpochTime
 getModTime path = do
+#ifdef OLD_TIME
   (TOD s _) <- getModificationTime path
   return $! fromIntegral s
+#else
+  t <- getModificationTime path
+  return . floor . utcTimeToPOSIXSeconds $ t
+#endif
