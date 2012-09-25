@@ -29,14 +29,15 @@ import qualified System.FilePath as FilePath.Native
 import System.Directory
          ( getDirectoryContents, doesDirectoryExist, getModificationTime
          , Permissions(..), getPermissions )
-#ifdef OLD_TIME
-import System.Time
-         ( ClockTime(..) )
-#else
+#if MIN_VERSION_directory(1,2,0)
+-- The directory package switched to the new time package
 import Data.Time.Clock
          ( UTCTime )
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
+#else
+import System.Time
+         ( ClockTime(..) )
 #endif
 import System.IO
          ( IOMode(ReadMode), openBinaryFile, hFileSize )
@@ -178,10 +179,11 @@ recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
 
 getModTime :: FilePath -> IO EpochTime
 getModTime path = do
-#ifdef OLD_TIME
-  (TOD s _) <- getModificationTime path
-  return $! fromIntegral s
-#else
+#if MIN_VERSION_directory(1,2,0)
+  -- The directory package switched to the new time package
   t <- getModificationTime path
   return . floor . utcTimeToPOSIXSeconds $ t
+#else
+  (TOD s _) <- getModificationTime path
+  return $! fromIntegral s
 #endif
