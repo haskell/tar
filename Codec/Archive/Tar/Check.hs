@@ -112,7 +112,8 @@ showFileNameError mb_plat err = case err of
 -- Given the expected subdirectory, this function checks all entries are within
 -- that subdirectroy.
 --
--- Note: This check must be used in conjunction with 'checkSecurity'.
+-- Note: This check must be used in conjunction with 'checkSecurity'
+-- (or 'checkPortability').
 --
 checkTarbomb :: FilePath -> Entries e -> Entries (Either e TarBombError)
 checkTarbomb expectedTopDir = checkEntries (checkEntryTarbomb expectedTopDir)
@@ -189,8 +190,9 @@ checkEntryPortability entry
   | otherwise = Nothing
 
   where
-    posixPath   = fromTarPathToPosixPath   (entryTarPath entry)
-    windowsPath = fromTarPathToWindowsPath (entryTarPath entry)
+    tarPath     = entryTarPath entry
+    posixPath   = fromTarPathToPosixPath   tarPath
+    windowsPath = fromTarPathToWindowsPath tarPath
 
     portableFileType ftype = case ftype of
       NormalFile   {} -> True
@@ -201,7 +203,7 @@ checkEntryPortability entry
 
     portableChar c = c <= '\127'
 
--- | Potential portability issues in a tar archive
+-- | Portability problems in a tar archive
 data PortabilityError
   = NonPortableFormat Format
   | NonPortableFileType
