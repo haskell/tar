@@ -1,12 +1,12 @@
 name:            tar
-version:         0.4.0.1
+version:         0.4.1.0
 license:         BSD3
 license-file:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
                  Duncan Coutts <duncan@community.haskell.org>
 maintainer:      Duncan Coutts <duncan@community.haskell.org>
 copyright:       2007 Bjorn Bringert <bjorn@bringert.net>
-                 2008-2012 Duncan Coutts <duncan@community.haskell.org>
+                 2008-2015 Duncan Coutts <duncan@community.haskell.org>
 category:        Codec
 synopsis:        Reading, writing and manipulating ".tar" archive files.
 description:     This library is for working with \"@.tar@\" archive files. It
