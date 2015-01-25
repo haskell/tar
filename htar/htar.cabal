@@ -1,12 +1,12 @@
 name:            htar
-version:         0.4
+version:         0.4.0.1
 license:         BSD3
 license-File:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
                  Duncan Coutts <duncan@community.haskell.org>
 maintainer:      Duncan Coutts <duncan@community.haskell.org>
 copyright:       2007 Bjorn Bringert <bjorn@bringert.net>
-                 2008-2012 Duncan Coutts <duncan@community.haskell.org>
+                 2008-2015 Duncan Coutts <duncan@community.haskell.org>
 category:        Codec
 synopsis:        Command-line tar archive utility.
 description:     A Command-line utility to create, extract and list the
