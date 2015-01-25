@@ -20,6 +20,8 @@ import Data.Int      (Int64)
 import Numeric       (readOct)
 import Control.Exception (Exception)
 import Data.Typeable (Typeable)
+import Control.Applicative
+import Control.Monad
 
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8
@@ -194,11 +196,21 @@ getChars off len = BS.Char8.unpack . getBytes off len
 getString :: Int64 -> Int64 -> ByteString -> String
 getString off len = BS.Char8.unpack . BS.Char8.takeWhile (/='\0') . getBytes off len
 
+-- These days we'd just use Either, but in older versions of base there was no
+-- Monad instance for Either, it was in mtl with an anoying Error constraint.
+--
 data Partial e a = Error e | Ok a
 
 partial :: Partial e a -> Either e a
 partial (Error msg) = Left msg
 partial (Ok x)      = Right x
+
+instance Functor (Partial e) where
+    fmap = liftM
+
+instance Applicative (Partial e) where
+    pure  = return
+    (<*>) = ap
 
 instance Monad (Partial e) where
     return        = Ok
