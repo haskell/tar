@@ -465,3 +465,7 @@ mapEntriesNoFail f =
 instance Monoid (Entries e) where
   mempty      = Done
   mappend a b = foldEntries Next b Fail a
+
+instance Functor Entries where
+  fmap f = foldEntries Next Done (Fail . f)
+
