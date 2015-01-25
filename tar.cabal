@@ -23,10 +23,15 @@ source-repository head
   type: darcs
   location: http://code.haskell.org/tar/
 
+flag old-time
+
 library
-  build-depends: base >= 3 && < 5, filepath,
-                 bytestring, directory,
-                 old-time, time
+  build-depends: base == 4.*, filepath,
+                 bytestring, directory
+  if flag(old-time)
+    build-depends: directory < 1.2, old-time
+  else
+    build-depends: directory >= 1.2, time
 
   exposed-modules:
     Codec.Archive.Tar
