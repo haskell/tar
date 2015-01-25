@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 module Main where
 
 import qualified Codec.Archive.Tar       as Tar
@@ -16,8 +17,13 @@ import System.Console.GetOpt (OptDescr(..), ArgDescr(..), ArgOrder(..),
 import System.Environment    (getArgs)
 import System.Exit           (exitFailure)
 import System.IO             (hPutStrLn, stderr)
+import Data.Time             (formatTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
+#if MIN_VERSION_time(1,5,0)
+import Data.Time             (defaultTimeLocale)
+#else
 import System.Locale         (defaultTimeLocale)
-import System.Time           (ClockTime(..), toUTCTime, formatCalendarTime)
+#endif
 
 main :: IO ()
 main = do
@@ -118,11 +124,7 @@ justify width left right = left ++ padding ++ right
 
 formatEpochTime :: String -> Tar.EpochTime -> String
 formatEpochTime f =
-    formatCalendarTime defaultTimeLocale f . toUTCTime . epochTimeToClockTime
-
-epochTimeToClockTime :: Tar.EpochTime -> ClockTime
-epochTimeToClockTime e = TOD s (truncate (1000000000 * f))
-    where (s,f) = properFraction (toRational e)
+    formatTime defaultTimeLocale f . posixSecondsToUTCTime . fromIntegral
 
 ------------------------
 -- Command line handling
