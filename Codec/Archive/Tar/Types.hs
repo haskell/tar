@@ -418,6 +418,8 @@ data Entries e = Next Entry (Entries e)
                | Done
                | Fail e
 
+infixr 5 `Next`
+
 -- | This is like the standard 'unfoldr' function on lists, but for 'Entries'.
 -- It includes failure as an extra possibility that the stepper function may
 -- return.

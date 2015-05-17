@@ -54,3 +54,28 @@ library
     DeriveDataTypeable, DeriveGeneric, ScopedTypeVariables
 
   ghc-options: -Wall -fno-warn-unused-imports
+
+test-suite properties
+  type:          exitcode-stdio-1.0
+  build-depends: base, filepath,
+                 bytestring, directory,
+                 old-time, time,
+                 array,
+                 QuickCheck == 2.*,
+                 tasty            == 0.10.*,
+                 tasty-quickcheck == 0.8.*
+
+  hs-source-dirs: . test
+
+  main-is: test/Properties.hs
+  cpp-options: -DTESTS
+
+  other-modules:
+    Codec.Archive.Tar.Index
+    Codec.Archive.Tar.Index.StringTable
+    Codec.Archive.Tar.Index.IntTrie
+
+  other-extensions:
+    CPP, BangPatterns,
+    DeriveDataTypeable, DeriveGeneric, ScopedTypeVariables
+
