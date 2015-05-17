@@ -27,7 +27,8 @@ flag old-time
 
 library
   build-depends: base == 4.*, filepath,
-                 bytestring, directory
+                 bytestring, directory,
+                 array
   if flag(old-time)
     build-depends: directory < 1.2, old-time
   else
@@ -37,6 +38,7 @@ library
     Codec.Archive.Tar
     Codec.Archive.Tar.Entry
     Codec.Archive.Tar.Check
+    Codec.Archive.Tar.Index
 
   other-modules:
     Codec.Archive.Tar.Types
@@ -44,6 +46,8 @@ library
     Codec.Archive.Tar.Write
     Codec.Archive.Tar.Pack
     Codec.Archive.Tar.Unpack
+    Codec.Archive.Tar.Index.StringTable
+    Codec.Archive.Tar.Index.IntTrie
 
   extensions:
     DeriveDataTypeable
