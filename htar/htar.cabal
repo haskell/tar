@@ -30,7 +30,7 @@ executable htar
     directory  >= 1.0,
     filepath   >= 1.0,
     bytestring >= 0.9,
-    tar        == 0.4.*,
+    tar        == 0.4.* && >= 0.4.2,
     zlib       >= 0.4 && < 0.7,
     bzlib      >= 0.4 && < 0.7
 

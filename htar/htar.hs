@@ -43,6 +43,12 @@ main' (Options { optFile        = file,
                        . Tar.write =<< Tar.pack dir files
     Extract  -> Tar.unpack dir . Tar.read . decompress compression =<< input
     List     -> printEntries . Tar.read . decompress compression =<< input
+    Append    | compression /= None
+             -> die ["Append cannot be used together with compression."]
+              | file == "-"
+             -> die ["Append must be used on a file, not stdin/stdout."]
+              | otherwise
+             -> Tar.append file dir files
   where
     input  = if file == "-" then BS.getContents else BS.readFile  file
     output = if file == "-" then BS.putStr      else BS.writeFile file
@@ -52,7 +58,7 @@ main' (Options { optFile        = file,
     printEntry = putStrLn . entryInfo verbosity
 
 data Compression = None | GZip | BZip
-  deriving Show
+  deriving (Show, Eq)
 
 compress :: Compression -> ByteString -> ByteString
 compress None = id
@@ -151,6 +157,7 @@ data Action = NoAction
             | Create
             | Extract
             | List
+            | Append
   deriving Show
 
 optDescr :: [OptDescr (Options -> Options)]
@@ -164,6 +171,9 @@ optDescr =
   , Option ['t'] ["list"]
       (action List)
       "List the contents of an archive."
+  , Option ['r'] ["append"]
+      (action Append)
+      "Append files to the end of an archive."
   , Option ['f'] ["file"]
       (ReqArg (\f o -> o { optFile = f}) "ARCHIVE")
       "Use archive file ARCHIVE."
