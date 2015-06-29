@@ -12,6 +12,10 @@
 --
 -- Random access to the content of a @.tar@ archive.
 --
+-- This module uses common names and so is designed to be imported qualified:
+--
+-- > import qualified Codec.Archive.Tar.Index as Tar
+--
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Index (
 
@@ -51,10 +55,14 @@ module Codec.Archive.Tar.Index (
     serialise,
     deserialise,
 
-    -- * Niche operations with offsets
+    -- * Lower level operations with offsets and I\/O on tar files
+    hReadEntryHeaderOrEof,
     hSeekEntryOffset,
-    endEntryOffset,
+    hSeekEntryContentOffset,
+    hSeekEndEntryOffset,
     nextEntryOffset,
+    indexEndEntryOffset,
+    indexNextEntryOffset,
 
 #ifdef TESTS
     prop_lookup,
@@ -233,29 +241,17 @@ emptyIndex = IndexBuilder [] 0
 --
 addNextEntry :: Entry -> IndexBuilder -> IndexBuilder
 addNextEntry entry (IndexBuilder acc nextOffset) =
-    IndexBuilder ((entrypath, nextOffset):acc) nextOffset'
+    IndexBuilder ((entrypath, nextOffset):acc)
+                 (nextEntryOffset entry nextOffset)
   where
     !entrypath  = entryPath entry
-    nextOffset' = nextOffset + 1
-                + case entryContent entry of
-                    NormalFile     _   size -> blocks size
-                    OtherEntryType _ _ size -> blocks size
-                    _                       -> 0
-    blocks size = 1 + ((fromIntegral size - 1) `div` 512)
 
 -- | Use this function if you want to skip some entries and not add them to the
 -- final 'TarIndex'.
 --
 skipNextEntry :: Entry -> IndexBuilder -> IndexBuilder
 skipNextEntry entry (IndexBuilder acc nextOffset) =
-    IndexBuilder acc nextOffset'
-  where
-    nextOffset' = nextOffset + 1
-                + case entryContent entry of
-                    NormalFile     _   size -> blocks size
-                    OtherEntryType _ _ size -> blocks size
-                    _                       -> 0
-    blocks size = 1 + ((fromIntegral size - 1) `div` 512)
+    IndexBuilder acc (nextEntryOffset entry nextOffset)
 
 -- | Finish accumulating 'Entry' information and build the compact 'TarIndex'
 -- lookup structure.
@@ -274,17 +270,34 @@ finaliseIndex (IndexBuilder pathsOffsets finalOffset) =
 -- | This is the offset immediately following the entry most recently added
 -- to the 'IndexBuilder'. You might use this if you need to know the offsets
 -- but don't want to use the 'TarIndex' lookup structure.
--- Use with 'hSeekEntryOffset'.
+-- Use with 'hSeekEntryOffset'. See also 'nextEntryOffset'.
 --
-nextEntryOffset :: IndexBuilder -> TarEntryOffset
-nextEntryOffset (IndexBuilder _ off) = off
+indexNextEntryOffset :: IndexBuilder -> TarEntryOffset
+indexNextEntryOffset (IndexBuilder _ off) = off
 
 -- | This is the offset immediately following the last entry in the tar file.
 -- This can be useful to append further entries into the tar file.
--- Use with 'hSeekEntryOffset'.
+-- Use with 'hSeekEntryOffset', or just use 'hSeekEndEntryOffset' directly.
 --
-endEntryOffset :: TarIndex -> TarEntryOffset
-endEntryOffset (TarIndex _ _ off) = off
+indexEndEntryOffset :: TarIndex -> TarEntryOffset
+indexEndEntryOffset (TarIndex _ _ off) = off
+
+-- | Calculate the 'TarEntryOffset' of the next entry, given the size and
+-- offset of the current entry.
+--
+-- This is much like using 'skipNextEntry' and 'indexNextEntryOffset', but without
+-- using an 'IndexBuilder'.
+--
+nextEntryOffset :: Entry -> TarEntryOffset -> TarEntryOffset
+nextEntryOffset entry offset =
+    offset
+  + 1
+  + case entryContent entry of
+      NormalFile     _   size -> blocks size
+      OtherEntryType _ _ size -> blocks size
+      _                       -> 0
+  where
+    blocks size = 1 + ((fromIntegral size - 1) `div` 512)
 
 
 -------------------------
@@ -347,14 +360,84 @@ hReadEntryHeader hnd blockOff = do
 --
 -- This position is where the entry metadata can be read. If you already know
 -- the entry has a body (and perhaps know it's length), you may wish to seek to
--- the body directly:
---
--- > hSeekEntryOffset hdn (toffset + 1)
+-- the body content directly using 'hSeekEntryContentOffset'.
 --
 hSeekEntryOffset :: Handle -> TarEntryOffset -> IO ()
 hSeekEntryOffset hnd blockOff =
     hSeek hnd AbsoluteSeek (fromIntegral blockOff * 512)
 
+-- | Set the 'Handle' position to the entry content position corresponding to
+-- the given 'TarEntryOffset'.
+--
+-- This position is where the entry content can be read using ordinary I\/O
+-- operations (though you have to know in advance how big the entry content
+-- is). This is /only valid/ if you /already know/ the entry has a body (i.e.
+-- is a normal file).
+--
+hSeekEntryContentOffset :: Handle -> TarEntryOffset -> IO ()
+hSeekEntryContentOffset hnd blockOff =
+    hSeekEntryOffset hnd (blockOff + 1)
+
+-- | This is a low level variant on 'hReadEntryHeader', that can be used to
+-- iterate through a tar file, entry by entry.
+--
+-- It has a few differences compared to 'hReadEntryHeader':
+--
+-- * It returns an indication when the end of the tar file is reached.
+--
+-- * It /does not/ move the 'Handle' position to the beginning of the entry
+--   content.
+--
+-- * It returns the 'TarEntryOffset' of the next entry.
+--
+-- After this action, the 'Handle' position is not in any useful place. If
+-- you want to skip to the next entry, take the 'TarEntryOffset' returned and
+-- use 'hReadEntryHeaderOrEof' again. Or if having inspected the 'Entry'
+-- header you want to read the entry content (if it has one) then use
+-- 'hSeekEntryContentOffset' on the original input 'TarEntryOffset'.
+--
+hReadEntryHeaderOrEof :: Handle -> TarEntryOffset
+                      -> IO (Maybe (Entry, TarEntryOffset))
+hReadEntryHeaderOrEof hnd blockOff = do
+    hSeekEntryOffset hnd blockOff
+    header <- LBS.hGet hnd 1024
+    case Tar.read header of
+      Tar.Next entry _ -> let !blockOff' = nextEntryOffset entry blockOff
+                           in return (Just (entry, blockOff'))
+      Tar.Done         -> return Nothing
+      Tar.Fail e       -> throwIO e
+
+-- | Seek to the end of a tar file, to the position where new entries can
+-- be appended, and return that 'TarEntryOffset'.
+--
+-- If you have a valid 'TarIndex' for this tar file then you should supply it
+-- because it allows seeking directly to the correct location.
+--
+-- If you do not have an index, then this becomes an expensive linear
+-- operation because we have to read each tar entry header from the beginning
+-- to find the location immediately after the last entry (this is because tar
+-- files have a variable length trailer and we cannot reliably find that by
+-- starting at the end). In this mode, it will fail with an exception if the
+-- file is not in fact in the tar format.
+--
+hSeekEndEntryOffset :: Handle -> Maybe TarIndex -> IO TarEntryOffset
+hSeekEndEntryOffset hnd (Just index) = do
+    let offset = indexEndEntryOffset index
+    hSeekEntryOffset hnd offset
+    return offset
+
+hSeekEndEntryOffset hnd Nothing = do
+    size <- hFileSize hnd
+    if size == 0
+      then return 0
+      else seekToEnd 0
+  where
+    seekToEnd offset = do
+      mbe <- hReadEntryHeaderOrEof hnd offset
+      case mbe of
+        Nothing -> do hSeekEntryOffset hnd offset
+                      return offset
+        Just (_, offset') -> seekToEnd offset'
 
 -------------------------
 -- (de)serialisation

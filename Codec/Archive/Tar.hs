@@ -47,6 +47,7 @@ module Codec.Archive.Tar (
   -- * High level \"all in one\" operations
   create,
   extract,
+  append,
 
   -- * Notes
   -- ** Compressed tar archives
@@ -146,11 +147,13 @@ import Codec.Archive.Tar.Write
 
 import Codec.Archive.Tar.Pack
 import Codec.Archive.Tar.Unpack
+import Codec.Archive.Tar.Index (hSeekEndEntryOffset)
 
 import Codec.Archive.Tar.Check
 
 import Control.Exception (Exception, throw, catch)
 import qualified Data.ByteString.Lazy as BS
+import System.IO (withFile, IOMode(..))
 import Prelude hiding (read)
 
 -- | Create a new @\".tar\"@ file from a directory of files.
@@ -222,3 +225,19 @@ extract :: FilePath -- ^ Destination directory
         -> FilePath -- ^ Tarball
         -> IO ()
 extract dir tar = unpack dir . read =<< BS.readFile tar
+
+-- | Append new entries to a @\".tar\"@ file from a directory of files.
+--
+-- This is much like 'create', except that all the entries are added to the
+-- end of an existing tar file. Or if the file does not already exists then
+-- it behaves the same as 'create'.
+--
+append :: FilePath   -- ^ Path of the \".tar\" file to write.
+       -> FilePath   -- ^ Base directory
+       -> [FilePath] -- ^ Files and directories to archive, relative to base dir
+       -> IO ()
+append tar base paths =
+    withFile tar ReadWriteMode $ \hnd -> do
+      _ <- hSeekEndEntryOffset hnd Nothing
+      BS.hPut hnd . write =<< pack base paths
+
