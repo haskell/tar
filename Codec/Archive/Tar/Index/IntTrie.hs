@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, BangPatterns #-}
-{-# LANGUAGE DeriveDataTypeable, DeriveGeneric, ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
 
 module Codec.Archive.Tar.Index.IntTrie (
 
@@ -22,7 +22,6 @@ module Codec.Archive.Tar.Index.IntTrie (
 import Prelude hiding (lookup)
 
 import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
 
 import qualified Data.Array.Unboxed as A
 import Data.Array.IArray  ((!))
@@ -41,7 +40,7 @@ import Control.Applicative ((<$>), (<*>))
 -- | A compact mapping from sequences of small nats to nats.
 --
 newtype IntTrie k v = IntTrie (A.UArray Word32 Word32)
-    deriving (Eq, Show, Typeable, Generic)
+    deriving (Eq, Show, Typeable)
 
 
 -- Compact, read-only implementation of a trie. It's intended for use with file

@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -71,7 +71,6 @@ module Codec.Archive.Tar.Index (
   ) where
 
 import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
 
 import Codec.Archive.Tar.Types as Tar
 import Codec.Archive.Tar.Read  as Tar
@@ -137,7 +136,7 @@ data TarIndex = TarIndex
   -- additional entries.
   {-# UNPACK #-} !TarEntryOffset
 
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Typeable)
 
 -- | The result of 'lookup' in a 'TarIndex'. It can either be a file directly,
 -- or a directory entry containing further entries (and all subdirectories
@@ -146,11 +145,11 @@ data TarIndex = TarIndex
 --
 data TarIndexEntry = TarFileEntry {-# UNPACK #-} !TarEntryOffset
                    | TarDir [(FilePath, TarIndexEntry)]
-  deriving (Show, Typeable, Generic)
+  deriving (Show, Typeable)
 
 
 newtype PathComponentId = PathComponentId Int
-  deriving (Eq, Ord, Enum, Show, Typeable, Generic)
+  deriving (Eq, Ord, Enum, Show, Typeable)
 
 -- | An offset within a tar file. Use 'hReadEntry', 'hReadEntryHeader' or
 -- 'hSeekEntryOffset'.

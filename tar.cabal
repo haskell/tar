@@ -52,7 +52,7 @@ library
 
   other-extensions:
     CPP, BangPatterns,
-    DeriveDataTypeable, DeriveGeneric, ScopedTypeVariables
+    DeriveDataTypeable, ScopedTypeVariables
 
   ghc-options: -Wall -fno-warn-unused-imports
 
@@ -78,5 +78,5 @@ test-suite properties
 
   other-extensions:
     CPP, BangPatterns,
-    DeriveDataTypeable, DeriveGeneric, ScopedTypeVariables
+    DeriveDataTypeable, ScopedTypeVariables
 

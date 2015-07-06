@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, BangPatterns, DeriveDataTypeable, DeriveGeneric #-}
+{-# LANGUAGE CPP, BangPatterns, DeriveDataTypeable #-}
 
 module Codec.Archive.Tar.Index.StringTable (
 
@@ -13,7 +13,6 @@ module Codec.Archive.Tar.Index.StringTable (
  ) where
 
 import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
 
 import Prelude hiding (lookup)
 import qualified Data.List as List
@@ -29,7 +28,7 @@ import Data.Word (Word32)
 data StringTable id = StringTable
                         {-# UNPACK #-} !BS.ByteString          -- all the strings concatenated
                         {-# UNPACK #-} !(A.UArray Int Word32)  -- offset table
-  deriving (Eq, Show, Typeable, Generic)
+  deriving (Eq, Show, Typeable)
 
 -- | Look up a string in the token table. If the string is present, return
 -- its corresponding index.
