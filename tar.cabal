@@ -27,8 +27,10 @@ source-repository head
 flag old-time
 
 library
-  build-depends: base == 4.*, filepath,
-                 bytestring, directory,
+  build-depends: base == 4.*,
+                 bytestring >= 0.10,
+                 filepath,
+                 directory,
                  array
   if flag(old-time)
     build-depends: directory < 1.2, old-time
@@ -58,8 +60,9 @@ library
 
 test-suite properties
   type:          exitcode-stdio-1.0
-  build-depends: base, filepath,
-                 bytestring, directory,
+  build-depends: base,
+                 bytestring,
+                 filepath, directory,
                  old-time, time,
                  array,
                  QuickCheck == 2.*,

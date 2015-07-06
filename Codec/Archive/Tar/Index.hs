@@ -80,7 +80,10 @@ import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import Codec.Archive.Tar.Index.IntTrie (IntTrie(..))
 
 import qualified System.FilePath.Posix as FilePath
-import Data.Monoid (Monoid(..), (<>))
+import Data.Monoid (Monoid(..))
+#if (MIN_VERSION_base(4,5,0))
+import Data.Monoid ((<>))
+#endif
 import Data.Word
 import Data.Int
 import Data.Bits
@@ -591,5 +594,10 @@ testEntry name size = simpleEntry path (NormalFile mempty size)
   where
     Right path = toTarPath False name
 
+#endif
+
+#if !(MIN_VERSION_base(4,5,0))
+(<>) :: Monoid m => m -> m -> m
+(<>) = mappend
 #endif
 
