@@ -420,9 +420,9 @@ instance Arbitrary ValidPaths where
   shrink (ValidPaths kvs) =
       map ValidPaths . filter noPrefix . filter nonEmpty . shrink $ kvs
     where
-      noPrefix []          = True
-      noPrefix ((k,_):kvs) = all (\(k', _) -> not (isPrefixOfOther k k')) kvs
-                          && noPrefix kvs
+      noPrefix []           = True
+      noPrefix ((k,_):kvs') = all (\(k', _) -> not (isPrefixOfOther k k')) kvs'
+                           && noPrefix kvs'
       nonEmpty = all (not . null . fst)
 
 isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a

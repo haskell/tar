@@ -4,8 +4,6 @@ import qualified Codec.Archive.Tar.Index as Index
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 
-import qualified Data.ByteString.Lazy.Char8 as BS
-import Test.QuickCheck
 import Test.Tasty
 import Test.Tasty.QuickCheck
 

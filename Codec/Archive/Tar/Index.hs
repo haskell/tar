@@ -104,6 +104,8 @@ import Data.ByteString.Lazy.Builder as BS
 import qualified Prelude
 import Test.QuickCheck
 import Control.Applicative ((<$>), (<*>))
+import Data.List (nub, sort, stripPrefix, isPrefixOf)
+import Data.Maybe
 #endif
 
 
@@ -535,22 +537,25 @@ readWord32BE bs i =
 
 #ifdef TESTS
 
--- properties of a finite mapping...
+-- Not quite the properties of a finite mapping because we also have lookups
+-- that result in completions.
 
-prop_lookup :: [(NonEmptyFilePath, TarEntryOffset)] -> NonEmptyFilePath -> Bool
-prop_lookup paths (NonEmptyFilePath p) =
-  case (lookup index p, Prelude.lookup p paths') of
+prop_lookup :: ValidPaths -> NonEmptyFilePath -> Bool
+prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
+  case (lookup index p, Prelude.lookup p paths) of
     (Nothing,                    Nothing)      -> True
     (Just (TarFileEntry offset), Just offset') -> offset == offset'
+    (Just (TarDir entries),      Nothing)      -> sort (nub (map fst entries))
+                                               == sort (nub completions)
     _                                          -> False
   where
-    paths' = [ (p, off) | (NonEmptyFilePath p, off) <- paths ]
+    index       = finaliseIndex (IndexBuilder paths 0)
+    completions = [ head (FilePath.splitDirectories completion)
+                  | (path,_) <- paths
+                  , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
 
-    index@(TarIndex pathTable _ _) =
-      finaliseIndex (IndexBuilder paths' 0)
-
-prop_valid :: [(NonEmptyFilePath, TarEntryOffset)] -> Bool
-prop_valid paths
+prop_valid :: ValidPaths -> Bool
+prop_valid (ValidPaths paths)
   | not $ StringTable.prop_valid   pathbits = error "TarIndex: bad string table"
   | not $ IntTrie.prop_lookup      intpaths = error "TarIndex: bad int trie"
   | not $ IntTrie.prop_completions intpaths = error "TarIndex: bad int trie"
@@ -558,16 +563,13 @@ prop_valid paths
   | otherwise                               = True
 
   where
-    paths' = [ (p, off) | (NonEmptyFilePath p, off) <- paths ]
+    index@(TarIndex pathTable _ _) = finaliseIndex (IndexBuilder paths 0)
 
-    index@(TarIndex pathTable _ _) =
-      finaliseIndex (IndexBuilder paths' 0)
-
-    pathbits = concatMap (FilePath.splitDirectories . fst) paths'
+    pathbits = concatMap (FilePath.splitDirectories . fst) paths
     intpaths = [ (cids, offset)
-               | (path, offset) <- paths'
+               | (path, offset) <- paths
                , let Just cids = toComponentIds pathTable path ]
-    prop' = flip all paths' $ \(file, offset) ->
+    prop' = flip all paths $ \(file, offset) ->
       case lookup index file of
         Just (TarFileEntry offset') -> offset' == offset
         _                           -> False
@@ -577,6 +579,22 @@ newtype NonEmptyFilePath = NonEmptyFilePath FilePath deriving Show
 instance Arbitrary NonEmptyFilePath where
   arbitrary = NonEmptyFilePath . FilePath.joinPath
                 <$> listOf1 (elements ["a", "b", "c", "d"])
+
+newtype ValidPaths = ValidPaths [(FilePath, TarEntryOffset)] deriving Show
+
+instance Arbitrary ValidPaths where
+  arbitrary =
+      ValidPaths . makeNoPrefix <$> listOf ((,) <$> arbitraryPath <*> arbitrary)
+    where
+      arbitraryPath   = FilePath.joinPath
+                         <$> listOf1 (elements ["a", "b", "c", "d"])
+      makeNoPrefix [] = []
+      makeNoPrefix ((k,v):kvs)
+        | all (\(k', _) -> not (isPrefixOfOther k k')) kvs
+                     = (k,v) : makeNoPrefix kvs
+        | otherwise  =         makeNoPrefix kvs
+
+      isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
 
 example0 :: Entries ()
 example0 =
