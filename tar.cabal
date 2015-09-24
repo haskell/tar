@@ -1,5 +1,5 @@
 name:            tar
-version:         0.4.2.1
+version:         0.4.2.2
 license:         BSD3
 license-file:    LICENSE
 author:          Bjorn Bringert <bjorn@bringert.net>
@@ -67,6 +67,7 @@ test-suite properties
                  old-time, time,
                  array,
                  QuickCheck == 2.*,
+                 bytestring-handle,
                  tasty            == 0.10.*,
                  tasty-quickcheck == 0.8.*
 
@@ -83,4 +84,3 @@ test-suite properties
   other-extensions:
     CPP, BangPatterns,
     DeriveDataTypeable, ScopedTypeVariables
-
