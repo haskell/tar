@@ -67,7 +67,7 @@ test-suite properties
                  old-time, time,
                  array,
                  QuickCheck == 2.*,
-                 tasty            == 0.10.*,
+                 tasty            >= 0.10 && <0.12,
                  tasty-quickcheck == 0.8.*
 
   hs-source-dirs: . test
