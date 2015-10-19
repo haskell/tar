@@ -1,3 +1,7 @@
+0.4.2.2 Edsko de Vries <edsko@well-typed.com> September 2015
+
+  * Fix bug in Index
+
 0.4.2.1 Duncan Coutts <duncan@community.haskell.org> July 2015
 
   * Fix tests for the Index modules (the code was right)
