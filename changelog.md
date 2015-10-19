@@ -1,4 +1,4 @@
-0.4.2.2 Edsko de Vries <edsko@well-typed.com> September 2015
+0.4.2.2 Edsko de Vries <edsko@well-typed.com> October 2015
 
   * Fix bug in Index
 
