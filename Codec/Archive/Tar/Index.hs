@@ -67,6 +67,7 @@ module Codec.Archive.Tar.Index (
 #ifdef TESTS
     prop_lookup,
     prop_valid,
+    prop_index_matches_tar
 #endif
   ) where
 
@@ -102,10 +103,16 @@ import Data.ByteString.Lazy.Builder as BS
 
 #ifdef TESTS
 import qualified Prelude
-import Test.QuickCheck
+import Test.QuickCheck hiding (Result)
+import Test.QuickCheck.Property (Result, exception, succeeded)
 import Control.Applicative ((<$>), (<*>))
+import Control.Monad (unless)
 import Data.List (nub, sort, stripPrefix, isPrefixOf)
 import Data.Maybe
+import System.IO.Unsafe (unsafePerformIO)
+import Control.Exception (SomeException, try)
+import Codec.Archive.Tar.Write          as Tar
+import qualified Data.ByteString.Handle as HBS
 #endif
 
 
@@ -170,7 +177,7 @@ type TarEntryOffset = Word32
 -- the list of files within that directory.
 --
 -- Given the 'TarEntryOffset' you can then use one of the I\/O operations:
--- 
+--
 -- * 'hReadEntry' to read the whole entry;
 --
 -- * 'hReadEntryHeader' to read just the file metadata (e.g. its length);
@@ -301,6 +308,9 @@ nextEntryOffset entry offset =
       OtherEntryType _ _ size -> blocks size
       _                       -> 0
   where
+    -- NOTE: The special case for 0 is important to avoid underflow,
+    -- because we are computing an unsigned TarEntryOffset (aka Word32) value
+    blocks 0    = 0
     blocks size = 1 + ((fromIntegral size - 1) `div` 512)
 
 
@@ -495,7 +505,7 @@ deserialiseIntTrie bs
 serialiseStringTable :: StringTable id -> BS.Builder
 serialiseStringTable (StringTable strs arr) =
       let (_, !ixEnd) = A.bounds arr in
-      
+
       BS.word32BE (fromIntegral (BS.length strs))
    <> BS.word32BE (fromIntegral ixEnd + 1)
    <> BS.byteString strs
@@ -612,10 +622,88 @@ testEntry name size = simpleEntry path (NormalFile mempty size)
   where
     Right path = toTarPath False name
 
+-- | Simple tar archive containing regular files only
+data SimpleTarArchive = SimpleTarArchive {
+    simpleTarEntries :: Tar.Entries ()
+  , simpleTarRaw     :: [(FilePath, LBS.ByteString)]
+  , simpleTarBS      :: LBS.ByteString
+  }
+
+instance Show SimpleTarArchive where
+  show = show . simpleTarRaw
+
+prop_index_matches_tar :: SimpleTarArchive -> Result
+prop_index_matches_tar sta =
+    case unsafePerformIO (try go) of
+      Left ex  -> exception "" ex
+      Right () -> succeeded
+  where
+    go :: IO ()
+    go = do
+      h <- HBS.readHandle True (simpleTarBS sta)
+      goEntries h 0 (simpleTarEntries sta)
+
+    goEntries :: Handle -> TarEntryOffset -> Tar.Entries () -> IO ()
+    goEntries _ _ Tar.Done =
+      return ()
+    goEntries _ _ (Tar.Fail _) =
+      throwIO (userError "Fail entry in SimpleTarArchive")
+    goEntries h offset (Tar.Next e es) = do
+      goEntry h offset e
+      goEntries h (nextEntryOffset e offset) es
+
+    goEntry :: Handle -> TarEntryOffset -> Tar.Entry -> IO ()
+    goEntry h offset e = do
+      e' <- hReadEntry h offset
+      case (Tar.entryContent e, Tar.entryContent e') of
+        (Tar.NormalFile bs sz, Tar.NormalFile bs' sz') ->
+          unless (sz == sz' && bs == bs') $
+            throwIO $ userError "Entry mismatch"
+        _otherwise ->
+          throwIO $ userError "unexpected entry types"
+
+instance Arbitrary SimpleTarArchive where
+  arbitrary = do
+      numEntries <- sized $ \n -> choose (0, n)
+      rawEntries <- mkRaw numEntries
+      let entries = mkList rawEntries
+      return SimpleTarArchive {
+          simpleTarEntries = mkEntries entries
+        , simpleTarRaw     = rawEntries
+        , simpleTarBS      = Tar.write entries
+        }
+    where
+      mkRaw :: Int -> Gen [(FilePath, LBS.ByteString)]
+      mkRaw 0 = return []
+      mkRaw n = do
+         -- Pick a size around 0, 1, or 2 block boundaries
+         sz <- sized $ \n -> elements (take n fileSizes)
+         bs <- LBS.pack `fmap` vectorOf sz arbitrary
+         es <- mkRaw (n - 1)
+         return $ ("file" ++ show n, bs) : es
+
+      mkList :: [(FilePath, LBS.ByteString)] -> [Tar.Entry]
+      mkList []            = []
+      mkList ((fp, bs):es) = entry : mkList es
+        where
+          Right path = toTarPath False fp
+          entry   = simpleEntry path content
+          content = NormalFile bs (LBS.length bs)
+
+      mkEntries :: [Tar.Entry] -> Tar.Entries ()
+      mkEntries []     = Tar.Done
+      mkEntries (e:es) = Tar.Next e (mkEntries es)
+
+      -- Sizes around 0, 1, and 2 block boundaries
+      fileSizes :: [Int]
+      fileSizes = [
+                           0 ,    1 ,    2
+        ,  510 ,  511 ,  512 ,  513 ,  514
+        , 1022 , 1023 , 1024 , 1025 , 1026
+        ]
 #endif
 
 #if !(MIN_VERSION_base(4,5,0))
 (<>) :: Monoid m => m -> m -> m
 (<>) = mappend
 #endif
-

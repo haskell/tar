@@ -22,8 +22,8 @@ main =
         testProperty "completions" IntTrie.prop_completions_mono
       ]
     , testGroup "index" [
-        testProperty "lookup" Index.prop_lookup
-      , testProperty "valid"  Index.prop_valid
+        testProperty "lookup"      Index.prop_lookup
+      , testProperty "valid"       Index.prop_valid
+      , testProperty "matches tar" Index.prop_index_matches_tar
       ]
     ]
-
