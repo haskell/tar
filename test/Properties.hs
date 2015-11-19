@@ -19,11 +19,13 @@ main =
         testProperty "unit 2"      IntTrie.test2,
         testProperty "unit 3"      IntTrie.test3,
         testProperty "lookups"     IntTrie.prop_lookup_mono,
-        testProperty "completions" IntTrie.prop_completions_mono
+        testProperty "completions" IntTrie.prop_completions_mono,
+        testProperty "toList"      IntTrie.prop_construct_toList
       ]
     , testGroup "index" [
         testProperty "lookup"      Index.prop_lookup
       , testProperty "valid"       Index.prop_valid
       , testProperty "matches tar" Index.prop_index_matches_tar
+      , testProperty "resume"      Index.prop_finalise_resume
       ]
     ]
