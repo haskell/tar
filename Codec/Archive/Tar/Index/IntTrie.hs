@@ -39,6 +39,9 @@ import Control.Applicative ((<$>), (<*>))
 
 -- | A compact mapping from sequences of small nats to nats.
 --
+-- NOTE: The tries in this module have values /only/ at the leaves (which
+-- correspond to files), they do not have values at the branch points (which
+-- correspond to directories).
 newtype IntTrie k v = IntTrie (A.UArray Word32 Word32)
     deriving (Eq, Show, Typeable)
 

@@ -28,6 +28,10 @@ module Codec.Archive.Tar.Index (
     -- @tar@ file is needed to 'build' the 'TarIndex', but thereafter you can
     -- 'lookup' paths in the @tar@ file, and then use 'hReadEntry' to
     -- seek to the right part of the file and read the entry.
+    --
+    -- An index cannot be used to lookup 'Directory' entries in a tar file;
+    -- instead, you will get 'TarDir' entry listing all the entries in the
+    -- directory.
 
     -- * Index type
     TarIndex,
