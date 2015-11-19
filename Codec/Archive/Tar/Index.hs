@@ -54,6 +54,7 @@ module Codec.Archive.Tar.Index (
     addNextEntry,
     skipNextEntry,
     finaliseIndex,
+    resumeIndexBuilder,
 
     -- * Serialising indexes
     serialise,
@@ -71,7 +72,8 @@ module Codec.Archive.Tar.Index (
 #ifdef TESTS
     prop_lookup,
     prop_valid,
-    prop_index_matches_tar
+    prop_index_matches_tar,
+    prop_finalise_resume,
 #endif
   ) where
 
@@ -96,6 +98,7 @@ import qualified Data.Array.Unboxed as A
 import Prelude hiding (lookup)
 import System.IO
 import Control.Exception (throwIO)
+import Control.Arrow (first)
 
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -111,8 +114,9 @@ import Test.QuickCheck hiding (Result)
 import Test.QuickCheck.Property (Result, exception, succeeded)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (unless)
-import Data.List (nub, sort, stripPrefix, isPrefixOf)
+import Data.List (nub, sort, sortBy, stripPrefix, isPrefixOf)
 import Data.Maybe
+import Data.Function (on)
 import System.IO.Unsafe (unsafePerformIO)
 import Control.Exception (SomeException, try)
 import Codec.Archive.Tar.Write          as Tar
@@ -316,6 +320,27 @@ nextEntryOffset entry offset =
     -- because we are computing an unsigned TarEntryOffset (aka Word32) value
     blocks 0    = 0
     blocks size = 1 + ((fromIntegral size - 1) `div` 512)
+
+
+-------------------------
+-- Resume building an existing index
+--
+
+-- | Resume building an existing index
+--
+-- A 'TarIndex' is optimized for a highly compact and efficient in-memory
+-- representation. This, however, makes it read-only. If you have an existing
+-- 'TarIndex' for a large file, and want to add to it, you can translate the
+-- 'TarIndex' back to an 'IndexBuilder', but be aware that this is a relatively
+-- costly operation (linear in the size of the 'TarIndex').
+--
+-- This is the left inverse to 'finaliseIndex' (modulo ordering).
+resumeIndexBuilder :: TarIndex -> IndexBuilder
+resumeIndexBuilder (TarIndex pathTable pathTrie finalOffset) =
+    IndexBuilder (map (first mkPath) (IntTrie.toList pathTrie)) finalOffset
+  where
+    mkPath :: [PathComponentId] -> FilePath
+    mkPath = FilePath.joinPath . map (StringTable.index pathTable)
 
 
 -------------------------
@@ -705,6 +730,33 @@ instance Arbitrary SimpleTarArchive where
         ,  510 ,  511 ,  512 ,  513 ,  514
         , 1022 , 1023 , 1024 , 1025 , 1026
         ]
+
+-- | 'IndexBuilder' constructed from a 'SimpleIndex'
+newtype SimpleIndexBuilder = SimpleIndexBuilder IndexBuilder
+
+instance Show SimpleIndexBuilder where
+  show (SimpleIndexBuilder (IndexBuilder acc nextOffset)) =
+    "IndexBuilder " ++ show acc ++ " " ++ show nextOffset
+
+instance Arbitrary SimpleIndexBuilder where
+  arbitrary = SimpleIndexBuilder . build' . simpleTarEntries <$> arbitrary
+    where
+      -- like 'build', but don't finalize
+      build' :: Show e => Entries e -> IndexBuilder
+      build' = go emptyIndex
+        where
+          go !builder (Next e es) = go (addNextEntry e builder) es
+          go !builder  Done       = builder
+          go !_       (Fail err)  = error (show err)
+
+prop_finalise_resume :: SimpleIndexBuilder -> Bool
+prop_finalise_resume (SimpleIndexBuilder index) =
+    resumeIndexBuilder (finaliseIndex index) `sameIndex` index
+  where
+    sameIndex :: IndexBuilder -> IndexBuilder -> Bool
+    sameIndex (IndexBuilder acc nextOffset) (IndexBuilder acc' nextOffset') =
+         sortBy (compare `on` fst) acc == sortBy (compare `on` fst) acc'
+      && nextOffset == nextOffset'
 #endif
 
 #if !(MIN_VERSION_base(4,5,0))

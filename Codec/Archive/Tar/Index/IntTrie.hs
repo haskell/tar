@@ -5,6 +5,7 @@ module Codec.Archive.Tar.Index.IntTrie (
 
   IntTrie(..),
   construct,
+  toList,
 
   lookup,
   TrieLookup(..),
@@ -16,6 +17,7 @@ module Codec.Archive.Tar.Index.IntTrie (
   prop_completions,
   prop_lookup_mono,
   prop_completions_mono,
+  prop_construct_toList,
 #endif
  ) where
 
@@ -195,6 +197,16 @@ completionsFrom trie@(IntTrie arr) nodeOff =
     nodeSize  = arr ! nodeOff
     keysStart = nodeOff + 1
     keysEnd   = nodeOff + nodeSize
+
+-- | Convert the trie to a list
+--
+-- This is the left inverse to 'construct' (modulo ordering).
+toList :: forall k v. (Enum k, Enum v) => IntTrie k v -> [([k], v)]
+toList = concatMap (aux []) . (`completionsFrom` 0)
+  where
+    aux :: [k] -> (k, TrieLookup k v) -> [([k], v)]
+    aux ks (k, Entry v)        = [(reverse (k:ks), v)]
+    aux ks (k, Completions cs) = concatMap (aux (k:ks)) cs
 
 -------------------------------------
 -- Toplevel trie array construction
@@ -407,6 +419,10 @@ prop_lookup_mono (ValidPaths paths) = prop_lookup paths
 prop_completions_mono :: ValidPaths -> Bool
 prop_completions_mono (ValidPaths paths) = prop_completions paths
 
+prop_construct_toList :: ValidPaths -> Bool
+prop_construct_toList (ValidPaths paths) =
+       sortBy (compare `on` fst) (toList (construct paths))
+    == sortBy (compare `on` fst) paths
 
 newtype ValidPaths = ValidPaths (Paths Char Char) deriving Show
 
