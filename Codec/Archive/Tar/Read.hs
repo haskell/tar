@@ -210,11 +210,11 @@ instance Functor (Partial e) where
     fmap = liftM
 
 instance Applicative (Partial e) where
-    pure  = return
+    pure  = Ok
     (<*>) = ap
 
 instance Monad (Partial e) where
-    return        = Ok
+    return        = pure
     Error m >>= _ = Error m
     Ok    x >>= k = k x
     fail          = error "fail @(Partial e)"
