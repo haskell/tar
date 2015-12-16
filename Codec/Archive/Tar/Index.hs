@@ -59,6 +59,7 @@ module Codec.Archive.Tar.Index (
     -- * Serialising indexes
     serialise,
     deserialise,
+    toList,
 
     -- * Lower level operations with offsets and I\/O on tar files
     hReadEntryHeaderOrEof,
@@ -342,6 +343,8 @@ resumeIndexBuilder (TarIndex pathTable pathTrie finalOffset) =
     mkPath :: [PathComponentId] -> FilePath
     mkPath = FilePath.joinPath . map (StringTable.index pathTable)
 
+toList :: TarIndex -> [(FilePath, TarEntryOffset)]
+toList idx = let IndexBuilder list _next = resumeIndexBuilder idx in list
 
 -------------------------
 -- I/O operations
