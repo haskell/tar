@@ -99,6 +99,7 @@ import Prelude hiding (lookup)
 import System.IO
 import Control.Exception (throwIO)
 import Control.Arrow (first)
+import Control.DeepSeq
 
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -157,6 +158,8 @@ data TarIndex = TarIndex
   {-# UNPACK #-} !TarEntryOffset
 
   deriving (Eq, Show, Typeable)
+
+instance NFData TarIndex -- fully strict by construction
 
 -- | The result of 'lookup' in a 'TarIndex'. It can either be a file directly,
 -- or a directory entry containing further entries (and all subdirectories
@@ -250,6 +253,9 @@ build = go emptyIndex
 --
 data IndexBuilder = IndexBuilder [(FilePath, TarEntryOffset)]
                                  {-# UNPACK #-} !TarEntryOffset
+
+instance NFData IndexBuilder where
+  rnf (IndexBuilder a _) = rnf a
 
 -- | The initial empty 'IndexBuilder'.
 --

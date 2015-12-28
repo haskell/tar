@@ -59,6 +59,7 @@ import Data.Int      (Int64)
 import Data.Monoid   (Monoid(..))
 import qualified Data.ByteString.Lazy as BS
 import Data.ByteString.Lazy (ByteString)
+import Control.DeepSeq
 
 import qualified System.FilePath as FilePath.Native
          ( joinPath, splitDirectories, addTrailingPathSeparator )
@@ -159,6 +160,16 @@ data Format =
      --
    | GnuFormat
   deriving (Eq, Ord)
+
+instance NFData Entry where
+  rnf (Entry _ c _ _ _ _) = rnf c
+
+instance NFData EntryContent where
+  rnf (NormalFile       c _) = rnf c
+  rnf (OtherEntryType _ c _) = rnf c
+  rnf  x                     = seq x ()
+
+instance NFData Ownership
 
 -- | @rw-r--r--@ for normal files
 ordinaryFilePermissions :: Permissions
@@ -470,4 +481,9 @@ instance Monoid (Entries e) where
 
 instance Functor Entries where
   fmap f = foldEntries Next Done (Fail . f)
+
+instance NFData e => NFData (Entries e) where
+  rnf (Next e es) = rnf e `seq` rnf es
+  rnf  Done       = ()
+  rnf (Fail e)    = rnf e
 

@@ -23,6 +23,7 @@ import Control.Exception (Exception)
 import Data.Typeable (Typeable)
 import Control.Applicative
 import Control.Monad
+import Control.DeepSeq
 
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8
@@ -54,6 +55,7 @@ instance Show FormatError where
   show HeaderBadNumericEncoding = "tar header is malformed (bad numeric encoding)"
 
 instance Exception FormatError
+instance NFData    FormatError
 
 
 -- | Convert a data stream in the tar file format into an internal data

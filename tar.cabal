@@ -32,7 +32,8 @@ library
                  bytestring >= 0.10,
                  filepath,
                  directory,
-                 array
+                 array,
+                 deepseq
   if flag(old-time)
     build-depends: directory < 1.2, old-time
   else
@@ -64,8 +65,9 @@ test-suite properties
   build-depends: base,
                  bytestring,
                  filepath, directory,
-                 old-time, time,
                  array,
+                 deepseq,
+                 old-time, time,
                  bytestring-handle,
                  QuickCheck == 2.*,
                  tasty            >= 0.10 && <0.12,
@@ -84,3 +86,17 @@ test-suite properties
   other-extensions:
     CPP, BangPatterns,
     DeriveDataTypeable, ScopedTypeVariables
+
+benchmark bench
+  type:          exitcode-stdio-1.0
+  hs-source-dirs: . bench
+  main-is:       bench/Main.hs
+  build-depends: base,
+                 bytestring,
+                 filepath, directory,
+                 array,
+                 containers,
+                 deepseq,
+                 old-time, time,
+                 criterion >= 1.0
+
