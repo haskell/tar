@@ -16,10 +16,13 @@ import Data.Typeable (Typeable)
 
 import Prelude hiding (lookup)
 import qualified Data.List as List
-import qualified Data.Array.Unboxed as A
-import Data.Array.Unboxed ((!))
-import qualified Data.ByteString.Char8 as BS
 import Data.Word (Word32)
+import Data.Int  (Int32)
+
+import qualified Data.Array.Unboxed as A
+import           Data.Array.Unboxed ((!))
+import qualified Data.ByteString.Char8  as BS
+import qualified Data.ByteString.Unsafe as BS
 
 
 
@@ -34,32 +37,32 @@ data StringTable id = StringTable
 -- its corresponding index.
 --
 lookup :: Enum id => StringTable id -> BS.ByteString -> Maybe id
-lookup (StringTable bs tbl) str =
+lookup (StringTable bs offsets) str =
     binarySearch 0 (topBound-1) str
   where
-    (0, topBound) = A.bounds tbl
+    (0, topBound) = A.bounds offsets
 
     binarySearch !a !b !key
       | a > b     = Nothing
-      | otherwise = case compare key (index' bs tbl mid) of
+      | otherwise = case compare key (index' bs offsets mid) of
           LT -> binarySearch a (mid-1) key
           EQ -> Just (toEnum mid)
           GT -> binarySearch (mid+1) b key
       where mid = (a + b) `div` 2
 
 index' :: BS.ByteString -> A.UArray Int Word32 -> Int -> BS.ByteString
-index' bs tbl i = BS.take len . BS.drop start $ bs
+index' bs offsets i = BS.unsafeTake len . BS.unsafeDrop start $ bs
   where
     start, end, len :: Int
-    start = fromIntegral (tbl ! i)
-    end   = fromIntegral (tbl ! (i+1))
+    start = fromIntegral (offsets ! i)
+    end   = fromIntegral (offsets ! (i+1))
     len   = end - start
 
 
 -- | Given the index of a string in the table, return the string.
 --
 index :: Enum id => StringTable id -> id -> BS.ByteString
-index (StringTable bs tbl) = index' bs tbl . fromEnum
+index (StringTable bs offsets) = index' bs offsets . fromEnum
 
 
 -- | Given a list of strings, construct a 'StringTable' mapping those strings
@@ -92,11 +95,11 @@ prop_valid strs =
       where str       = index tbl ident
 
 enumStrings :: Enum id => StringTable id -> [BS.ByteString]
-enumStrings (StringTable bs tbl) = map (index' bs tbl) [0..h-1]
-  where (0,h) = A.bounds tbl
+enumStrings (StringTable bs offsets) = map (index' bs offsets) [0..h-1]
+  where (0,h) = A.bounds offsets
 
 enumIds :: Enum id => StringTable id -> [id]
-enumIds (StringTable _ tbl) = [toEnum 0 .. toEnum (h-1)]
-  where (0,h) = A.bounds tbl
+enumIds (StringTable _ offsets) = [toEnum 0 .. toEnum (h-1)]
+  where (0,h) = A.bounds offsets
 
 #endif
