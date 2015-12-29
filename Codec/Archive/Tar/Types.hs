@@ -57,8 +57,9 @@ module Codec.Archive.Tar.Types (
 
 import Data.Int      (Int64)
 import Data.Monoid   (Monoid(..))
-import qualified Data.ByteString.Lazy as BS
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString       as BS
+import qualified Data.ByteString.Char8 as BS.Char8
+import qualified Data.ByteString.Lazy  as LBS
 import Control.DeepSeq
 
 import qualified System.FilePath as FilePath.Native
@@ -85,20 +86,20 @@ data Entry = Entry {
 
     -- | The path of the file or directory within the archive. This is in a
     -- tar-specific form. Use 'entryPath' to get a native 'FilePath'.
-    entryTarPath :: !TarPath,
+    entryTarPath :: {-# UNPACK #-} !TarPath,
 
     -- | The real content of the entry. For 'NormalFile' this includes the
     -- file data. An entry usually contains a 'NormalFile' or a 'Directory'.
     entryContent :: !EntryContent,
 
     -- | File permissions (Unix style file mode).
-    entryPermissions :: !Permissions,
+    entryPermissions :: {-# UNPACK #-} !Permissions,
 
     -- | The user and group to which this file belongs.
-    entryOwnership :: !Ownership,
+    entryOwnership :: {-# UNPACK #-} !Ownership,
 
     -- | The time the file was last modified.
-    entryTime :: !EpochTime,
+    entryTime :: {-# UNPACK #-} !EpochTime,
 
     -- | The tar format the archive is using.
     entryFormat :: !Format
@@ -113,14 +114,17 @@ entryPath = fromTarPath . entryTarPath
 --
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
-data EntryContent = NormalFile      ByteString !FileSize
+data EntryContent = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
                   | Directory
                   | SymbolicLink    !LinkTarget
                   | HardLink        !LinkTarget
-                  | CharacterDevice !DevMajor !DevMinor
-                  | BlockDevice     !DevMajor !DevMinor
+                  | CharacterDevice {-# UNPACK #-} !DevMajor
+                                    {-# UNPACK #-} !DevMinor
+                  | BlockDevice     {-# UNPACK #-} !DevMajor
+                                    {-# UNPACK #-} !DevMinor
                   | NamedPipe
-                  | OtherEntryType  !TypeCode ByteString !FileSize
+                  | OtherEntryType  {-# UNPACK #-} !TypeCode LBS.ByteString
+                                    {-# UNPACK #-} !FileSize
     deriving (Eq, Ord)
 
 data Ownership = Ownership {
@@ -131,10 +135,10 @@ data Ownership = Ownership {
     groupName :: String,
 
     -- | Numeric owner user id. Should be set to @0@ if unknown.
-    ownerId :: !Int,
+    ownerId :: {-# UNPACK #-} !Int,
 
     -- | Numeric owner group id. Should be set to @0@ if unknown.
-    groupId :: !Int
+    groupId :: {-# UNPACK #-} !Int
   }
     deriving (Eq, Ord)
 
@@ -211,9 +215,9 @@ simpleEntry tarpath content = Entry {
 --
 -- > (fileEntry name content) { fileMode = executableFileMode }
 --
-fileEntry :: TarPath -> ByteString -> Entry
+fileEntry :: TarPath -> LBS.ByteString -> Entry
 fileEntry name fileContent =
-  simpleEntry name (NormalFile fileContent (BS.length fileContent))
+  simpleEntry name (NormalFile fileContent (LBS.length fileContent))
 
 -- | A tar 'Entry' for a directory.
 --
@@ -436,7 +440,7 @@ infixr 5 `Next`
 -- return.
 --
 -- It can be used to generate 'Entries' from some other type. For example it is
--- used internally to lazily unfold entries from a 'ByteString'.
+-- used internally to lazily unfold entries from a 'LBS.ByteString'.
 --
 unfoldEntries :: (a -> Either e (Maybe (Entry, a))) -> a -> Entries e
 unfoldEntries f = unfold
