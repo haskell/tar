@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Read
@@ -18,7 +18,7 @@ import Codec.Archive.Tar.Types
 
 import Data.Char     (ord)
 import Data.Int      (Int64)
-import Numeric       (readOct)
+import Data.Bits     (Bits(shiftL))
 import Control.Exception (Exception)
 import Data.Typeable (Typeable)
 import Control.Applicative
@@ -27,6 +27,7 @@ import Control.DeepSeq
 
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
+import qualified Data.ByteString.Unsafe as BS
 import qualified Data.ByteString.Lazy   as LBS
 
 import Prelude hiding (read)
@@ -158,14 +159,15 @@ correctChecksum header checksum = checksum == checksum'
 
 -- * TAR format primitive input
 
-getOct :: Integral a => Int -> Int -> BS.ByteString -> Partial FormatError a
+{-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Partial FormatError Int   #-}
+{-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Partial FormatError Int64 #-}
+getOct :: (Integral a, Bits a) => Int -> Int -> BS.ByteString -> Partial FormatError a
 getOct off len = parseOct
-               . BS.Char8.unpack
                . BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
                . BS.Char8.dropWhile (== ' ')
                . getBytes off len
   where
-    parseOct "" = return 0
+    parseOct s | BS.null s = return 0
     -- As a star extension, octal fields can hold a base-256 value if the high
     -- bit of the initial character is set. The initial character can be:
     --   0x80 ==> trailing characters hold a positive base-256 value
@@ -177,15 +179,14 @@ getOct off len = parseOct
     -- extra bits in the first character, but I don't think it works and the
     -- docs I can find on star seem to suggest that these will always be 0,
     -- which is what I will assume.
-    parseOct ('\128':xs) = return (readBytes xs)
-    parseOct ('\255':xs) = return (negate (readBytes xs))
+    parseOct s | BS.head s == 128 = return (readBytes (BS.tail s))
+               | BS.head s == 255 = return (negate (readBytes (BS.tail s)))
     parseOct s  = case readOct s of
-      [(x,[])] -> return x
-      _        -> Error HeaderBadNumericEncoding
+      Just x  -> return x
+      Nothing -> Error HeaderBadNumericEncoding
 
-    readBytes = go 0
-      where go acc []     = acc
-            go acc (x:xs) = go (acc * 256 + fromIntegral (ord x)) xs
+    readBytes :: (Integral a, Bits a) => BS.ByteString -> a
+    readBytes = BS.foldl' (\acc x -> acc `shiftL` 8 + fromIntegral x) 0
 
 getBytes :: Int -> Int -> BS.ByteString -> BS.ByteString
 getBytes off len = BS.take len . BS.drop off
@@ -220,3 +221,21 @@ instance Monad (Partial e) where
     Error m >>= _ = Error m
     Ok    x >>= k = k x
     fail          = error "fail @(Partial e)"
+
+{-# SPECIALISE readOct :: BS.ByteString -> Maybe Int   #-}
+{-# SPECIALISE readOct :: BS.ByteString -> Maybe Int64 #-}
+readOct :: Integral n => BS.ByteString -> Maybe n
+readOct bs0 = case go 0 0 bs0 of
+                -1 -> Nothing
+                n  -> Just n
+  where
+    go :: Integral n => Int -> n -> BS.ByteString -> n
+    go !i !n !bs
+      | BS.null bs = if i == 0 then -1 else n
+      | otherwise  =
+          case BS.unsafeHead bs of
+            w | w >= 0x30
+             && w <= 0x39 -> go (i+1)
+                                (n * 8 + (fromIntegral w - 0x30))
+                                (BS.unsafeTail bs)
+              | otherwise -> -1
