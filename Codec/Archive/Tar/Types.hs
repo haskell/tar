@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
@@ -129,10 +130,10 @@ data EntryContent = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
 
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
-    ownerName :: String,
+    ownerName :: !BS.ByteString,
 
     -- | The owner group name. Should be set to @\"\"@ if unknown.
-    groupName :: String,
+    groupName :: !BS.ByteString,
 
     -- | Numeric owner user id. Should be set to @0@ if unknown.
     ownerId :: {-# UNPACK #-} !Int,
@@ -201,7 +202,7 @@ simpleEntry tarpath content = Entry {
     entryPermissions = case content of
                          Directory -> directoryPermissions
                          _         -> ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = Ownership BS.empty BS.empty 0 0,
     entryTime        = 0,
     entryFormat      = UstarFormat
   }
@@ -254,9 +255,14 @@ directoryEntry name = simpleEntry name Directory
 --
 -- * The directory separator between the prefix and name is /not/ stored.
 --
-data TarPath = TarPath FilePath -- path name, 100 characters max.
-                       FilePath -- path prefix, 155 characters max.
+data TarPath = TarPath {-# UNPACK #-} !BS.ByteString -- path name, 100 characters max.
+                       {-# UNPACK #-} !BS.ByteString -- path prefix, 155 characters max.
   deriving (Eq, Ord)
+
+instance NFData TarPath
+
+instance Show TarPath where
+  show = show . fromTarPath
 
 -- | Convert a 'TarPath' to a native 'FilePath'.
 --
@@ -271,15 +277,17 @@ data TarPath = TarPath FilePath -- path name, 100 characters max.
 --   responsibility to check for these conditions (eg using 'checkSecurity').
 --
 fromTarPath :: TarPath -> FilePath
-fromTarPath (TarPath name prefix) = adjustDirectory $
+fromTarPath (TarPath namebs prefixbs) = adjustDirectory $
   FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
                           ++ FilePath.Posix.splitDirectories name
   where
+    name   = BS.Char8.unpack namebs
+    prefix = BS.Char8.unpack prefixbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
 
--- | Convert a 'TarPath' to a Unix/Posix 'FilePath'.
+-- | Convert a 'TarPath' to a Unix\/Posix 'FilePath'.
 --
 -- The difference compared to 'fromTarPath' is that it always returns a Unix
 -- style path irrespective of the current operating system.
@@ -288,10 +296,12 @@ fromTarPath (TarPath name prefix) = adjustDirectory $
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath (TarPath name prefix) = adjustDirectory $
+fromTarPathToPosixPath (TarPath namebs prefixbs) = adjustDirectory $
   FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
                          ++ FilePath.Posix.splitDirectories name
   where
+    name   = BS.Char8.unpack namebs
+    prefix = BS.Char8.unpack prefixbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
                     = FilePath.Posix.addTrailingPathSeparator
                     | otherwise = id
@@ -305,10 +315,12 @@ fromTarPathToPosixPath (TarPath name prefix) = adjustDirectory $
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToWindowsPath :: TarPath -> FilePath
-fromTarPathToWindowsPath (TarPath name prefix) = adjustDirectory $
+fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
   FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
                            ++ FilePath.Posix.splitDirectories name
   where
+    name   = BS.Char8.unpack namebs
+    prefix = BS.Char8.unpack prefixbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id
@@ -340,11 +352,13 @@ splitLongPath :: FilePath -> Either String TarPath
 splitLongPath path =
   case packName nameMax (reverse (FilePath.Posix.splitPath path)) of
     Left err                 -> Left err
-    Right (name, [])         -> Right (TarPath name "")
+    Right (name, [])         -> Right $! TarPath (BS.Char8.pack name)
+                                                  BS.empty
     Right (name, first:rest) -> case packName prefixMax remainder of
       Left err               -> Left err
       Right (_     , (_:_))  -> Left "File name too long (cannot split)"
-      Right (prefix, [])     -> Right (TarPath name prefix)
+      Right (prefix, [])     -> Right $! TarPath (BS.Char8.pack name)
+                                                 (BS.Char8.pack prefix)
       where
         -- drop the '/' between the name and prefix:
         remainder = init first : rest
@@ -368,23 +382,24 @@ splitLongPath path =
 -- | The tar format allows just 100 ASCII characters for the 'SymbolicLink' and
 -- 'HardLink' entry types.
 --
-newtype LinkTarget = LinkTarget FilePath
-  deriving (Eq, Ord)
+newtype LinkTarget = LinkTarget BS.ByteString
+  deriving (Eq, Ord, NFData)
 
 -- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the
 -- string is longer than 100 characters or if it contains non-portable
 -- characters.
 --
 toLinkTarget   :: FilePath -> Maybe LinkTarget
-toLinkTarget path | length path <= 100 = Just (LinkTarget path)
+toLinkTarget path | length path <= 100 = Just $! LinkTarget (BS.Char8.pack path)
                   | otherwise          = Nothing
 
 -- | Convert a tar 'LinkTarget' to a native 'FilePath'.
 --
 fromLinkTarget :: LinkTarget -> FilePath
-fromLinkTarget (LinkTarget path) = adjustDirectory $
+fromLinkTarget (LinkTarget pathbs) = adjustDirectory $
   FilePath.Native.joinPath $ FilePath.Posix.splitDirectories path
   where
+    path = BS.Char8.unpack pathbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
@@ -392,9 +407,10 @@ fromLinkTarget (LinkTarget path) = adjustDirectory $
 -- | Convert a tar 'LinkTarget' to a Unix/Posix 'FilePath'.
 --
 fromLinkTargetToPosixPath :: LinkTarget -> FilePath
-fromLinkTargetToPosixPath (LinkTarget path) = adjustDirectory $
+fromLinkTargetToPosixPath (LinkTarget pathbs) = adjustDirectory $
   FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories path
   where
+    path = BS.Char8.unpack pathbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
@@ -402,9 +418,10 @@ fromLinkTargetToPosixPath (LinkTarget path) = adjustDirectory $
 -- | Convert a tar 'LinkTarget' to a Windows 'FilePath'.
 --
 fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
-fromLinkTargetToWindowsPath (LinkTarget path) = adjustDirectory $
+fromLinkTargetToWindowsPath (LinkTarget pathbs) = adjustDirectory $
   FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories path
   where
+    path = BS.Char8.unpack pathbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id

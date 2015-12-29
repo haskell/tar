@@ -16,6 +16,7 @@ import Codec.Archive.Tar.Types
 
 import Data.Char     (ord)
 import Data.List     (foldl')
+import Data.Monoid   (mempty)
 import Numeric       (showOct)
 
 import qualified Data.ByteString             as BS
@@ -79,7 +80,7 @@ putHeaderNoChkSum Entry {
   V7Format    ->
       fill 255 '\NUL'
   UstarFormat -> concat
-    [ putString    8 $ "ustar\NUL00"
+    [ putString    8 $ ustarMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
     , putOct       8 $ deviceMajor
@@ -88,7 +89,7 @@ putHeaderNoChkSum Entry {
     , fill        12 $ '\NUL'
     ]
   GnuFormat -> concat
-    [ putString    8 $ "ustar  \NUL"
+    [ putString    8 $ gnuMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
     , putGnuDev    8 $ deviceMajor
@@ -99,26 +100,30 @@ putHeaderNoChkSum Entry {
   where
     (typeCode, contentSize, linkTarget,
      deviceMajor, deviceMinor) = case content of
-       NormalFile      _ size            -> ('0' , size, [],   0,     0)
-       Directory                         -> ('5' , 0,    [],   0,     0)
-       SymbolicLink    (LinkTarget link) -> ('2' , 0,    link, 0,     0)
-       HardLink        (LinkTarget link) -> ('1' , 0,    link, 0,     0)
-       CharacterDevice major minor       -> ('3' , 0,    [],   major, minor)
-       BlockDevice     major minor       -> ('4' , 0,    [],   major, minor)
-       NamedPipe                         -> ('6' , 0,    [],   0,     0)
-       OtherEntryType  code _ size       -> (code, size, [],   0,     0)
+       NormalFile      _ size            -> ('0' , size, mempty, 0,     0)
+       Directory                         -> ('5' , 0,    mempty, 0,     0)
+       SymbolicLink    (LinkTarget link) -> ('2' , 0,    link,   0,     0)
+       HardLink        (LinkTarget link) -> ('1' , 0,    link,   0,     0)
+       CharacterDevice major minor       -> ('3' , 0,    mempty, major, minor)
+       BlockDevice     major minor       -> ('4' , 0,    mempty, major, minor)
+       NamedPipe                         -> ('6' , 0,    mempty, 0,     0)
+       OtherEntryType  code _ size       -> (code, size, mempty, 0,     0)
 
     putGnuDev w n = case content of
       CharacterDevice _ _ -> putOct w n
       BlockDevice     _ _ -> putOct w n
       _                   -> replicate w '\NUL'
 
+ustarMagic, gnuMagic :: BS.ByteString
+ustarMagic = BS.Char8.pack "ustar\NUL00"
+gnuMagic   = BS.Char8.pack "ustar  \NUL"
+
 -- * TAR format primitive output
 
 type FieldWidth = Int
 
-putString :: FieldWidth -> String -> String
-putString n s = take n s ++ fill (n - length s) '\NUL'
+putString :: FieldWidth -> BS.ByteString -> String
+putString n s = BS.Char8.unpack (BS.take n s) ++ fill (n - BS.length s) '\NUL'
 
 --TODO: check integer widths, eg for large file sizes
 putOct :: (Integral a, Show a) => FieldWidth -> a -> String
