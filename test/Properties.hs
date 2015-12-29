@@ -26,6 +26,6 @@ main =
         testProperty "lookup"      Index.prop_lookup
       , testProperty "valid"       Index.prop_valid
       , testProperty "matches tar" Index.prop_index_matches_tar
-      , testProperty "resume"      Index.prop_finalise_resume
+      , testProperty "resume"      Index.prop_finalise_unfinalise
       ]
     ]

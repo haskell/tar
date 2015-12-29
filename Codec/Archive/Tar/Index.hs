@@ -14,7 +14,7 @@
 --
 -- This module uses common names and so is designed to be imported qualified:
 --
--- > import qualified Codec.Archive.Tar.Index as Tar
+-- > import qualified Codec.Archive.Tar.Index as TarIndex
 --
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Index (
@@ -50,11 +50,11 @@ module Codec.Archive.Tar.Index (
     -- ** Incremental construction
     -- $incremental-construction
     IndexBuilder,
-    emptyIndex,
+    empty,
     addNextEntry,
     skipNextEntry,
-    finaliseIndex,
-    resumeIndexBuilder,
+    finalise,
+    unfinalise,
 
     -- * Serialising indexes
     serialise,
@@ -69,11 +69,15 @@ module Codec.Archive.Tar.Index (
     indexEndEntryOffset,
     indexNextEntryOffset,
 
+    -- * Deprecated aliases
+    emptyIndex,
+    finaliseIndex,
+
 #ifdef TESTS
     prop_lookup,
     prop_valid,
     prop_index_matches_tar,
-    prop_finalise_resume,
+    prop_finalise_unfinalise,
 #endif
   ) where
 
@@ -224,10 +228,10 @@ fromComponentId table = StringTable.index table
 -- assumed to start at offset @0@ within a file.
 --
 build :: Entries e -> Either e TarIndex
-build = go emptyIndex
+build = go empty
   where
     go !builder (Next e es) = go (addNextEntry e builder) es
-    go !builder  Done       = Right $! finaliseIndex builder
+    go !builder  Done       = Right $! finalise builder
     go !_       (Fail err)  = Left err
 
 
@@ -235,17 +239,17 @@ build = go emptyIndex
 -- If you need more control than 'build' then you can construct the index
 -- in an acumulator style using the 'IndexBuilder' and operations.
 --
--- Start with the 'emptyIndex' and use 'addNextEntry' (or 'skipNextEntry') for
+-- Start with 'empty' and use 'addNextEntry' (or 'skipNextEntry') for
 -- each 'Entry' in the tar file in order. Every entry must added or skipped in
 -- order, otherwise the resulting 'TarIndex' will report the wrong
--- 'TarEntryOffset's. At the end use 'finaliseIndex' to get the 'TarIndex'.
+-- 'TarEntryOffset's. At the end use 'finalise' to get the 'TarIndex'.
 --
 -- For example, 'build' is simply:
 --
--- > build = go emptyIndex
+-- > build = go empty
 -- >   where
 -- >     go !builder (Next e es) = go (addNextEntry e builder) es
--- >     go !builder  Done       = Right $! finaliseIndex builder
+-- >     go !builder  Done       = Right $! finalise builder
 -- >     go !_       (Fail err)  = Left err
 
 
@@ -259,8 +263,12 @@ instance NFData IndexBuilder where
 
 -- | The initial empty 'IndexBuilder'.
 --
+empty :: IndexBuilder
+empty = IndexBuilder [] 0
+
 emptyIndex :: IndexBuilder
-emptyIndex = IndexBuilder [] 0
+emptyIndex = empty
+{-# DEPRECATED emptyIndex "Use TarIndex.empty" #-}
 
 -- | Add the next 'Entry' into the 'IndexBuilder'.
 --
@@ -281,8 +289,8 @@ skipNextEntry entry (IndexBuilder acc nextOffset) =
 -- | Finish accumulating 'Entry' information and build the compact 'TarIndex'
 -- lookup structure.
 --
-finaliseIndex :: IndexBuilder -> TarIndex
-finaliseIndex (IndexBuilder pathsOffsets finalOffset) =
+finalise :: IndexBuilder -> TarIndex
+finalise (IndexBuilder pathsOffsets finalOffset) =
     TarIndex pathTable pathTrie finalOffset
   where
     pathComponents = concatMap (FilePath.splitDirectories . fst) pathsOffsets
@@ -291,6 +299,10 @@ finaliseIndex (IndexBuilder pathsOffsets finalOffset) =
                   [ (cids, offset)
                   | (path, offset) <- pathsOffsets
                   , let Just cids = toComponentIds pathTable path ]
+
+finaliseIndex :: IndexBuilder -> TarIndex
+finaliseIndex = finalise
+{-# DEPRECATED finaliseIndex "Use TarIndex.finalise" #-}
 
 -- | This is the offset immediately following the entry most recently added
 -- to the 'IndexBuilder'. You might use this if you need to know the offsets
@@ -337,12 +349,14 @@ nextEntryOffset entry offset =
 -- A 'TarIndex' is optimized for a highly compact and efficient in-memory
 -- representation. This, however, makes it read-only. If you have an existing
 -- 'TarIndex' for a large file, and want to add to it, you can translate the
--- 'TarIndex' back to an 'IndexBuilder', but be aware that this is a relatively
--- costly operation (linear in the size of the 'TarIndex').
+-- 'TarIndex' back to an 'IndexBuilder'. Be aware that this is a relatively
+-- costly operation (linear in the size of the 'TarIndex'), though still
+-- faster than starting again from scratch.
 --
 -- This is the left inverse to 'finaliseIndex' (modulo ordering).
-resumeIndexBuilder :: TarIndex -> IndexBuilder
-resumeIndexBuilder (TarIndex pathTable pathTrie finalOffset) =
+--
+unfinalise :: TarIndex -> IndexBuilder
+unfinalise (TarIndex pathTable pathTrie finalOffset) =
     IndexBuilder (map (first mkPath) (IntTrie.toList pathTrie)) finalOffset
   where
     mkPath :: [PathComponentId] -> FilePath
@@ -749,15 +763,15 @@ instance Arbitrary SimpleIndexBuilder where
     where
       -- like 'build', but don't finalize
       build' :: Show e => Entries e -> IndexBuilder
-      build' = go emptyIndex
+      build' = go empty
         where
           go !builder (Next e es) = go (addNextEntry e builder) es
           go !builder  Done       = builder
           go !_       (Fail err)  = error (show err)
 
-prop_finalise_resume :: SimpleIndexBuilder -> Bool
-prop_finalise_resume (SimpleIndexBuilder index) =
-    resumeIndexBuilder (finaliseIndex index) `sameIndex` index
+prop_finalise_unfinalise :: SimpleIndexBuilder -> Bool
+prop_finalise_unfinalise (SimpleIndexBuilder index) =
+    unfinalise (finalise index) `sameIndex` index
   where
     sameIndex :: IndexBuilder -> IndexBuilder -> Bool
     sameIndex (IndexBuilder acc nextOffset) (IndexBuilder acc' nextOffset') =

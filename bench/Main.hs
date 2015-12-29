@@ -23,7 +23,7 @@ benchmarks =
       bench "index build" (nf TarIndex.build entries)
 
   , env loadTarIndex $ \entries ->
-      bench "index rebuild" (nf TarIndex.finaliseIndex entries)
+      bench "index rebuild" (nf TarIndex.finalise entries)
   ]
 
 loadTarFile :: IO BS.ByteString
@@ -40,7 +40,7 @@ loadTarEntriesList =
 
 loadTarIndex :: IO TarIndex.IndexBuilder
 loadTarIndex =
-    fmap (TarIndex.resumeIndexBuilder
+    fmap (TarIndex.unfinalise
            . either throw id . TarIndex.build)
          loadTarEntries
 
