@@ -18,9 +18,10 @@ import Data.Char     (ord)
 import Data.List     (foldl')
 import Numeric       (showOct)
 
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BS.Char8
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString             as BS
+import qualified Data.ByteString.Char8       as BS.Char8
+import qualified Data.ByteString.Lazy        as LBS
+import qualified Data.ByteString.Lazy.Char8  as LBS.Char8
 
 
 -- | Create the external representation of a tar archive by serialising a list
@@ -28,22 +29,23 @@ import Data.ByteString.Lazy (ByteString)
 --
 -- * The conversion is done lazily.
 --
-write :: [Entry] -> ByteString
-write es = BS.concat $ map putEntry es ++ [BS.replicate (512*2) 0]
+write :: [Entry] -> LBS.ByteString
+write es = LBS.concat $ map putEntry es ++ [LBS.replicate (512*2) 0]
 
-putEntry :: Entry -> ByteString
+putEntry :: Entry -> LBS.ByteString
 putEntry entry = case entryContent entry of
-  NormalFile       content size -> BS.concat [ header, content, padding size ]
-  OtherEntryType _ content size -> BS.concat [ header, content, padding size ]
+  NormalFile       content size -> LBS.concat [ header, content, padding size ]
+  OtherEntryType _ content size -> LBS.concat [ header, content, padding size ]
   _                             -> header
   where
     header       = putHeader entry
-    padding size = BS.replicate paddingSize 0
+    padding size = LBS.replicate paddingSize 0
       where paddingSize = fromIntegral (negate size `mod` 512)
 
-putHeader :: Entry -> ByteString
+putHeader :: Entry -> LBS.ByteString
 putHeader entry =
-     BS.Char8.pack $ take 148 block
+     LBS.Char8.pack
+   $ take 148 block
   ++ putOct 7 checksum
   ++ ' ' : drop 156 block
 --  ++ putOct 8 checksum
