@@ -140,22 +140,27 @@ getEntry bs
    prefix     = getString 345 155 header
 -- trailing   = getBytes  500  12 header
 
-   format_ = case magic of
-    "\0\0\0\0\0\0\0\0" -> return V7Format
-    "ustar\NUL00"      -> return UstarFormat
-    "ustar  \NUL"      -> return GnuFormat
-    _                  -> Error UnrecognisedTarFormat
+   format_
+     | magic == ustarMagic = return UstarFormat
+     | magic == gnuMagic   = return GnuFormat
+     | magic == v7Magic    = return V7Format
+     | otherwise           = Error UnrecognisedTarFormat
+
+v7Magic, ustarMagic, gnuMagic :: BS.ByteString
+v7Magic    = BS.Char8.pack "\0\0\0\0\0\0\0\0"
+ustarMagic = BS.Char8.pack "ustar\NUL00"
+gnuMagic   = BS.Char8.pack "ustar  \NUL"
 
 correctChecksum :: BS.ByteString -> Int -> Bool
 correctChecksum header checksum = checksum == checksum'
   where
     -- sum of all 512 bytes in the header block,
     -- treating each byte as an 8-bit unsigned value
-    checksum' = BS.Char8.foldl' (\x y -> x + ord y) 0 header'
+    sumchars  = BS.foldl' (\x y -> x + fromIntegral y) 0
     -- treating the 8 bytes of chksum as blank characters.
-    header'   = BS.concat [BS.take 148 header,
-                           BS.Char8.replicate 8 ' ',
-                           BS.drop 156 header]
+    checksum' = sumchars (BS.take 148 header)
+              + 256 -- 256 = sumchars (BS.Char8.replicate 8 ' ')
+              + sumchars (BS.drop 156 header)
 
 -- * TAR format primitive input
 
@@ -194,8 +199,8 @@ getBytes off len = BS.take len . BS.drop off
 getByte :: Int -> BS.ByteString -> Char
 getByte off bs = BS.Char8.index bs off
 
-getChars :: Int -> Int -> BS.ByteString -> String
-getChars off len = BS.Char8.unpack . getBytes off len
+getChars :: Int -> Int -> BS.ByteString -> BS.ByteString
+getChars off len = getBytes off len
 
 getString :: Int -> Int -> BS.ByteString -> String
 getString off len = BS.Char8.unpack . BS.Char8.takeWhile (/='\0') . getBytes off len
