@@ -25,9 +25,9 @@ import Control.Applicative
 import Control.Monad
 import Control.DeepSeq
 
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BS.Char8
-import Data.ByteString.Lazy (ByteString)
+import qualified Data.ByteString        as BS
+import qualified Data.ByteString.Char8  as BS.Char8
+import qualified Data.ByteString.Lazy   as LBS
 
 import Prelude hiding (read)
 
@@ -64,22 +64,22 @@ instance NFData    FormatError
 --
 -- * The conversion is done lazily.
 --
-read :: ByteString -> Entries FormatError
+read :: LBS.ByteString -> Entries FormatError
 read = unfoldEntries getEntry
 
-getEntry :: ByteString -> Either FormatError (Maybe (Entry, ByteString))
+getEntry :: LBS.ByteString -> Either FormatError (Maybe (Entry, LBS.ByteString))
 getEntry bs
   | BS.length header < 512 = Left TruncatedArchive
 
   -- Tar files end with at least two blocks of all '0'. Checking this serves
   -- two purposes. It checks the format but also forces the tail of the data
   -- which is necessary to close the file if it came from a lazily read file.
-  | BS.head bs == 0 = case BS.splitAt 1024 bs of
+  | LBS.head bs == 0 = case LBS.splitAt 1024 bs of
       (end, trailing)
-        | BS.length end /= 1024        -> Left ShortTrailer
-        | not (BS.all (== 0) end)      -> Left BadTrailer
-        | not (BS.all (== 0) trailing) -> Left TrailingJunk
-        | otherwise                    -> Right Nothing
+        | LBS.length end /= 1024        -> Left ShortTrailer
+        | not (LBS.all (== 0) end)      -> Left BadTrailer
+        | not (LBS.all (== 0) trailing) -> Left TrailingJunk
+        | otherwise                     -> Right Nothing
 
   | otherwise  = partial $ do
 
@@ -94,9 +94,9 @@ getEntry bs
   size     <- size_;     mtime    <- mtime_;
   devmajor <- devmajor_; devminor <- devminor_;
 
-  let content = BS.take size (BS.drop 512 bs)
+  let content = LBS.take size (LBS.drop 512 bs)
       padding = (512 - size) `mod` 512
-      bs'     = BS.drop (512 + size + padding) bs
+      bs'     = LBS.drop (512 + size + padding) bs
 
       entry = Entry {
         entryTarPath     = TarPath name prefix,
@@ -120,7 +120,7 @@ getEntry bs
   return (Just (entry, bs'))
 
   where
-   header = BS.take 512 bs
+   header = LBS.toStrict (LBS.take 512 bs)
 
    name       = getString   0 100 header
    mode_      = getOct    100   8 header
@@ -145,7 +145,7 @@ getEntry bs
     "ustar  \NUL"      -> return GnuFormat
     _                  -> Error UnrecognisedTarFormat
 
-correctChecksum :: ByteString -> Int -> Bool
+correctChecksum :: BS.ByteString -> Int -> Bool
 correctChecksum header checksum = checksum == checksum'
   where
     -- sum of all 512 bytes in the header block,
@@ -158,7 +158,7 @@ correctChecksum header checksum = checksum == checksum'
 
 -- * TAR format primitive input
 
-getOct :: Integral a => Int64 -> Int64 -> ByteString -> Partial FormatError a
+getOct :: Integral a => Int -> Int -> BS.ByteString -> Partial FormatError a
 getOct off len = parseOct
                . BS.Char8.unpack
                . BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
@@ -187,16 +187,16 @@ getOct off len = parseOct
       where go acc []     = acc
             go acc (x:xs) = go (acc * 256 + fromIntegral (ord x)) xs
 
-getBytes :: Int64 -> Int64 -> ByteString -> ByteString
+getBytes :: Int -> Int -> BS.ByteString -> BS.ByteString
 getBytes off len = BS.take len . BS.drop off
 
-getByte :: Int64 -> ByteString -> Char
+getByte :: Int -> BS.ByteString -> Char
 getByte off bs = BS.Char8.index bs off
 
-getChars :: Int64 -> Int64 -> ByteString -> String
+getChars :: Int -> Int -> BS.ByteString -> String
 getChars off len = BS.Char8.unpack . getBytes off len
 
-getString :: Int64 -> Int64 -> ByteString -> String
+getString :: Int -> Int -> BS.ByteString -> String
 getString off len = BS.Char8.unpack . BS.Char8.takeWhile (/='\0') . getBytes off len
 
 -- These days we'd just use Either, but in older versions of base there was no
