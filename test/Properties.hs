@@ -4,6 +4,8 @@ import qualified Codec.Archive.Tar.Index as Index
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 
+import qualified Data.ByteString as BS
+
 import Test.Tasty
 import Test.Tasty.QuickCheck
 
@@ -29,3 +31,7 @@ main =
       , testProperty "resume"      Index.prop_finalise_unfinalise
       ]
     ]
+
+instance Arbitrary BS.ByteString where
+  arbitrary = fmap BS.pack arbitrary
+

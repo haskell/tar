@@ -105,8 +105,9 @@ import Control.Exception (throwIO)
 import Control.Arrow (first)
 import Control.DeepSeq
 
-import qualified Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString       as BS
+import qualified Data.ByteString.Char8 as BS.Char8
+import qualified Data.ByteString.Lazy  as LBS
 #if MIN_VERSION_bytestring(0,10,2)
 import Data.ByteString.Builder      as BS
 #else
@@ -212,6 +213,7 @@ lookup (TarIndex pathTable pathTrie _) path = do
 toComponentIds :: StringTable PathComponentId -> FilePath -> Maybe [PathComponentId]
 toComponentIds table =
     lookupComponents []
+  . map BS.Char8.pack
   . filter (/= ".")
   . FilePath.splitDirectories
   where
@@ -221,7 +223,7 @@ toComponentIds table =
       Just cid -> lookupComponents (cid:cs') cs
 
 fromComponentId :: StringTable PathComponentId -> PathComponentId -> FilePath
-fromComponentId table = StringTable.index table
+fromComponentId table = BS.Char8.unpack . StringTable.index table
 
 
 -- | Build a 'TarIndex' from a sequence of tar 'Entries'. The 'Entries' are
@@ -294,7 +296,7 @@ finalise (IndexBuilder pathsOffsets finalOffset) =
     TarIndex pathTable pathTrie finalOffset
   where
     pathComponents = concatMap (FilePath.splitDirectories . fst) pathsOffsets
-    pathTable = StringTable.construct pathComponents
+    pathTable = StringTable.construct (map BS.Char8.pack pathComponents)
     pathTrie  = IntTrie.construct
                   [ (cids, offset)
                   | (path, offset) <- pathsOffsets
@@ -360,7 +362,7 @@ unfinalise (TarIndex pathTable pathTrie finalOffset) =
     IndexBuilder (map (first mkPath) (IntTrie.toList pathTrie)) finalOffset
   where
     mkPath :: [PathComponentId] -> FilePath
-    mkPath = FilePath.joinPath . map (StringTable.index pathTable)
+    mkPath = FilePath.joinPath . map (BS.Char8.unpack . StringTable.index pathTable)
 
 
 -------------------------
@@ -624,7 +626,8 @@ prop_valid (ValidPaths paths)
   where
     index@(TarIndex pathTable _ _) = finaliseIndex (IndexBuilder paths 0)
 
-    pathbits = concatMap (FilePath.splitDirectories . fst) paths
+    pathbits = concatMap (map BS.Char8.pack . FilePath.splitDirectories . fst)
+                         paths
     intpaths = [ (cids, offset)
                | (path, offset) <- paths
                , let Just cids = toComponentIds pathTable path ]

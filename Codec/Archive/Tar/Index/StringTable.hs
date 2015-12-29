@@ -33,9 +33,9 @@ data StringTable id = StringTable
 -- | Look up a string in the token table. If the string is present, return
 -- its corresponding index.
 --
-lookup :: Enum id => StringTable id -> String -> Maybe id
+lookup :: Enum id => StringTable id -> BS.ByteString -> Maybe id
 lookup (StringTable bs tbl) str =
-    binarySearch 0 (topBound-1) (BS.pack str)
+    binarySearch 0 (topBound-1) str
   where
     (0, topBound) = A.bounds tbl
 
@@ -58,25 +58,25 @@ index' bs tbl i = BS.take len . BS.drop start $ bs
 
 -- | Given the index of a string in the table, return the string.
 --
-index :: Enum id => StringTable id -> id -> String
-index (StringTable bs tbl) = BS.unpack . index' bs tbl . fromEnum
+index :: Enum id => StringTable id -> id -> BS.ByteString
+index (StringTable bs tbl) = index' bs tbl . fromEnum
 
 
 -- | Given a list of strings, construct a 'StringTable' mapping those strings
 -- to a dense set of integers.
 --
-construct :: Enum id => [String] -> StringTable id
+construct :: Enum id => [BS.ByteString] -> StringTable id
 construct strs = StringTable bs tbl
   where
-    bs      = BS.pack (concat strs')
+    bs      = BS.concat strs'
     tbl     = A.array (0, length strs') (zip [0..] offsets)
-    offsets = scanl (\off str -> off + fromIntegral (length str)) 0 strs'
+    offsets = scanl (\off str -> off + fromIntegral (BS.length str)) 0 strs'
     strs'   = map head . List.group . List.sort $ strs
 
 
 #ifdef TESTS
 
-prop_valid :: [String] -> Bool
+prop_valid :: [BS.ByteString] -> Bool
 prop_valid strs =
      all lookupIndex (enumStrings tbl)
   && all indexLookup (enumIds tbl)
@@ -91,12 +91,12 @@ prop_valid strs =
     indexLookup ident = lookup tbl str == Just ident
       where str       = index tbl ident
 
-enumStrings :: Enum id => StringTable id -> [String]
-enumStrings (StringTable bs tbl) = map (BS.unpack . index' bs tbl) [0..h-1]
+enumStrings :: Enum id => StringTable id -> [BS.ByteString]
+enumStrings (StringTable bs tbl) = map (index' bs tbl) [0..h-1]
   where (0,h) = A.bounds tbl
 
 enumIds :: Enum id => StringTable id -> [id]
-enumIds (StringTable _ tbl) = map toEnum [0..h-1]
+enumIds (StringTable _ tbl) = [toEnum 0 .. toEnum (h-1)]
   where (0,h) = A.bounds tbl
 
 #endif
