@@ -20,6 +20,7 @@ module Codec.Archive.Tar.Index.StringTable (
 
 #ifdef TESTS
     prop_valid,
+    prop_sorted,
     prop_finalise_unfinalise,
     prop_serialise_deserialise,
 #endif
@@ -61,7 +62,10 @@ data StringTable id = StringTable
          {-# UNPACK #-} !(A.UArray Int32 Word32) -- string offset table
          {-# UNPACK #-} !(A.UArray Int32 Int32)  -- string index to id table
          {-# UNPACK #-} !(A.UArray Int32 Int32)  -- string id to index table
-  deriving (Eq, Show, Typeable)
+  deriving (Show, Typeable)
+
+instance (Eq id, Enum id) => Eq (StringTable id) where
+  tbl1 == tbl2 = unfinalise tbl1 == unfinalise tbl2
 
 -- | Look up a string in the token table. If the string is present, return
 -- its corresponding index.
@@ -246,6 +250,16 @@ prop_valid strs =
 
     indexLookup ident = lookup tbl str == Just ident
       where str       = index tbl ident
+
+-- this is important so we can use Map.fromAscList
+prop_sorted :: [BS.ByteString] -> Bool
+prop_sorted strings =
+    isSorted [ index' strs offsets ix
+             | ix <- A.range (A.bounds ids) ]
+  where
+    _tbl :: StringTable Int
+    _tbl@(StringTable strs offsets ids _ixs) = construct strings
+    isSorted xs = and (zipWith (<) xs (tail xs))
 
 prop_finalise_unfinalise :: [BS.ByteString] -> Bool
 prop_finalise_unfinalise strs =

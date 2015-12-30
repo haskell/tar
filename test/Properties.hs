@@ -15,6 +15,7 @@ main =
     testGroup "tar tests" [
       testGroup "string table" [
         testProperty "construction" StringTable.prop_valid,
+        testProperty "sorted"       StringTable.prop_sorted,
         testProperty "serialise"    StringTable.prop_serialise_deserialise,
         testProperty "unfinalise"   StringTable.prop_finalise_unfinalise
       ]
