@@ -33,6 +33,7 @@ library
                  filepath,
                  directory,
                  array,
+                 containers,
                  deepseq
   if flag(old-time)
     build-depends: directory < 1.2, old-time
@@ -66,6 +67,7 @@ test-suite properties
                  bytestring,
                  filepath, directory,
                  array,
+                 containers,
                  deepseq,
                  old-time, time,
                  bytestring-handle,

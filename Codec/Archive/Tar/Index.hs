@@ -355,7 +355,7 @@ nextEntryOffset entry offset =
 -- costly operation (linear in the size of the 'TarIndex'), though still
 -- faster than starting again from scratch.
 --
--- This is the left inverse to 'finaliseIndex' (modulo ordering).
+-- This is the left inverse to 'finalise' (modulo ordering).
 --
 unfinalise :: TarIndex -> IndexBuilder
 unfinalise (TarIndex pathTable pathTrie finalOffset) =
@@ -513,7 +513,7 @@ hSeekEndEntryOffset hnd Nothing = do
 --
 serialise :: TarIndex -> BS.Builder
 serialise (TarIndex stringTable intTrie finalOffset) =
-     BS.word32BE 1 -- format version
+     BS.word32BE 2 -- format version
   <> BS.word32BE finalOffset
   <> serialiseStringTable stringTable
   <> serialiseIntTrie intTrie
@@ -522,11 +522,20 @@ serialise (TarIndex stringTable intTrie finalOffset) =
 --
 deserialise :: BS.ByteString -> Maybe (TarIndex, BS.ByteString)
 deserialise bs
-  | BS.length bs >= 8
-  , let ver = readWord32BE bs 0
+  | BS.length bs < 8
+  = Nothing
+
+  | let ver = readWord32BE bs 0
   , ver == 1
   = do let !finalOffset = readWord32BE bs 4
-       (stringTable, bs')  <- deserialiseStringTable (BS.drop 8 bs)
+       (stringTable, bs')  <- deserialiseStringTable1 (BS.drop 8 bs)
+       (intTrie,     bs'') <- deserialiseIntTrie bs'
+       return (TarIndex stringTable intTrie finalOffset, bs'')
+
+  | let ver = readWord32BE bs 0
+  , ver == 2
+  = do let !finalOffset = readWord32BE bs 4
+       (stringTable, bs')  <- deserialiseStringTable2 (BS.drop 8 bs)
        (intTrie,     bs'') <- deserialiseIntTrie bs'
        return (TarIndex stringTable intTrie finalOffset, bs'')
 
@@ -554,35 +563,75 @@ deserialiseIntTrie bs
   = Nothing
 
 serialiseStringTable :: StringTable id -> BS.Builder
-serialiseStringTable (StringTable strs arr) =
-      let (_, !ixEnd) = A.bounds arr in
+serialiseStringTable (StringTable strs offs ids ixs) =
+      let (_, !ixEnd) = A.bounds offs in
 
       BS.word32BE (fromIntegral (BS.length strs))
    <> BS.word32BE (fromIntegral ixEnd + 1)
    <> BS.byteString strs
-   <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems arr)
+   <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems offs)
+   <> foldr (\n r -> BS.int32BE  n <> r) mempty (A.elems ids)
+   <> foldr (\n r -> BS.int32BE  n <> r) mempty (A.elems ixs)
 
-deserialiseStringTable :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
-deserialiseStringTable bs
+deserialiseStringTable1 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
+deserialiseStringTable1 bs
   | BS.length bs >= 8
   , let lenStrs = fromIntegral (readWord32BE bs 0)
         lenArr  = fromIntegral (readWord32BE bs 4)
         lenTotal= 8 + lenStrs + 4 * lenArr
   , BS.length bs >= lenTotal
   , let strs = BS.take lenStrs (BS.drop 8 bs)
-        arr  = A.array (0, lenArr-1)
+        arr  = A.array (0, fromIntegral lenArr - 1)
                        [ (i, readWord32BE bs off)
-                       | (i, off) <- zip [0..lenArr-1]
+                       | (i, off) <- zip [0 .. fromIntegral lenArr - 1]
                                          [offArrS,offArrS+4 .. offArrE]
                        ]
+        ids  = A.array (0, fromIntegral lenArr - 1)
+                       [ (i,i) | i <- [0 .. fromIntegral lenArr - 1] ]
+        ixs  = ids -- two identity mappings
         offArrS = 8 + lenStrs
         offArrE = offArrS + 4 * lenArr - 1
-        !stringTable = StringTable strs arr
+        !stringTable = StringTable strs arr ids ixs
         !bs'         = BS.drop lenTotal bs
   = Just (stringTable, bs')
 
   | otherwise
   = Nothing
+
+deserialiseStringTable2 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
+deserialiseStringTable2 bs
+  | BS.length bs >= 8
+  , let lenStrs = fromIntegral (readWord32BE bs 0)
+        lenArr  = fromIntegral (readWord32BE bs 4)
+        lenTotal= 8                   -- the two length prefixes
+                + lenStrs
+                + 4 * lenArr
+                +(4 * (lenArr - 1)) * 2 -- offsets array is 1 longer
+  , BS.length bs >= lenTotal
+  , let strs = BS.take lenStrs (BS.drop 8 bs)
+        offs = A.listArray (0, fromIntegral lenArr - 1)
+                           [ readWord32BE bs off
+                           | off <- offsets offsOff ]
+        -- the second two arrays are 1 shorter
+        ids  = A.listArray (0, fromIntegral lenArr - 2)
+                           [ readInt32BE bs off
+                           | off <- offsets idsOff ]
+        ixs  = A.listArray (0, fromIntegral lenArr - 2)
+                           [ readInt32BE bs off
+                           | off <- offsets ixsOff ]
+        offsOff = 8 + lenStrs
+        idsOff  = offsOff + 4 * lenArr
+        ixsOff  = idsOff  + 4 * (lenArr-1)
+        offsets from = [from,from+4 .. from + 4 * (lenArr - 1)]
+        !stringTable = StringTable strs offs ids ixs
+        !bs'         = BS.drop lenTotal bs
+  = Just (stringTable, bs')
+
+  | otherwise
+  = Nothing
+
+readInt32BE :: BS.ByteString -> Int -> Int32
+readInt32BE bs i = fromIntegral (readWord32BE bs i)
 
 readWord32BE :: BS.ByteString -> Int -> Word32
 readWord32BE bs i =
@@ -610,7 +659,7 @@ prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
                                                == sort (nub completions)
     _                                          -> False
   where
-    index       = finaliseIndex (IndexBuilder paths 0)
+    index       = finalise (IndexBuilder paths 0)
     completions = [ head (FilePath.splitDirectories completion)
                   | (path,_) <- paths
                   , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
@@ -624,7 +673,7 @@ prop_valid (ValidPaths paths)
   | otherwise                               = True
 
   where
-    index@(TarIndex pathTable _ _) = finaliseIndex (IndexBuilder paths 0)
+    index@(TarIndex pathTable _ _) = finalise (IndexBuilder paths 0)
 
     pathbits = concatMap (map BS.Char8.pack . FilePath.splitDirectories . fst)
                          paths
