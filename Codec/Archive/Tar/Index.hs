@@ -76,6 +76,7 @@ module Codec.Archive.Tar.Index (
 #ifdef TESTS
     prop_lookup,
     prop_valid,
+    prop_serialise_deserialise,
     prop_index_matches_tar,
     prop_finalise_unfinalise,
 #endif
@@ -101,29 +102,29 @@ import Data.Bits
 import qualified Data.Array.Unboxed as A
 import Prelude hiding (lookup)
 import System.IO
-import Control.Exception (throwIO)
+import Control.Exception (assert, throwIO)
 import Control.Arrow (first)
 import Control.DeepSeq
 
-import qualified Data.ByteString       as BS
-import qualified Data.ByteString.Char8 as BS.Char8
-import qualified Data.ByteString.Lazy  as LBS
+import qualified Data.ByteString        as BS
+import qualified Data.ByteString.Char8  as BS.Char8
+import qualified Data.ByteString.Lazy   as LBS
+import qualified Data.ByteString.Unsafe as BS
 #if MIN_VERSION_bytestring(0,10,2)
-import Data.ByteString.Builder      as BS
+import Data.ByteString.Builder          as BS
 #else
-import Data.ByteString.Lazy.Builder as BS
+import Data.ByteString.Lazy.Builder     as BS
 #endif
 
 #ifdef TESTS
 import qualified Prelude
-import Test.QuickCheck hiding (Result)
-import Test.QuickCheck.Property (Result, exception, succeeded)
+import Test.QuickCheck
+import Test.QuickCheck.Property (ioProperty)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (unless)
 import Data.List (nub, sort, sortBy, stripPrefix, isPrefixOf)
 import Data.Maybe
 import Data.Function (on)
-import System.IO.Unsafe (unsafePerformIO)
 import Control.Exception (SomeException, try)
 import Codec.Archive.Tar.Write          as Tar
 import qualified Data.ByteString.Handle as HBS
@@ -515,8 +516,8 @@ serialise :: TarIndex -> BS.Builder
 serialise (TarIndex stringTable intTrie finalOffset) =
      BS.word32BE 2 -- format version
   <> BS.word32BE finalOffset
-  <> serialiseStringTable stringTable
-  <> serialiseIntTrie intTrie
+  <> StringTable.serialise stringTable
+  <> IntTrie.serialise intTrie
 
 -- | Read the external representation back into a 'TarIndex'.
 --
@@ -528,117 +529,26 @@ deserialise bs
   | let ver = readWord32BE bs 0
   , ver == 1
   = do let !finalOffset = readWord32BE bs 4
-       (stringTable, bs')  <- deserialiseStringTable1 (BS.drop 8 bs)
-       (intTrie,     bs'') <- deserialiseIntTrie bs'
+       (stringTable, bs')  <- StringTable.deserialiseV1 (BS.drop 8 bs)
+       (intTrie,     bs'') <- IntTrie.deserialise bs'
        return (TarIndex stringTable intTrie finalOffset, bs'')
 
   | let ver = readWord32BE bs 0
   , ver == 2
   = do let !finalOffset = readWord32BE bs 4
-       (stringTable, bs')  <- deserialiseStringTable2 (BS.drop 8 bs)
-       (intTrie,     bs'') <- deserialiseIntTrie bs'
+       (stringTable, bs')  <- StringTable.deserialiseV2 (BS.drop 8 bs)
+       (intTrie,     bs'') <- IntTrie.deserialise bs'
        return (TarIndex stringTable intTrie finalOffset, bs'')
 
   | otherwise = Nothing
 
-serialiseIntTrie :: IntTrie k v -> BS.Builder
-serialiseIntTrie (IntTrie arr) =
-    let (_, !ixEnd) = A.bounds arr in
-    BS.word32BE (ixEnd+1)
- <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems arr)
-
-deserialiseIntTrie :: BS.ByteString -> Maybe (IntTrie k v, BS.ByteString)
-deserialiseIntTrie bs
-  | BS.length bs >= 4
-  , let lenArr   = readWord32BE bs 0
-        lenTotal = 4 + 4 * fromIntegral lenArr
-  , BS.length bs >= 4 + 4 * fromIntegral lenArr
-  , let !arr = A.array (0, lenArr-1)
-                      [ (i, readWord32BE bs off)
-                      | (i, off) <- zip [0..lenArr-1] [4,8 .. lenTotal - 4] ]
-        !bs' = BS.drop lenTotal bs
-  = Just (IntTrie arr, bs')
-
-  | otherwise
-  = Nothing
-
-serialiseStringTable :: StringTable id -> BS.Builder
-serialiseStringTable (StringTable strs offs ids ixs) =
-      let (_, !ixEnd) = A.bounds offs in
-
-      BS.word32BE (fromIntegral (BS.length strs))
-   <> BS.word32BE (fromIntegral ixEnd + 1)
-   <> BS.byteString strs
-   <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems offs)
-   <> foldr (\n r -> BS.int32BE  n <> r) mempty (A.elems ids)
-   <> foldr (\n r -> BS.int32BE  n <> r) mempty (A.elems ixs)
-
-deserialiseStringTable1 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
-deserialiseStringTable1 bs
-  | BS.length bs >= 8
-  , let lenStrs = fromIntegral (readWord32BE bs 0)
-        lenArr  = fromIntegral (readWord32BE bs 4)
-        lenTotal= 8 + lenStrs + 4 * lenArr
-  , BS.length bs >= lenTotal
-  , let strs = BS.take lenStrs (BS.drop 8 bs)
-        arr  = A.array (0, fromIntegral lenArr - 1)
-                       [ (i, readWord32BE bs off)
-                       | (i, off) <- zip [0 .. fromIntegral lenArr - 1]
-                                         [offArrS,offArrS+4 .. offArrE]
-                       ]
-        ids  = A.array (0, fromIntegral lenArr - 1)
-                       [ (i,i) | i <- [0 .. fromIntegral lenArr - 1] ]
-        ixs  = ids -- two identity mappings
-        offArrS = 8 + lenStrs
-        offArrE = offArrS + 4 * lenArr - 1
-        !stringTable = StringTable strs arr ids ixs
-        !bs'         = BS.drop lenTotal bs
-  = Just (stringTable, bs')
-
-  | otherwise
-  = Nothing
-
-deserialiseStringTable2 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
-deserialiseStringTable2 bs
-  | BS.length bs >= 8
-  , let lenStrs = fromIntegral (readWord32BE bs 0)
-        lenArr  = fromIntegral (readWord32BE bs 4)
-        lenTotal= 8                   -- the two length prefixes
-                + lenStrs
-                + 4 * lenArr
-                +(4 * (lenArr - 1)) * 2 -- offsets array is 1 longer
-  , BS.length bs >= lenTotal
-  , let strs = BS.take lenStrs (BS.drop 8 bs)
-        offs = A.listArray (0, fromIntegral lenArr - 1)
-                           [ readWord32BE bs off
-                           | off <- offsets offsOff ]
-        -- the second two arrays are 1 shorter
-        ids  = A.listArray (0, fromIntegral lenArr - 2)
-                           [ readInt32BE bs off
-                           | off <- offsets idsOff ]
-        ixs  = A.listArray (0, fromIntegral lenArr - 2)
-                           [ readInt32BE bs off
-                           | off <- offsets ixsOff ]
-        offsOff = 8 + lenStrs
-        idsOff  = offsOff + 4 * lenArr
-        ixsOff  = idsOff  + 4 * (lenArr-1)
-        offsets from = [from,from+4 .. from + 4 * (lenArr - 1)]
-        !stringTable = StringTable strs offs ids ixs
-        !bs'         = BS.drop lenTotal bs
-  = Just (stringTable, bs')
-
-  | otherwise
-  = Nothing
-
-readInt32BE :: BS.ByteString -> Int -> Int32
-readInt32BE bs i = fromIntegral (readWord32BE bs i)
-
 readWord32BE :: BS.ByteString -> Int -> Word32
 readWord32BE bs i =
-     fromIntegral (BS.index bs (i + 0)) `shiftL` 24
-   + fromIntegral (BS.index bs (i + 1)) `shiftL` 16
-   + fromIntegral (BS.index bs (i + 2)) `shiftL` 8
-   + fromIntegral (BS.index bs (i + 3))
+    assert (i >= 0 && i+3 <= BS.length bs - 1) $
+    fromIntegral (BS.unsafeIndex bs (i + 0)) `shiftL` 24
+  + fromIntegral (BS.unsafeIndex bs (i + 1)) `shiftL` 16
+  + fromIntegral (BS.unsafeIndex bs (i + 2)) `shiftL` 8
+  + fromIntegral (BS.unsafeIndex bs (i + 3))
 
 
 -------------------------
@@ -684,6 +594,14 @@ prop_valid (ValidPaths paths)
       case lookup index file of
         Just (TarFileEntry offset') -> offset' == offset
         _                           -> False
+
+prop_serialise_deserialise :: ValidPaths -> Bool
+prop_serialise_deserialise (ValidPaths paths) =
+    Just (index, BS.empty) == (deserialise
+                             . LBS.toStrict . BS.toLazyByteString
+                             . serialise) index
+  where
+    index = finalise (IndexBuilder paths 0)
 
 newtype NonEmptyFilePath = NonEmptyFilePath FilePath deriving Show
 
@@ -733,11 +651,10 @@ data SimpleTarArchive = SimpleTarArchive {
 instance Show SimpleTarArchive where
   show = show . simpleTarRaw
 
-prop_index_matches_tar :: SimpleTarArchive -> Result
+prop_index_matches_tar :: SimpleTarArchive -> Property
 prop_index_matches_tar sta =
-    case unsafePerformIO (try go) of
-      Left ex  -> exception "" ex
-      Right () -> succeeded
+    ioProperty (try go >>= either (\e -> throwIO (e :: SomeException))
+                                  (\_ -> return True))
   where
     go :: IO ()
     go = do

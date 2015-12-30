@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, BangPatterns #-}
+{-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
 
 module Codec.Archive.Tar.Index.IntTrie (
@@ -9,6 +9,9 @@ module Codec.Archive.Tar.Index.IntTrie (
 
   lookup,
   TrieLookup(..),
+
+  serialise,
+  deserialise,
 
 #ifdef TESTS
   test1, test2, test3,
@@ -29,6 +32,19 @@ import qualified Data.Array.Unboxed as A
 import Data.Array.IArray  ((!))
 import qualified Data.Bits as Bits
 import Data.Word (Word32)
+import Data.Bits
+import Data.Monoid (Monoid(..))
+#if (MIN_VERSION_base(4,5,0))
+import Data.Monoid ((<>))
+#endif
+import qualified Data.ByteString        as BS
+import qualified Data.ByteString.Unsafe as BS
+#if MIN_VERSION_bytestring(0,10,2)
+import Data.ByteString.Builder          as BS
+#else
+import Data.ByteString.Lazy.Builder     as BS
+#endif
+import Control.Exception (assert)
 
 import Data.List hiding (lookup)
 import Data.Function (on)
@@ -383,6 +399,40 @@ enum2Word32 = int2Word32 . fromEnum
 
 
 -------------------------
+-- (de)serialisation
+--
+
+serialise :: IntTrie k v -> BS.Builder
+serialise (IntTrie arr) =
+    let (_, !ixEnd) = A.bounds arr in
+    BS.word32BE (ixEnd+1)
+ <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems arr)
+
+deserialise :: BS.ByteString -> Maybe (IntTrie k v, BS.ByteString)
+deserialise bs
+  | BS.length bs >= 4
+  , let lenArr   = readWord32BE bs 0
+        lenTotal = 4 + 4 * fromIntegral lenArr
+  , BS.length bs >= 4 + 4 * fromIntegral lenArr
+  , let !arr = A.array (0, lenArr-1)
+                      [ (i, readWord32BE bs off)
+                      | (i, off) <- zip [0..lenArr-1] [4,8 .. lenTotal - 4] ]
+        !bs' = BS.drop lenTotal bs
+  = Just (IntTrie arr, bs')
+
+  | otherwise
+  = Nothing
+
+readWord32BE :: BS.ByteString -> Int -> Word32
+readWord32BE bs i =
+    assert (i >= 0 && i+3 <= BS.length bs - 1) $
+    fromIntegral (BS.unsafeIndex bs (i + 0)) `shiftL` 24
+  + fromIntegral (BS.unsafeIndex bs (i + 1)) `shiftL` 16
+  + fromIntegral (BS.unsafeIndex bs (i + 2)) `shiftL` 8
+  + fromIntegral (BS.unsafeIndex bs (i + 3))
+
+
+-------------------------
 -- Correctness property
 --
 
@@ -447,3 +497,9 @@ instance Arbitrary ValidPaths where
 isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
 
 #endif
+
+#if !(MIN_VERSION_base(4,5,0))
+(<>) :: Monoid m => m -> m -> m
+(<>) = mappend
+#endif
+

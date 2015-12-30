@@ -89,6 +89,8 @@ test-suite properties
     CPP, BangPatterns,
     DeriveDataTypeable, ScopedTypeVariables
 
+  ghc-options: -fno-ignore-asserts
+
 benchmark bench
   type:          exitcode-stdio-1.0
   hs-source-dirs: . bench

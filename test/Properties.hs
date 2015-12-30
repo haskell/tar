@@ -14,7 +14,9 @@ main =
   defaultMain $
     testGroup "tar tests" [
       testGroup "string table" [
-        testProperty "construction and lookup" StringTable.prop_valid
+        testProperty "construction" StringTable.prop_valid,
+        testProperty "serialise"    StringTable.prop_serialise_deserialise,
+        testProperty "unfinalise"   StringTable.prop_finalise_unfinalise
       ]
     , testGroup "int trie" [
         testProperty "unit 1"      IntTrie.test1,
@@ -25,10 +27,11 @@ main =
         testProperty "toList"      IntTrie.prop_construct_toList
       ]
     , testGroup "index" [
-        testProperty "lookup"      Index.prop_lookup
-      , testProperty "valid"       Index.prop_valid
-      , testProperty "matches tar" Index.prop_index_matches_tar
-      , testProperty "resume"      Index.prop_finalise_unfinalise
+        testProperty "lookup"      Index.prop_lookup,
+        testProperty "valid"       Index.prop_valid,
+        testProperty "serialise"   Index.prop_serialise_deserialise,
+        testProperty "matches tar" Index.prop_index_matches_tar,
+        testProperty "resume"      Index.prop_finalise_unfinalise
       ]
     ]
 
