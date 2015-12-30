@@ -24,7 +24,9 @@ main =
         testProperty "unit 3"      IntTrie.test3,
         testProperty "lookups"     IntTrie.prop_lookup_mono,
         testProperty "completions" IntTrie.prop_completions_mono,
-        testProperty "toList"      IntTrie.prop_construct_toList
+        testProperty "toList"      IntTrie.prop_construct_toList,
+        testProperty "serialise"   IntTrie.prop_serialise_deserialise,
+        testProperty "unfinalise"  IntTrie.prop_finalise_unfinalise
       ]
     , testGroup "index" [
         testProperty "lookup"      Index.prop_lookup,
