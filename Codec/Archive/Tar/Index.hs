@@ -213,9 +213,9 @@ lookup (TarIndex pathTable pathTrie _) path = do
 toComponentIds :: StringTable PathComponentId -> FilePath -> Maybe [PathComponentId]
 toComponentIds table =
     lookupComponents []
-  . map BS.Char8.pack
-  . filter (/= ".")
-  . FilePath.splitDirectories
+  . filter (/= BS.Char8.singleton '.')
+  . splitDirectories
+  . BS.Char8.pack
   where
     lookupComponents cs' []     = Just (reverse cs')
     lookupComponents cs' (c:cs) = case StringTable.lookup table c of
@@ -281,7 +281,7 @@ addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
     IndexBuilder stbl' itrie'
                  (nextEntryOffset entry nextOffset)
   where
-    !entrypath    = map BS.Char8.pack . FilePath.splitDirectories . entryPath $ entry
+    !entrypath    = splitTarPath (entryTarPath entry)
     (stbl', cids) = StringTable.inserts entrypath stbl
     itrie'        = IntTrie.insert cids nextOffset itrie
 
@@ -339,6 +339,18 @@ nextEntryOffset entry offset =
     -- NOTE: to avoid underflow, do the (fromIntegral :: Int64 -> Word32) last
     blocks :: Int64 -> TarEntryOffset
     blocks size = fromIntegral (1 + (size - 1) `div` 512)
+
+type FilePathBS = BS.ByteString
+
+splitTarPath :: TarPath -> [FilePathBS]
+splitTarPath (TarPath name prefix) =
+    splitDirectories prefix ++ splitDirectories name
+
+splitDirectories :: FilePathBS -> [FilePathBS]
+splitDirectories bs =
+    case BS.Char8.split '/' bs of
+      c:cs | BS.null c -> BS.Char8.singleton '/' : filter (not . BS.null) cs
+      cs               ->                          filter (not . BS.null) cs
 
 
 -------------------------
