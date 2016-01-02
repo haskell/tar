@@ -105,6 +105,7 @@ data Entry = Entry {
     -- | The tar format the archive is using.
     entryFormat :: !Format
   }
+  deriving (Eq, Show)
 
 -- | Native 'FilePath' of the file or directory within the archive.
 --
@@ -126,7 +127,7 @@ data EntryContent = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
                   | NamedPipe
                   | OtherEntryType  {-# UNPACK #-} !TypeCode LBS.ByteString
                                     {-# UNPACK #-} !FileSize
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
@@ -141,7 +142,7 @@ data Ownership = Ownership {
     -- | Numeric owner group id. Should be set to @0@ if unknown.
     groupId :: {-# UNPACK #-} !Int
   }
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Show)
 
 -- | There have been a number of extensions to the tar file format over the
 -- years. They all share the basic entry fields and put more meta-data in
@@ -164,7 +165,7 @@ data Format =
      -- archives the standard USTAR/POSIX should be used.
      --
    | GnuFormat
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 instance NFData Entry where
   rnf (Entry _ c _ _ _ _) = rnf c
@@ -383,7 +384,7 @@ splitLongPath path =
 -- 'HardLink' entry types.
 --
 newtype LinkTarget = LinkTarget BS.ByteString
-  deriving (Eq, Ord, NFData)
+  deriving (Eq, Ord, Show, NFData)
 
 -- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the
 -- string is longer than 100 characters or if it contains non-portable
