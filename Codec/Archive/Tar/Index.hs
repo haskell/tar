@@ -87,9 +87,9 @@ import Data.Typeable (Typeable)
 import Codec.Archive.Tar.Types as Tar
 import Codec.Archive.Tar.Read  as Tar
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
-import Codec.Archive.Tar.Index.StringTable (StringTable(..))
+import Codec.Archive.Tar.Index.StringTable (StringTable(..), StringTableBuilder)
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
-import Codec.Archive.Tar.Index.IntTrie (IntTrie(..))
+import Codec.Archive.Tar.Index.IntTrie (IntTrie(..), IntTrieBuilder)
 
 import qualified System.FilePath.Posix as FilePath
 import Data.Monoid (Monoid(..))
@@ -103,7 +103,6 @@ import qualified Data.Array.Unboxed as A
 import Prelude hiding (lookup)
 import System.IO
 import Control.Exception (assert, throwIO)
-import Control.Arrow (first)
 import Control.DeepSeq
 
 import qualified Data.ByteString        as BS
@@ -258,16 +257,18 @@ build = go empty
 
 -- | The intermediate type used for incremental construction of a 'TarIndex'.
 --
-data IndexBuilder = IndexBuilder [(FilePath, TarEntryOffset)]
-                                 {-# UNPACK #-} !TarEntryOffset
+data IndexBuilder
+   = IndexBuilder !(StringTableBuilder PathComponentId)
+                  !(IntTrieBuilder PathComponentId TarEntryOffset)
+   {-# UNPACK #-} !TarEntryOffset
+  deriving (Eq, Show)
 
-instance NFData IndexBuilder where
-  rnf (IndexBuilder a _) = rnf a
+instance NFData IndexBuilder -- fully strict by construction
 
 -- | The initial empty 'IndexBuilder'.
 --
 empty :: IndexBuilder
-empty = IndexBuilder [] 0
+empty = IndexBuilder StringTable.empty IntTrie.empty 0
 
 emptyIndex :: IndexBuilder
 emptyIndex = empty
@@ -276,32 +277,30 @@ emptyIndex = empty
 -- | Add the next 'Entry' into the 'IndexBuilder'.
 --
 addNextEntry :: Entry -> IndexBuilder -> IndexBuilder
-addNextEntry entry (IndexBuilder acc nextOffset) =
-    IndexBuilder ((entrypath, nextOffset):acc)
+addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
+    IndexBuilder stbl' itrie'
                  (nextEntryOffset entry nextOffset)
   where
-    !entrypath  = entryPath entry
+    !entrypath    = map BS.Char8.pack . FilePath.splitDirectories . entryPath $ entry
+    (stbl', cids) = StringTable.inserts entrypath stbl
+    itrie'        = IntTrie.insert cids nextOffset itrie
 
 -- | Use this function if you want to skip some entries and not add them to the
 -- final 'TarIndex'.
 --
 skipNextEntry :: Entry -> IndexBuilder -> IndexBuilder
-skipNextEntry entry (IndexBuilder acc nextOffset) =
-    IndexBuilder acc (nextEntryOffset entry nextOffset)
+skipNextEntry entry (IndexBuilder stbl itrie nextOffset) =
+    IndexBuilder stbl itrie (nextEntryOffset entry nextOffset)
 
 -- | Finish accumulating 'Entry' information and build the compact 'TarIndex'
 -- lookup structure.
 --
 finalise :: IndexBuilder -> TarIndex
-finalise (IndexBuilder pathsOffsets finalOffset) =
+finalise (IndexBuilder stbl itrie finalOffset) =
     TarIndex pathTable pathTrie finalOffset
   where
-    pathComponents = concatMap (FilePath.splitDirectories . fst) pathsOffsets
-    pathTable = StringTable.construct (map BS.Char8.pack pathComponents)
-    pathTrie  = IntTrie.construct
-                  [ (cids, offset)
-                  | (path, offset) <- pathsOffsets
-                  , let Just cids = toComponentIds pathTable path ]
+    pathTable = StringTable.finalise stbl
+    pathTrie  = IntTrie.finalise itrie
 
 finaliseIndex :: IndexBuilder -> TarIndex
 finaliseIndex = finalise
@@ -313,7 +312,7 @@ finaliseIndex = finalise
 -- Use with 'hSeekEntryOffset'. See also 'nextEntryOffset'.
 --
 indexNextEntryOffset :: IndexBuilder -> TarEntryOffset
-indexNextEntryOffset (IndexBuilder _ off) = off
+indexNextEntryOffset (IndexBuilder _ _ off) = off
 
 -- | This is the offset immediately following the last entry in the tar file.
 -- This can be useful to append further entries into the tar file.
@@ -359,10 +358,9 @@ nextEntryOffset entry offset =
 --
 unfinalise :: TarIndex -> IndexBuilder
 unfinalise (TarIndex pathTable pathTrie finalOffset) =
-    IndexBuilder (map (first mkPath) (IntTrie.toList pathTrie)) finalOffset
-  where
-    mkPath :: [PathComponentId] -> FilePath
-    mkPath = FilePath.joinPath . map (BS.Char8.unpack . StringTable.index pathTable)
+    IndexBuilder (StringTable.unfinalise pathTable)
+                 (IntTrie.unfinalise pathTrie)
+                 finalOffset
 
 
 -------------------------
@@ -562,13 +560,13 @@ readWord32BE bs i =
 prop_lookup :: ValidPaths -> NonEmptyFilePath -> Bool
 prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
   case (lookup index p, Prelude.lookup p paths) of
-    (Nothing,                    Nothing)      -> True
-    (Just (TarFileEntry offset), Just offset') -> offset == offset'
-    (Just (TarDir entries),      Nothing)      -> sort (nub (map fst entries))
-                                               == sort (nub completions)
-    _                                          -> False
+    (Nothing,                    Nothing)          -> True
+    (Just (TarFileEntry offset), Just (_,offset')) -> offset == offset'
+    (Just (TarDir entries),      Nothing)          -> sort (nub (map fst entries))
+                                                   == sort (nub completions)
+    _                                              -> False
   where
-    index       = finalise (IndexBuilder paths 0)
+    index       = construct paths
     completions = [ head (FilePath.splitDirectories completion)
                   | (path,_) <- paths
                   , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
@@ -582,14 +580,14 @@ prop_valid (ValidPaths paths)
   | otherwise                               = True
 
   where
-    index@(TarIndex pathTable _ _) = finalise (IndexBuilder paths 0)
+    index@(TarIndex pathTable _ _) = construct paths
 
     pathbits = concatMap (map BS.Char8.pack . FilePath.splitDirectories . fst)
                          paths
     intpaths = [ (cids, offset)
-               | (path, offset) <- paths
+               | (path, (_size, offset)) <- paths
                , let Just cids = toComponentIds pathTable path ]
-    prop' = flip all paths $ \(file, offset) ->
+    prop' = flip all paths $ \(file, (_size, offset)) ->
       case lookup index file of
         Just (TarFileEntry offset') -> offset' == offset
         _                           -> False
@@ -600,7 +598,7 @@ prop_serialise_deserialise (ValidPaths paths) =
                              . LBS.toStrict . BS.toLazyByteString
                              . serialise) index
   where
-    index = finalise (IndexBuilder paths 0)
+    index = construct paths
 
 newtype NonEmptyFilePath = NonEmptyFilePath FilePath deriving Show
 
@@ -608,21 +606,34 @@ instance Arbitrary NonEmptyFilePath where
   arbitrary = NonEmptyFilePath . FilePath.joinPath
                 <$> listOf1 (elements ["a", "b", "c", "d"])
 
-newtype ValidPaths = ValidPaths [(FilePath, TarEntryOffset)] deriving Show
+newtype ValidPaths = ValidPaths [(FilePath, (Int64, TarEntryOffset))] deriving Show
 
 instance Arbitrary ValidPaths where
-  arbitrary =
-      ValidPaths . makeNoPrefix <$> listOf ((,) <$> arbitraryPath <*> arbitrary)
+  arbitrary = do
+      paths <- makeNoPrefix <$> listOf arbitraryPath
+      sizes <- vectorOf (length paths) (getNonNegative <$> arbitrary)
+      let offsets = scanl (\o sz -> o + 1 + blocks sz) 0 sizes
+      return (ValidPaths (zip paths (zip sizes offsets)))
     where
       arbitraryPath   = FilePath.joinPath
                          <$> listOf1 (elements ["a", "b", "c", "d"])
       makeNoPrefix [] = []
-      makeNoPrefix ((k,v):kvs)
-        | all (\(k', _) -> not (isPrefixOfOther k k')) kvs
-                     = (k,v) : makeNoPrefix kvs
-        | otherwise  =         makeNoPrefix kvs
+      makeNoPrefix (k:ks)
+        | all (not . isPrefixOfOther k) ks
+                     = k : makeNoPrefix ks
+        | otherwise  =     makeNoPrefix ks
 
       isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
+
+      blocks :: Int64 -> TarEntryOffset
+      blocks size = fromIntegral (1 + ((size - 1) `div` 512))
+
+-- Helper for bulk construction.
+construct :: [(FilePath, (Int64, TarEntryOffset))] -> TarIndex
+construct =
+    either (\_ -> undefined) id
+  . build
+  . foldr (\(path, (size, _off)) es -> Next (testEntry path size) es) Done
 
 example0 :: Entries ()
 example0 =
@@ -721,10 +732,7 @@ instance Arbitrary SimpleTarArchive where
 
 -- | 'IndexBuilder' constructed from a 'SimpleIndex'
 newtype SimpleIndexBuilder = SimpleIndexBuilder IndexBuilder
-
-instance Show SimpleIndexBuilder where
-  show (SimpleIndexBuilder (IndexBuilder acc nextOffset)) =
-    "IndexBuilder " ++ show acc ++ " " ++ show nextOffset
+  deriving Show
 
 instance Arbitrary SimpleIndexBuilder where
   arbitrary = SimpleIndexBuilder . build' . simpleTarEntries <$> arbitrary
@@ -739,12 +747,7 @@ instance Arbitrary SimpleIndexBuilder where
 
 prop_finalise_unfinalise :: SimpleIndexBuilder -> Bool
 prop_finalise_unfinalise (SimpleIndexBuilder index) =
-    unfinalise (finalise index) `sameIndex` index
-  where
-    sameIndex :: IndexBuilder -> IndexBuilder -> Bool
-    sameIndex (IndexBuilder acc nextOffset) (IndexBuilder acc' nextOffset') =
-         sortBy (compare `on` fst) acc == sortBy (compare `on` fst) acc'
-      && nextOffset == nextOffset'
+    unfinalise (finalise index) == index
 #endif
 
 #if !(MIN_VERSION_base(4,5,0))
