@@ -337,10 +337,9 @@ nextEntryOffset entry offset =
       OtherEntryType _ _ size -> blocks size
       _                       -> 0
   where
-    -- NOTE: The special case for 0 is important to avoid underflow,
-    -- because we are computing an unsigned TarEntryOffset (aka Word32) value
-    blocks 0    = 0
-    blocks size = 1 + ((fromIntegral size - 1) `div` 512)
+    -- NOTE: to avoid underflow, do the (fromIntegral :: Int64 -> Word32) last
+    blocks :: Int64 -> TarEntryOffset
+    blocks size = fromIntegral (1 + (size - 1) `div` 512)
 
 
 -------------------------
