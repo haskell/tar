@@ -54,9 +54,15 @@ import Data.ByteString.Builder          as BS
 import Data.ByteString.Lazy.Builder     as BS
 #endif
 import Control.Exception (assert)
-import qualified Data.Map.Strict    as Map
-import qualified Data.IntMap.Strict as IntMap
+#if MIN_VERSION_containers(0,5,0)
+import qualified Data.Map.Strict        as Map
+import qualified Data.IntMap.Strict     as IntMap
 import Data.IntMap.Strict (IntMap)
+#else
+import qualified Data.Map               as Map
+import qualified Data.IntMap            as IntMap
+import Data.IntMap (IntMap)
+#endif
 
 import Data.List hiding (lookup, insert)
 import Data.Function (on)
