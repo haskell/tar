@@ -1,3 +1,14 @@
+0.4.3.0 Duncan Coutts <duncan@community.haskell.org> January 2016
+
+  * New Index function `unfinalise` to extend existing index
+  * 9x  faster reading
+  * 9x  faster index construction
+  * 25x faster index extension
+  * More compact entry types, using ByteStrings
+  * More Eq and Show instances
+  * Greater QC test coverage
+  * Fix minor bug in reading non-standard v7 format entries
+
 0.4.2.2 Edsko de Vries <edsko@well-typed.com> September 2015
 
   * Fix bug in Index
