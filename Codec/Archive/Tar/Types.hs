@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
@@ -54,6 +54,9 @@ module Codec.Archive.Tar.Types (
   foldEntries,
   unfoldEntries,
 
+#ifdef TESTS
+  limitToV7FormatCompat
+#endif
   ) where
 
 import Data.Int      (Int64)
@@ -72,6 +75,12 @@ import qualified System.FilePath.Windows as FilePath.Windows
          ( joinPath, addTrailingPathSeparator )
 import System.Posix.Types
          ( FileMode )
+
+#ifdef TESTS
+import Test.QuickCheck
+import Control.Applicative ((<$>), pure, (<*>))
+#endif
+
 
 type FileSize  = Int64
 -- | The number of seconds since the UNIX epoch
@@ -450,6 +459,7 @@ fromLinkTargetToWindowsPath (LinkTarget pathbs) = adjustDirectory $
 data Entries e = Next Entry (Entries e)
                | Done
                | Fail e
+  deriving (Eq, Show)
 
 infixr 5 `Next`
 
@@ -508,4 +518,152 @@ instance NFData e => NFData (Entries e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
+
+
+-------------------------
+-- QuickCheck instances
+--
+
+#ifdef TESTS
+
+instance Arbitrary Entry where
+  arbitrary = Entry <$> arbitrary <*> arbitrary <*> arbitraryPermissions
+                    <*> arbitrary <*> arbitraryEpochTime <*> arbitrary
+    where
+      arbitraryPermissions :: Gen Permissions
+      arbitraryPermissions = fromIntegral <$> (arbitraryOctal 7 :: Gen Int)
+
+      arbitraryEpochTime :: Gen EpochTime
+      arbitraryEpochTime = fromIntegral <$> (arbitraryOctal 11 :: Gen Int)
+
+  shrink (Entry path content perms author time format) =
+      [ Entry path' content' perms author' time' format 
+      | (path', content', author', time') <-
+         shrink (path, content, author, time) ]
+   ++ [ Entry path content perms' author time format
+      | perms' <- shrinkIntegral perms ]
+
+instance Arbitrary TarPath where
+  arbitrary = either error id
+            . toTarPath False
+            . FilePath.Posix.joinPath
+          <$> listOf1ToN (255 `div` 5)
+                         (elements (map (replicate 4) "abcd"))
+
+  shrink = map (either error id . toTarPath False)
+         . map FilePath.Posix.joinPath
+         . filter (not . null)
+         . shrinkList shrinkNothing
+         . FilePath.Posix.splitPath
+         . fromTarPathToPosixPath
+
+instance Arbitrary LinkTarget where
+  arbitrary = maybe (error "link target too large") id
+            . toLinkTarget
+            . FilePath.Native.joinPath
+          <$> listOf1ToN (100 `div` 5)
+                         (elements (map (replicate 4) "abcd"))
+
+  shrink = map (maybe (error "link target too large") id . toLinkTarget)
+         . map FilePath.Posix.joinPath
+         . filter (not . null)
+         . shrinkList shrinkNothing
+         . FilePath.Posix.splitPath
+         . fromLinkTargetToPosixPath
+
+
+listOf1ToN :: Int -> Gen a -> Gen [a]
+listOf1ToN n g = sized $ \sz -> do
+    n <- choose (1, min n (max 1 sz))
+    vectorOf n g
+
+listOf0ToN :: Int -> Gen a -> Gen [a]
+listOf0ToN n g = sized $ \sz -> do
+    n <- choose (0, min n sz)
+    vectorOf n g
+
+instance Arbitrary EntryContent where
+  arbitrary =
+    frequency
+      [ (16, do bs <- arbitrary;
+                return (NormalFile bs (LBS.length bs)))
+      , (2, pure Directory)
+      , (1, SymbolicLink    <$> arbitrary)
+      , (1, HardLink        <$> arbitrary)
+      , (1, CharacterDevice <$> arbitraryOctal 7 <*> arbitraryOctal 7)
+      , (1, BlockDevice     <$> arbitraryOctal 7 <*> arbitraryOctal 7)
+      , (1, pure NamedPipe)
+      , (1, do c  <- elements (['A'..'Z']++['a'..'z'])
+               bs <- arbitrary;
+               return (OtherEntryType c bs (LBS.length bs)))
+      ]
+
+  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs') 
+                               | bs' <- shrink bs ]
+  shrink  Directory          = []
+  shrink (SymbolicLink link) = [ SymbolicLink link' | link' <- shrink link ]
+  shrink (HardLink     link) = [ HardLink     link' | link' <- shrink link ]
+  shrink (CharacterDevice ma mi) = [ CharacterDevice ma' mi'
+                                   | (ma', mi') <- shrink (ma, mi) ]
+  shrink (BlockDevice     ma mi) = [ BlockDevice ma' mi'
+                                   | (ma', mi') <- shrink (ma, mi) ]
+  shrink  NamedPipe              = []
+  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs') 
+                                   | bs' <- shrink bs ]
+
+instance Arbitrary LBS.ByteString where
+  arbitrary = fmap LBS.pack arbitrary
+  shrink    = map LBS.pack . shrink . LBS.unpack
+
+instance Arbitrary BS.ByteString where
+  arbitrary = fmap BS.pack arbitrary
+  shrink    = map BS.pack . shrink . BS.unpack
+
+instance Arbitrary Ownership where
+  arbitrary = Ownership <$> name <*> name
+                        <*> idno <*> idno
+    where
+      name = BS.pack <$> listOf0ToN 32 (arbitrary `suchThat` (/= 0))
+      idno = arbitraryOctal 7
+
+  shrink (Ownership oname gname oid gid) =
+    [ Ownership oname' gname' oid' gid'
+    | (oname', gname', oid', gid') <- shrink (oname, gname, oid, gid) ]
+
+instance Arbitrary Format where
+  arbitrary = elements [V7Format, UstarFormat, GnuFormat]
+
+
+--arbitraryOctal :: (Integral n, Random n) => Int -> Gen n
+arbitraryOctal n =
+    oneof [ pure 0
+          , choose (0, upperBound)
+          , pure upperBound
+          ]
+  where
+    upperBound = 8^n-1
+
+-- For QC tests it's useful to have a way to limit the info to that which can
+-- be expressed in the old V7 format
+limitToV7FormatCompat :: Entry -> Entry
+limitToV7FormatCompat entry@Entry { entryFormat = V7Format } =
+    entry {
+      entryContent = case entryContent entry of
+        CharacterDevice _ _ -> OtherEntryType  '3' LBS.empty 0
+        BlockDevice     _ _ -> OtherEntryType  '4' LBS.empty 0
+        Directory           -> OtherEntryType  '5' LBS.empty 0
+        NamedPipe           -> OtherEntryType  '6' LBS.empty 0
+        other               -> other,
+
+      entryOwnership = (entryOwnership entry) {
+        groupName = BS.empty,
+        ownerName = BS.empty
+      },
+
+      entryTarPath = let TarPath name _prefix = entryTarPath entry
+                      in TarPath name BS.empty
+    }
+limitToV7FormatCompat entry = entry
+
+#endif
 

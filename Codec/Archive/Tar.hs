@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -138,6 +139,13 @@ module Codec.Archive.Tar (
 
   -- ** Errors from reading tar files
   FormatError(..),
+
+
+#ifdef TESTS
+  prop_write_read_ustar,
+  prop_write_read_gnu,
+  prop_write_read_v7,
+#endif
   ) where
 
 import Codec.Archive.Tar.Types
@@ -241,3 +249,29 @@ append tar base paths =
       _ <- hSeekEndEntryOffset hnd Nothing
       BS.hPut hnd . write =<< pack base paths
 
+-------------------------
+-- Correctness properties
+--
+
+#ifdef TESTS
+
+prop_write_read_ustar :: [Entry] -> Bool
+prop_write_read_ustar entries =
+    foldr Next Done entries' == read (write entries')
+  where
+    entries' = [ e { entryFormat = UstarFormat } | e <- entries ]
+
+prop_write_read_gnu :: [Entry] -> Bool
+prop_write_read_gnu entries =
+    foldr Next Done entries' == read (write entries')
+  where
+    entries' = [ e { entryFormat = GnuFormat } | e <- entries ]
+
+prop_write_read_v7 :: [Entry] -> Bool
+prop_write_read_v7 entries =
+    foldr Next Done entries' == read (write entries')
+  where
+    entries' = [ limitToV7FormatCompat e { entryFormat = V7Format }
+               | e <- entries ]
+
+#endif

@@ -3,6 +3,7 @@ module Main where
 import qualified Codec.Archive.Tar.Index as Index
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
+import qualified Codec.Archive.Tar       as Tar
 
 import qualified Data.ByteString as BS
 
@@ -13,12 +14,20 @@ main :: IO ()
 main =
   defaultMain $
     testGroup "tar tests" [
-      testGroup "string table" [
+
+      testGroup "write/read" [
+        testProperty "ustar format" Tar.prop_write_read_ustar,
+        testProperty "gnu format"   Tar.prop_write_read_gnu,
+        testProperty "v7 format"    Tar.prop_write_read_v7
+      ]
+
+    , testGroup "string table" [
         testProperty "construction" StringTable.prop_valid,
         testProperty "sorted"       StringTable.prop_sorted,
         testProperty "serialise"    StringTable.prop_serialise_deserialise,
         testProperty "unfinalise"   StringTable.prop_finalise_unfinalise
       ]
+
     , testGroup "int trie" [
         testProperty "unit 1"      IntTrie.test1,
         testProperty "unit 2"      IntTrie.test2,
@@ -29,6 +38,7 @@ main =
         testProperty "serialise"   IntTrie.prop_serialise_deserialise,
         testProperty "unfinalise"  IntTrie.prop_finalise_unfinalise
       ]
+
     , testGroup "index" [
         testProperty "lookup"      Index.prop_lookup,
         testProperty "valid"       Index.prop_valid,
@@ -37,7 +47,4 @@ main =
         testProperty "resume"      Index.prop_finalise_unfinalise
       ]
     ]
-
-instance Arbitrary BS.ByteString where
-  arbitrary = fmap BS.pack arbitrary
 
