@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, BangPatterns #-}
+{-# LANGUAGE CPP, DeriveDataTypeable, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Read
@@ -43,7 +43,20 @@ data FormatError
   | NotTarFormat
   | UnrecognisedTarFormat
   | HeaderBadNumericEncoding
-  deriving (Typeable)
+#if MIN_VERSION_base(4,8,0)
+  deriving (Eq, Show, Typeable)
+
+instance Exception FormatError where
+  displayException TruncatedArchive         = "truncated tar archive"
+  displayException ShortTrailer             = "short tar trailer"
+  displayException BadTrailer               = "bad tar trailer"
+  displayException TrailingJunk             = "tar file has trailing junk"
+  displayException ChecksumIncorrect        = "tar checksum error"
+  displayException NotTarFormat             = "data is not in tar format"
+  displayException UnrecognisedTarFormat    = "tar entry not in a recognised format"
+  displayException HeaderBadNumericEncoding = "tar header is malformed (bad numeric encoding)"
+#else
+  deriving (Eq, Typeable)
 
 instance Show FormatError where
   show TruncatedArchive         = "truncated tar archive"
@@ -56,6 +69,8 @@ instance Show FormatError where
   show HeaderBadNumericEncoding = "tar header is malformed (bad numeric encoding)"
 
 instance Exception FormatError
+#endif
+
 instance NFData    FormatError
 
 
