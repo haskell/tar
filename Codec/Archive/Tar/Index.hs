@@ -87,9 +87,9 @@ import Data.Typeable (Typeable)
 import Codec.Archive.Tar.Types as Tar
 import Codec.Archive.Tar.Read  as Tar
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
-import Codec.Archive.Tar.Index.StringTable (StringTable(..), StringTableBuilder)
+import Codec.Archive.Tar.Index.StringTable (StringTable, StringTableBuilder)
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
-import Codec.Archive.Tar.Index.IntTrie (IntTrie(..), IntTrieBuilder)
+import Codec.Archive.Tar.Index.IntTrie (IntTrie, IntTrieBuilder)
 
 import qualified System.FilePath.Posix as FilePath
 import Data.Monoid (Monoid(..))

@@ -3,7 +3,7 @@
 
 module Codec.Archive.Tar.Index.IntTrie (
 
-  IntTrie(..),
+  IntTrie,
   construct,
   toList,
 
@@ -333,8 +333,8 @@ insertTrie :: Int -> [Int] -> Word32
            -> IntTrieBuilder k v -> IntTrieBuilder k v
 insertTrie k ks v (IntTrieBuilder t) =
     IntTrieBuilder $
-      IntMap.alter (\t -> Just $! maybe (freshTrieNode  ks v)
-                                        (insertTrieNode ks v) t)
+      IntMap.alter (\t' -> Just $! maybe (freshTrieNode  ks v)
+                                         (insertTrieNode ks v) t')
                    k t
 
 insertTrieNode :: [Int] -> Word32 -> TrieNode k v -> TrieNode k v
@@ -354,7 +354,7 @@ freshTrieNode (k:ks) v = TrieNode (freshTrie k ks v)
 
 inserts :: (Enum k, Enum v) => [([k], v)]
         -> IntTrieBuilder k v -> IntTrieBuilder k v
-inserts kvs t = foldl' (\t (ks, v) -> insert ks v t) t kvs
+inserts kvs t = foldl' (\t' (ks, v) -> insert ks v t') t kvs
 
 finalise :: (Enum k, Enum v) => IntTrieBuilder k v -> IntTrie k v
 finalise trie =
