@@ -23,7 +23,7 @@ benchmarks =
       bench "index build" (nf TarIndex.build entries)
 
   , env loadTarIndex $ \entries ->
-      bench "index rebuild" (nf TarIndex.finalise entries)
+      bench "index rebuild" (nf (TarIndex.finalise . TarIndex.unfinalise) entries)
   ]
 
 loadTarFile :: IO BS.ByteString
@@ -38,9 +38,8 @@ loadTarEntriesList :: IO [Tar.Entry]
 loadTarEntriesList =
     fmap (Tar.foldEntries (:) [] throw) loadTarEntries
 
-loadTarIndex :: IO TarIndex.IndexBuilder
+loadTarIndex :: IO TarIndex.TarIndex
 loadTarIndex =
-    fmap (TarIndex.unfinalise
-           . either throw id . TarIndex.build)
+    fmap (either throw id . TarIndex.build)
          loadTarEntries
 

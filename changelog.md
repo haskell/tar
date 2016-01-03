@@ -3,7 +3,7 @@
   * New Index function `unfinalise` to extend existing index
   * 9x  faster reading
   * 9x  faster index construction
-  * 25x faster index extension
+  * 24x faster index extension
   * More compact entry types, using ByteStrings
   * More Eq and Show instances
   * Greater QC test coverage
