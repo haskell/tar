@@ -106,6 +106,8 @@ getEntry bs
                    '0'  -> NormalFile      content size
                    '1'  -> HardLink        (LinkTarget linkname)
                    '2'  -> SymbolicLink    (LinkTarget linkname)
+                   _ | format == V7Format
+                        -> OtherEntryType  typecode content size
                    '3'  -> CharacterDevice devmajor devminor
                    '4'  -> BlockDevice     devmajor devminor
                    '5'  -> Directory
