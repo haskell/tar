@@ -1,3 +1,8 @@
+0.4.4.0 Duncan Coutts <duncan@community.haskell.org> January 2016
+
+  * Build and warning fixes for GHC 7.10 and 8.0
+  * New Index module function `toList` to get all index entries
+
 0.4.3.0 Duncan Coutts <duncan@community.haskell.org> January 2016
 
   * New Index function `unfinalise` to extend existing index
