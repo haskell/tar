@@ -39,6 +39,7 @@ module Codec.Archive.Tar.Index (
     -- * Index lookup
     lookup,
     TarIndexEntry(..),
+    toList,
 
     -- ** I\/O operations
     TarEntryOffset,
@@ -75,6 +76,7 @@ module Codec.Archive.Tar.Index (
 
 #ifdef TESTS
     prop_lookup,
+    prop_toList,
     prop_valid,
     prop_serialise_deserialise,
     prop_index_matches_tar,
@@ -225,6 +227,17 @@ toComponentIds table =
 
 fromComponentId :: StringTable PathComponentId -> PathComponentId -> FilePath
 fromComponentId table = BS.Char8.unpack . StringTable.index table
+
+-- | All the files in the index with their corresponding 'TarEntryOffset's.
+--
+-- Note that the files are in no special order. If you intend to read all or
+-- most files then is is recommended to sort by the 'TarEntryOffset'.
+--
+toList :: TarIndex -> [(FilePath, TarEntryOffset)]
+toList (TarIndex pathTable pathTrie _) =
+    [ (path, off)
+    | (cids, off) <- IntTrie.toList pathTrie
+    , let path = FilePath.joinPath (map (fromComponentId pathTable) cids) ]
 
 
 -- | Build a 'TarIndex' from a sequence of tar 'Entries'. The 'Entries' are
@@ -584,6 +597,13 @@ prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
     completions = [ head (FilePath.splitDirectories completion)
                   | (path,_) <- paths
                   , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
+
+prop_toList :: ValidPaths -> Bool
+prop_toList (ValidPaths paths) =
+    sort (toList index)
+ == sort [ (path, off) | (path, (_sz, off)) <- paths ]
+  where
+    index = construct paths
 
 prop_valid :: ValidPaths -> Bool
 prop_valid (ValidPaths paths)

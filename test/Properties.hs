@@ -42,9 +42,10 @@ main =
     , testGroup "index" [
         testProperty "lookup"      Index.prop_lookup,
         testProperty "valid"       Index.prop_valid,
+        testProperty "toList"      Index.prop_toList,
         testProperty "serialise"   Index.prop_serialise_deserialise,
         testProperty "matches tar" Index.prop_index_matches_tar,
-        testProperty "resume"      Index.prop_finalise_unfinalise
+        testProperty "unfinalise"  Index.prop_finalise_unfinalise
       ]
     ]
 
