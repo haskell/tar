@@ -27,6 +27,7 @@ source-repository head
   location: https://github.com/haskell/tar.git
 
 flag old-time
+  default: False
 
 library
   build-depends: base == 4.*,
