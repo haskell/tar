@@ -164,7 +164,8 @@ data TarIndex = TarIndex
 
   deriving (Eq, Show, Typeable)
 
-instance NFData TarIndex -- fully strict by construction
+instance NFData TarIndex where
+  rnf (TarIndex _ _ _) = () -- fully strict by construction
 
 -- | The result of 'lookup' in a 'TarIndex'. It can either be a file directly,
 -- or a directory entry containing further entries (and all subdirectories
@@ -263,7 +264,8 @@ data IndexBuilder
    {-# UNPACK #-} !TarEntryOffset
   deriving (Eq, Show)
 
-instance NFData IndexBuilder -- fully strict by construction
+instance NFData IndexBuilder where
+  rnf (IndexBuilder _ _ _) = () -- fully strict by construction
 
 -- | The initial empty 'IndexBuilder'.
 --

@@ -71,8 +71,8 @@ instance Show FormatError where
 instance Exception FormatError
 #endif
 
-instance NFData    FormatError
-
+instance NFData    FormatError where
+  rnf !_ = () -- enumerations are fully strict by construction
 
 -- | Convert a data stream in the tar file format into an internal data
 -- structure. Decoding errors are reported by the 'Fail' constructor of the

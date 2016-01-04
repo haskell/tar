@@ -184,7 +184,8 @@ instance NFData EntryContent where
   rnf (OtherEntryType _ c _) = rnf c
   rnf  x                     = seq x ()
 
-instance NFData Ownership
+instance NFData Ownership where
+  rnf (Ownership _ _ _ _) = () -- fully strict by construction
 
 -- | @rw-r--r--@ for normal files
 ordinaryFilePermissions :: Permissions
@@ -269,7 +270,8 @@ data TarPath = TarPath {-# UNPACK #-} !BS.ByteString -- path name, 100 character
                        {-# UNPACK #-} !BS.ByteString -- path prefix, 155 characters max.
   deriving (Eq, Ord)
 
-instance NFData TarPath
+instance NFData TarPath where
+  rnf (TarPath _ _) = () -- fully strict by construction
 
 instance Show TarPath where
   show = show . fromTarPath
