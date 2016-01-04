@@ -362,7 +362,7 @@ inserts :: (Enum k, Enum v) => [([k], v)]
         -> IntTrieBuilder k v -> IntTrieBuilder k v
 inserts kvs t = foldl' (\t' (ks, v) -> insert ks v t') t kvs
 
-finalise :: (Enum k, Enum v) => IntTrieBuilder k v -> IntTrie k v
+finalise :: IntTrieBuilder k v -> IntTrie k v
 finalise trie =
     IntTrie $
       A.listArray (0, fromIntegral (flatTrieLength trie) - 1)
