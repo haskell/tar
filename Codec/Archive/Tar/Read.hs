@@ -19,7 +19,7 @@ import Codec.Archive.Tar.Types
 import Data.Char     (ord)
 import Data.Int      (Int64)
 import Data.Bits     (Bits(shiftL))
-import Control.Exception (Exception)
+import Control.Exception (Exception(..))
 import Data.Typeable (Typeable)
 import Control.Applicative
 import Control.Monad
