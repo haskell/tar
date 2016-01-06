@@ -637,7 +637,7 @@ instance Arbitrary Ownership where
   arbitrary = Ownership <$> name <*> name
                         <*> idno <*> idno
     where
-      name = BS.pack <$> listOf0ToN 32 (arbitrary `suchThat` (/= 0))
+      name = listOf0ToN 32 (arbitrary `suchThat` (/= '\0'))
       idno = arbitraryOctal 7
 
   shrink (Ownership oname gname oid gid) =
@@ -670,8 +670,8 @@ limitToV7FormatCompat entry@Entry { entryFormat = V7Format } =
         other               -> other,
 
       entryOwnership = (entryOwnership entry) {
-        groupName = BS.empty,
-        ownerName = BS.empty
+        groupName = "",
+        ownerName = ""
       },
 
       entryTarPath = let TarPath name _prefix = entryTarPath entry
