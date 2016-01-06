@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, BangPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
@@ -52,6 +52,7 @@ module Codec.Archive.Tar.Types (
   mapEntries,
   mapEntriesNoFail,
   foldEntries,
+  foldlEntries,
   unfoldEntries,
 
 #ifdef TESTS
@@ -493,6 +494,17 @@ foldEntries next done fail' = fold
     fold (Next e es) = next e (fold es)
     fold Done        = done
     fold (Fail err)  = fail' err
+
+-- | A 'foldl'-like function on Entries. It either returns the final
+-- accumulator result, or the failure along with the intermediate accumulator
+-- value.
+--
+foldlEntries :: (a -> Entry -> a) -> a -> Entries e -> Either (e, a) a
+foldlEntries f z = go z
+  where
+    go !acc (Next e es) = go (f acc e) es
+    go !acc  Done       = Right acc
+    go !acc (Fail err)  = Left (err, acc)
 
 -- | This is like the standard 'map' function on lists, but for 'Entries'. It
 -- includes failure as a extra possible outcome of the mapping function.
