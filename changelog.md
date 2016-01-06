@@ -1,3 +1,10 @@
+0.4.5.0 Duncan Coutts <duncan@community.haskell.org> January 2016
+
+  * Revert accidental minor API change in 0.4.x series (the type of the
+    owner and group name strings). The 0.4.3.0 and 0.4.4.0 releases
+    contained the accidental API change.
+  * Add a handy foldlEntries function
+
 0.4.4.0 Duncan Coutts <duncan@community.haskell.org> January 2016
 
   * Build and warning fixes for GHC 7.10 and 8.0
