@@ -66,7 +66,7 @@ putHeaderNoChkSum Entry {
   } =
 
   concat
-    [ putString  100 $ name
+    [ putBString 100 $ name
     , putOct       8 $ permissions
     , putOct       8 $ ownerId ownership
     , putOct       8 $ groupId ownership
@@ -74,27 +74,27 @@ putHeaderNoChkSum Entry {
     , putOct      12 $ modTime
     , fill         8 $ ' ' -- dummy checksum
     , putChar8       $ typeCode
-    , putString  100 $ linkTarget
+    , putBString 100 $ linkTarget
     ] ++
   case format of
   V7Format    ->
       fill 255 '\NUL'
   UstarFormat -> concat
-    [ putString    8 $ ustarMagic
+    [ putBString   8 $ ustarMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
     , putOct       8 $ deviceMajor
     , putOct       8 $ deviceMinor
-    , putString  155 $ prefix
+    , putBString 155 $ prefix
     , fill        12 $ '\NUL'
     ]
   GnuFormat -> concat
-    [ putString    8 $ gnuMagic
+    [ putBString   8 $ gnuMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
     , putGnuDev    8 $ deviceMajor
     , putGnuDev    8 $ deviceMinor
-    , putString  155 $ prefix
+    , putBString 155 $ prefix
     , fill        12 $ '\NUL'
     ]
   where
@@ -122,8 +122,11 @@ gnuMagic   = BS.Char8.pack "ustar  \NUL"
 
 type FieldWidth = Int
 
-putString :: FieldWidth -> BS.ByteString -> String
-putString n s = BS.Char8.unpack (BS.take n s) ++ fill (n - BS.length s) '\NUL'
+putBString :: FieldWidth -> BS.ByteString -> String
+putBString n s = BS.Char8.unpack (BS.take n s) ++ fill (n - BS.length s) '\NUL'
+
+putString :: FieldWidth -> String -> String
+putString n s = take n s ++ fill (n - length s) '\NUL'
 
 --TODO: check integer widths, eg for large file sizes
 putOct :: (Integral a, Show a) => FieldWidth -> a -> String

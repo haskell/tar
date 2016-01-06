@@ -140,10 +140,10 @@ data EntryContent = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
 
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
-    ownerName :: !BS.ByteString,
+    ownerName :: String,
 
     -- | The owner group name. Should be set to @\"\"@ if unknown.
-    groupName :: !BS.ByteString,
+    groupName :: String,
 
     -- | Numeric owner user id. Should be set to @0@ if unknown.
     ownerId :: {-# UNPACK #-} !Int,
@@ -185,7 +185,7 @@ instance NFData EntryContent where
   rnf  x                     = seq x ()
 
 instance NFData Ownership where
-  rnf (Ownership _ _ _ _) = () -- fully strict by construction
+  rnf (Ownership o g _ _) = rnf o `seq` rnf g
 
 -- | @rw-r--r--@ for normal files
 ordinaryFilePermissions :: Permissions
@@ -213,7 +213,7 @@ simpleEntry tarpath content = Entry {
     entryPermissions = case content of
                          Directory -> directoryPermissions
                          _         -> ordinaryFilePermissions,
-    entryOwnership   = Ownership BS.empty BS.empty 0 0,
+    entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,
     entryFormat      = UstarFormat
   }

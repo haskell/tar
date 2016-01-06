@@ -130,7 +130,8 @@ getEntry bs
                    '7'  -> NormalFile      content size
                    _    -> OtherEntryType  typecode content size,
         entryPermissions = mode,
-        entryOwnership   = Ownership uname gname uid gid,
+        entryOwnership   = Ownership (BS.Char8.unpack uname)
+                                     (BS.Char8.unpack gname) uid gid,
         entryTime        = mtime,
         entryFormat      = format
     }
