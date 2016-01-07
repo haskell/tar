@@ -77,6 +77,11 @@ import qualified System.FilePath.Windows as FilePath.Windows
 import System.Posix.Types
          ( FileMode )
 
+#if !MIN_VERSION_bytestring(0,10,0)
+import qualified Data.ByteString.Internal as BS
+import qualified Data.ByteString.Lazy.Internal as LBS
+#endif
+
 #ifdef TESTS
 import Test.QuickCheck
 import Control.Applicative ((<$>), pure, (<*>))
@@ -181,9 +186,17 @@ instance NFData Entry where
   rnf (Entry _ c _ _ _ _) = rnf c
 
 instance NFData EntryContent where
-  rnf (NormalFile       c _) = rnf c
-  rnf (OtherEntryType _ c _) = rnf c
-  rnf  x                     = seq x ()
+  rnf x = case x of
+      NormalFile       c _  -> rnflbs c
+      OtherEntryType _ c _  -> rnflbs c
+      _                     -> seq x ()
+    where
+#if MIN_VERSION_bytestring(0,10,0)
+      rnflbs = rnf
+#else
+      rnflbs LBS.Empty       = ()
+      rnflbs (LBS.Chunk _ b) = rnflbs b
+#endif
 
 instance NFData Ownership where
   rnf (Ownership o g _ _) = rnf o `seq` rnf g
@@ -396,7 +409,14 @@ splitLongPath path =
 -- 'HardLink' entry types.
 --
 newtype LinkTarget = LinkTarget BS.ByteString
-  deriving (Eq, Ord, Show, NFData)
+  deriving (Eq, Ord, Show)
+
+instance NFData LinkTarget where
+#if MIN_VERSION_bytestring(0,10,0)
+    rnf (LinkTarget bs) = rnf bs
+#else
+    rnf (LinkTarget (BS.PS _ _ _)) = ()
+#endif
 
 -- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the
 -- string is longer than 100 characters or if it contains non-portable

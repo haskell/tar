@@ -16,11 +16,20 @@ matrix:
     - env: CABALVER=1.16 GHCVER=7.0.4 NOTEST=1
       compiler: ": #GHC 7.0.4"
       addons: {apt: {packages: [cabal-install-1.16,ghc-7.0.4,zlib1g-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.16 GHCVER=7.0.4 NOTEST=1 CABALCONFIG=bytestring-0.9.cabal.config
+      compiler: ": #GHC 7.0.4 bytestring-0.9"
+      addons: {apt: {packages: [cabal-install-1.16,ghc-7.0.4,zlib1g-dev], sources: [hvr-ghc]}}
     - env: CABALVER=1.16 GHCVER=7.2.2 NOTEST=1
       compiler: ": #GHC 7.2.2"
       addons: {apt: {packages: [cabal-install-1.16,ghc-7.2.2,zlib1g-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.16 GHCVER=7.2.2 NOTEST=1 CABALCONFIG=bytestring-0.9.cabal.config
+      compiler: ": #GHC 7.2.2 bytestring-0.9"
+      addons: {apt: {packages: [cabal-install-1.16,ghc-7.2.2,zlib1g-dev], sources: [hvr-ghc]}}
     - env: CABALVER=1.22 GHCVER=7.4.2
       compiler: ": #GHC 7.4.2"
+      addons: {apt: {packages: [cabal-install-1.22,ghc-7.4.2,zlib1g-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=1.22 GHCVER=7.4.2 CABALCONFIG=bytestring-0.9.cabal.config
+      compiler: ": #GHC 7.4.2 bytestring-0.9"
       addons: {apt: {packages: [cabal-install-1.22,ghc-7.4.2,zlib1g-dev], sources: [hvr-ghc]}}
     - env: CABALVER=1.16 GHCVER=7.6.3
       compiler: ": #GHC 7.6.3"
@@ -41,6 +50,7 @@ matrix:
 before_install:
  - unset CC
  - export PATH=/opt/ghc/$GHCVER/bin:/opt/cabal/$CABALVER/bin:$PATH
+ - if [ "x$CABALCONFIG" = "x" ]; then true; else cp $CABALCONFIG cabal.config; fi
  - if [ "x$NOTEST" = "x" ]; then export CABFLAGS="--enable-tests"; else export CABFLAGS=""; fi
 
 install:

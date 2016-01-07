@@ -52,13 +52,17 @@ import           Data.Map (Map)
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Unsafe as BS
 import qualified Data.ByteString.Lazy  as LBS
-#if MIN_VERSION_bytestring(0,10,2)
+#if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder      as BS
 #else
 import Data.ByteString.Lazy.Builder as BS
 #endif
 
-
+#ifdef TESTS
+#if !MIN_VERSION_bytestring(0,10,0)
+import qualified Data.ByteString.Lazy.Internal as LBS
+#endif
+#endif
 
 -- | An effecient mapping from strings to a dense set of integers.
 --
@@ -276,11 +280,16 @@ prop_finalise_unfinalise strs =
 prop_serialise_deserialise :: [BS.ByteString] -> Bool
 prop_serialise_deserialise strs =
     Just (strtable, BS.empty) == (deserialiseV2
-                                . LBS.toStrict . BS.toLazyByteString
+                                . toStrict . BS.toLazyByteString
                                 . serialise) strtable
   where
     strtable :: StringTable Int
     strtable = construct strs
+#if MIN_VERSION_bytestring(0,10,0)
+    toStrict = LBS.toStrict
+#else
+    toStrict = LBS.foldrChunks mappend mempty
+#endif
 
 enumStrings :: Enum id => StringTable id -> [BS.ByteString]
 enumStrings (StringTable bs offsets _ _) = map (index' bs offsets) [0..h-1]

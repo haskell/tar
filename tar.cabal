@@ -29,9 +29,11 @@ source-repository head
 flag old-time
   default: False
 
+flag old-bytestring
+  default: False
+
 library
   build-depends: base == 4.*,
-                 bytestring >= 0.10,
                  filepath,
                  directory,
                  array,
@@ -41,6 +43,11 @@ library
     build-depends: directory < 1.2, old-time
   else
     build-depends: directory >= 1.2, time
+
+  if flag(old-bytestring)
+    build-depends: bytestring-builder, bytestring >= 0.9 && <0.10
+  else
+    build-depends: bytestring >= 0.10
 
   exposed-modules:
     Codec.Archive.Tar
@@ -66,16 +73,24 @@ library
 test-suite properties
   type:          exitcode-stdio-1.0
   build-depends: base,
-                 bytestring,
-                 filepath, directory,
+                 filepath,
                  array,
                  containers,
                  deepseq,
-                 old-time, time,
                  bytestring-handle,
                  QuickCheck == 2.*,
                  tasty            >= 0.10 && <0.12,
                  tasty-quickcheck == 0.8.*
+
+  if flag(old-time)
+    build-depends: directory < 1.2, old-time
+  else
+    build-depends: directory >= 1.2, time
+
+  if flag(old-bytestring)
+    build-depends: bytestring-builder, bytestring >= 0.9 && <0.10
+  else
+    build-depends: bytestring >= 0.10
 
   hs-source-dirs: . test
 
