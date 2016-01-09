@@ -15,6 +15,7 @@ module Codec.Archive.Tar.Index.StringTable (
     unfinalise,
 
     serialise,
+    serialiseSize,
     deserialiseV1,
     deserialiseV2,
 
@@ -23,6 +24,7 @@ module Codec.Archive.Tar.Index.StringTable (
     prop_sorted,
     prop_finalise_unfinalise,
     prop_serialise_deserialise,
+    prop_serialiseSize,
 #endif
  ) where
 
@@ -51,11 +53,13 @@ import           Data.Map (Map)
 #endif
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Unsafe as BS
-import qualified Data.ByteString.Lazy  as LBS
+import qualified Data.ByteString.Lazy   as LBS
 #if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
-import Data.ByteString.Builder      as BS
+import Data.ByteString.Builder          as BS
+import Data.ByteString.Builder.Extra    as BS (byteStringCopy)
 #else
-import Data.ByteString.Lazy.Builder as BS
+import Data.ByteString.Lazy.Builder     as BS
+import Data.ByteString.Lazy.Builder.Extras as BS (byteStringCopy)
 #endif
 
 
@@ -165,10 +169,18 @@ serialise (StringTable strs offs ids ixs) =
 
       BS.word32BE (fromIntegral (BS.length strs))
    <> BS.word32BE (fromIntegral ixEnd + 1)
-   <> BS.byteString strs
+   <> BS.byteStringCopy strs
    <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems offs)
    <> foldr (\n r -> BS.int32BE  n <> r) mempty (A.elems ids)
    <> foldr (\n r -> BS.int32BE  n <> r) mempty (A.elems ixs)
+
+serialiseSize :: StringTable id -> Int
+serialiseSize (StringTable strs offs _ids _ixs) =
+    let (_, !ixEnd) = A.bounds offs
+     in 4 * 2
+      + BS.length strs
+      + 4 * (fromIntegral ixEnd + 1)
+      + 8 *  fromIntegral ixEnd
 
 deserialiseV1 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
 deserialiseV1 bs
@@ -277,6 +289,14 @@ prop_serialise_deserialise strs =
     Just (strtable, BS.empty) == (deserialiseV2
                                 . toStrict . BS.toLazyByteString
                                 . serialise) strtable
+  where
+    strtable :: StringTable Int
+    strtable = construct strs
+
+prop_serialiseSize :: [BS.ByteString] -> Bool
+prop_serialiseSize strs =
+    (fromIntegral . LBS.length . BS.toLazyByteString . serialise) strtable
+ == serialiseSize strtable
   where
     strtable :: StringTable Int
     strtable = construct strs

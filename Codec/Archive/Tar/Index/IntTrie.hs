@@ -17,6 +17,7 @@ module Codec.Archive.Tar.Index.IntTrie (
   TrieLookup(..),
 
   serialise,
+  serialiseSize,
   deserialise,
 
 #ifdef TESTS
@@ -29,6 +30,7 @@ module Codec.Archive.Tar.Index.IntTrie (
   prop_construct_toList,
   prop_finalise_unfinalise,
   prop_serialise_deserialise,
+  prop_serialiseSize,
 #endif
  ) where
 
@@ -468,6 +470,12 @@ serialise (IntTrie arr) =
     BS.word32BE (ixEnd+1)
  <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems arr)
 
+serialiseSize :: IntTrie k v -> Int
+serialiseSize (IntTrie arr) =
+    let (_, ixEnd) = A.bounds arr in
+    4
+  + 4 * (fromIntegral ixEnd + 1)
+
 deserialise :: BS.ByteString -> Maybe (IntTrie k v, BS.ByteString)
 deserialise bs
   | BS.length bs >= 4
@@ -549,6 +557,14 @@ prop_serialise_deserialise (ValidPaths paths) =
     Just (trie, BS.empty) == (deserialise
                             . toStrict . BS.toLazyByteString
                             . serialise) trie
+  where
+    trie :: IntTrie Char Char
+    trie = construct paths
+
+prop_serialiseSize :: ValidPaths -> Bool
+prop_serialiseSize (ValidPaths paths) =
+    (fromIntegral . LBS.length . BS.toLazyByteString . serialise) trie
+ == serialiseSize trie
   where
     trie :: IntTrie Char Char
     trie = construct paths

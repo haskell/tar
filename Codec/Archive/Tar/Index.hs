@@ -79,6 +79,7 @@ module Codec.Archive.Tar.Index (
     prop_toList,
     prop_valid,
     prop_serialise_deserialise,
+    prop_serialiseSize,
     prop_index_matches_tar,
     prop_finalise_unfinalise,
 #endif
@@ -113,8 +114,12 @@ import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS
 #if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
+import Data.ByteString.Builder.Extra    as BS (toLazyByteStringWith,
+                                               untrimmedStrategy)
 #else
 import Data.ByteString.Lazy.Builder     as BS
+import Data.ByteString.Lazy.Builder.Extras as BS (toLazyByteStringWith,
+                                                  untrimmedStrategy)
 #endif
 
 #ifdef TESTS
@@ -536,8 +541,24 @@ hSeekEndEntryOffset hnd Nothing = do
 -- | The 'TarIndex' is compact in memory, and it has a similarly compact
 -- external representation.
 --
-serialise :: TarIndex -> BS.Builder
-serialise (TarIndex stringTable intTrie finalOffset) =
+serialise :: TarIndex -> BS.ByteString
+serialise = toStrict . serialiseLBS
+
+-- we keep this version around just so we can check we got the size right.
+serialiseLBS :: TarIndex -> LBS.ByteString
+serialiseLBS index =
+    BS.toLazyByteStringWith
+      (BS.untrimmedStrategy (serialiseSize index) 512) LBS.empty
+      (serialiseBuilder index)
+
+serialiseSize :: TarIndex -> Int
+serialiseSize (TarIndex stringTable intTrie _) =
+    StringTable.serialiseSize stringTable
+  + IntTrie.serialiseSize intTrie
+  + 8
+
+serialiseBuilder :: TarIndex -> BS.Builder
+serialiseBuilder (TarIndex stringTable intTrie finalOffset) =
      BS.word32BE 2 -- format version
   <> BS.word32BE finalOffset
   <> StringTable.serialise stringTable
@@ -628,9 +649,15 @@ prop_valid (ValidPaths paths)
 
 prop_serialise_deserialise :: ValidPaths -> Bool
 prop_serialise_deserialise (ValidPaths paths) =
-    Just (index, BS.empty) == (deserialise
-                             . toStrict . BS.toLazyByteString
-                             . serialise) index
+    Just (index, BS.empty) == (deserialise . serialise) index
+  where
+    index = construct paths
+
+prop_serialiseSize :: ValidPaths -> Bool
+prop_serialiseSize (ValidPaths paths) =
+    case (LBS.toChunks . serialiseLBS) index of
+      [c1] -> BS.length c1 == serialiseSize index
+      _    -> False
   where
     index = construct paths
 
@@ -783,13 +810,13 @@ prop_finalise_unfinalise :: SimpleIndexBuilder -> Bool
 prop_finalise_unfinalise (SimpleIndexBuilder index) =
     unfinalise (finalise index) == index
 
+#endif
+
 toStrict :: LBS.ByteString -> BS.ByteString
 #if MIN_VERSION_bytestring(0,10,0)
 toStrict = LBS.toStrict
 #else
 toStrict = BS.concat . LBS.toChunks
-#endif
-
 #endif
 
 #if !(MIN_VERSION_base(4,5,0))

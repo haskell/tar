@@ -25,6 +25,7 @@ main =
         testProperty "construction" StringTable.prop_valid,
         testProperty "sorted"       StringTable.prop_sorted,
         testProperty "serialise"    StringTable.prop_serialise_deserialise,
+        testProperty "size"         StringTable.prop_serialiseSize,
         testProperty "unfinalise"   StringTable.prop_finalise_unfinalise
       ]
 
@@ -36,6 +37,7 @@ main =
         testProperty "completions" IntTrie.prop_completions_mono,
         testProperty "toList"      IntTrie.prop_construct_toList,
         testProperty "serialise"   IntTrie.prop_serialise_deserialise,
+        testProperty "size"        IntTrie.prop_serialiseSize,
         testProperty "unfinalise"  IntTrie.prop_finalise_unfinalise
       ]
 
@@ -44,6 +46,7 @@ main =
         testProperty "valid"       Index.prop_valid,
         testProperty "toList"      Index.prop_toList,
         testProperty "serialise"   Index.prop_serialise_deserialise,
+        testProperty "size"        Index.prop_serialiseSize,
         testProperty "matches tar" Index.prop_index_matches_tar,
         testProperty "unfinalise"  Index.prop_finalise_unfinalise
       ]
