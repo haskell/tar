@@ -1,3 +1,9 @@
+0.5.0.0 Duncan Coutts <duncan@community.haskell.org> January 2016
+
+  * Work with old version of bytestring (using bytestring-builder package).
+  * Builds with GHC 6.10 -- 8.0.
+  * Change type of Index.serialise to be simply strict bytestring.
+
 0.4.5.0 Duncan Coutts <duncan@community.haskell.org> January 2016
 
   * Revert accidental minor API change in 0.4.x series (the type of the
