@@ -416,9 +416,15 @@ flattenTrie trie = go (queue [trie]) (size trie)
                    : Map.keys  keysValues
                   ++ Map.elems keysValues
             (!offset', !keysValues, !tries') =
+#if MIN_VERSION_containers(0,4,2)
               IntMap.foldlWithKey' accumNodes
                                    (offset, Map.empty, tries)
                                    tnodes
+#else
+              foldl' (\a (k,v) -> accumNodes a k v)
+                     (offset, Map.empty, tries)
+                     (IntMap.toList tnodes)
+#endif
 
     accumNodes :: (Offset, Map.Map Word32 Word32, Q (IntTrieBuilder k v))
                -> Int -> TrieNode k v

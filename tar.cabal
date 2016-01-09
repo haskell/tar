@@ -37,7 +37,7 @@ library
                  filepath,
                  directory,
                  array,
-                 containers >= 0.4.2,
+                 containers >= 0.2,
                  deepseq >= 1.1 && < 1.5
   if flag(old-time)
     build-depends: directory < 1.2, old-time
