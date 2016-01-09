@@ -48,7 +48,7 @@ import Data.Monoid ((<>))
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS
-#if MIN_VERSION_bytestring(0,10,2)
+#if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
 #else
 import Data.ByteString.Lazy.Builder     as BS
@@ -70,6 +70,10 @@ import Data.Function (on)
 #ifdef TESTS
 import Test.QuickCheck
 import Control.Applicative ((<$>), (<*>))
+
+#if !MIN_VERSION_bytestring(0,10,0)
+import qualified Data.ByteString.Lazy.Internal as LBS
+#endif
 #endif
 
 
@@ -541,11 +545,16 @@ prop_finalise_unfinalise (ValidPaths paths) =
 prop_serialise_deserialise :: ValidPaths -> Bool
 prop_serialise_deserialise (ValidPaths paths) =
     Just (trie, BS.empty) == (deserialise
-                            . LBS.toStrict . BS.toLazyByteString
+                            . toStrict . BS.toLazyByteString
                             . serialise) trie
   where
     trie :: IntTrie Char Char
     trie = construct paths
+#if MIN_VERSION_bytestring(0,10,0)
+    toStrict = LBS.toStrict
+#else
+    toStrict = LBS.foldrChunks mappend mempty
+#endif
 
 newtype ValidPaths = ValidPaths [([Char], Char)] deriving Show
 

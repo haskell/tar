@@ -111,7 +111,7 @@ import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS
-#if MIN_VERSION_bytestring(0,10,2)
+#if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
 #else
 import Data.ByteString.Lazy.Builder     as BS
@@ -129,6 +129,10 @@ import Data.Function (on)
 import Control.Exception (SomeException, try)
 import Codec.Archive.Tar.Write          as Tar
 import qualified Data.ByteString.Handle as HBS
+
+#if !MIN_VERSION_bytestring(0,10,0)
+import qualified Data.ByteString.Lazy.Internal as LBS
+#endif
 #endif
 
 
@@ -629,10 +633,15 @@ prop_valid (ValidPaths paths)
 prop_serialise_deserialise :: ValidPaths -> Bool
 prop_serialise_deserialise (ValidPaths paths) =
     Just (index, BS.empty) == (deserialise
-                             . LBS.toStrict . BS.toLazyByteString
+                             . toStrict . BS.toLazyByteString
                              . serialise) index
   where
     index = construct paths
+#if MIN_VERSION_bytestring(0,10,0)
+    toStrict = LBS.toStrict
+#else
+    toStrict = LBS.foldrChunks mappend mempty
+#endif
 
 newtype NonEmptyFilePath = NonEmptyFilePath FilePath deriving Show
 
