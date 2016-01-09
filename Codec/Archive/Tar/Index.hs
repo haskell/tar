@@ -129,10 +129,6 @@ import Data.Function (on)
 import Control.Exception (SomeException, try)
 import Codec.Archive.Tar.Write          as Tar
 import qualified Data.ByteString.Handle as HBS
-
-#if !MIN_VERSION_bytestring(0,10,0)
-import qualified Data.ByteString.Lazy.Internal as LBS
-#endif
 #endif
 
 
@@ -637,11 +633,6 @@ prop_serialise_deserialise (ValidPaths paths) =
                              . serialise) index
   where
     index = construct paths
-#if MIN_VERSION_bytestring(0,10,0)
-    toStrict = LBS.toStrict
-#else
-    toStrict = LBS.foldrChunks mappend mempty
-#endif
 
 newtype NonEmptyFilePath = NonEmptyFilePath FilePath deriving Show
 
@@ -791,6 +782,14 @@ instance Arbitrary SimpleIndexBuilder where
 prop_finalise_unfinalise :: SimpleIndexBuilder -> Bool
 prop_finalise_unfinalise (SimpleIndexBuilder index) =
     unfinalise (finalise index) == index
+
+toStrict :: LBS.ByteString -> BS.ByteString
+#if MIN_VERSION_bytestring(0,10,0)
+toStrict = LBS.toStrict
+#else
+toStrict = BS.concat . LBS.toChunks
+#endif
+
 #endif
 
 #if !(MIN_VERSION_base(4,5,0))

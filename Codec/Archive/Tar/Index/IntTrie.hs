@@ -70,10 +70,6 @@ import Data.Function (on)
 #ifdef TESTS
 import Test.QuickCheck
 import Control.Applicative ((<$>), (<*>))
-
-#if !MIN_VERSION_bytestring(0,10,0)
-import qualified Data.ByteString.Lazy.Internal as LBS
-#endif
 #endif
 
 
@@ -550,11 +546,6 @@ prop_serialise_deserialise (ValidPaths paths) =
   where
     trie :: IntTrie Char Char
     trie = construct paths
-#if MIN_VERSION_bytestring(0,10,0)
-    toStrict = LBS.toStrict
-#else
-    toStrict = LBS.foldrChunks mappend mempty
-#endif
 
 newtype ValidPaths = ValidPaths [([Char], Char)] deriving Show
 
@@ -577,6 +568,13 @@ instance Arbitrary ValidPaths where
       nonEmpty = all (not . null . fst)
 
 isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
+
+toStrict :: LBS.ByteString -> BS.ByteString
+#if MIN_VERSION_bytestring(0,10,0)
+toStrict = LBS.toStrict
+#else
+toStrict = BS.concat . LBS.toChunks
+#endif
 
 #endif
 

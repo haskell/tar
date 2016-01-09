@@ -77,11 +77,6 @@ import qualified System.FilePath.Windows as FilePath.Windows
 import System.Posix.Types
          ( FileMode )
 
-#if !MIN_VERSION_bytestring(0,10,0)
-import qualified Data.ByteString.Internal as BS
-import qualified Data.ByteString.Lazy.Internal as LBS
-#endif
-
 #ifdef TESTS
 import Test.QuickCheck
 import Control.Applicative ((<$>), pure, (<*>))
@@ -194,8 +189,7 @@ instance NFData EntryContent where
 #if MIN_VERSION_bytestring(0,10,0)
       rnflbs = rnf
 #else
-      rnflbs LBS.Empty       = ()
-      rnflbs (LBS.Chunk _ b) = rnflbs b
+      rnflbs = foldr (\ !_bs r -> r) () . LBS.toChunks
 #endif
 
 instance NFData Ownership where
@@ -415,7 +409,7 @@ instance NFData LinkTarget where
 #if MIN_VERSION_bytestring(0,10,0)
     rnf (LinkTarget bs) = rnf bs
 #else
-    rnf (LinkTarget (BS.PS _ _ _)) = ()
+    rnf (LinkTarget !_bs) = ()
 #endif
 
 -- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the

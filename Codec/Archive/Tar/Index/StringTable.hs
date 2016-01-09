@@ -58,11 +58,6 @@ import Data.ByteString.Builder      as BS
 import Data.ByteString.Lazy.Builder as BS
 #endif
 
-#ifdef TESTS
-#if !MIN_VERSION_bytestring(0,10,0)
-import qualified Data.ByteString.Lazy.Internal as LBS
-#endif
-#endif
 
 -- | An effecient mapping from strings to a dense set of integers.
 --
@@ -285,11 +280,6 @@ prop_serialise_deserialise strs =
   where
     strtable :: StringTable Int
     strtable = construct strs
-#if MIN_VERSION_bytestring(0,10,0)
-    toStrict = LBS.toStrict
-#else
-    toStrict = LBS.foldrChunks mappend mempty
-#endif
 
 enumStrings :: Enum id => StringTable id -> [BS.ByteString]
 enumStrings (StringTable bs offsets _ _) = map (index' bs offsets) [0..h-1]
@@ -298,6 +288,13 @@ enumStrings (StringTable bs offsets _ _) = map (index' bs offsets) [0..h-1]
 enumIds :: Enum id => StringTable id -> [id]
 enumIds (StringTable _ offsets _ _) = [toEnum 0 .. toEnum (fromIntegral (h-1))]
   where (0,h) = A.bounds offsets
+
+toStrict :: LBS.ByteString -> BS.ByteString
+#if MIN_VERSION_bytestring(0,10,0)
+toStrict = LBS.toStrict
+#else
+toStrict = BS.concat . LBS.toChunks
+#endif
 
 #endif
 
