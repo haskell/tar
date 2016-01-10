@@ -26,7 +26,18 @@ import qualified System.FilePath as FilePath.Native
 import System.Directory
          ( createDirectoryIfMissing, copyFile )
 import Control.Exception
-         ( Exception, throwIO, catch )
+         ( Exception, throwIO )
+#if MIN_VERSION_directory(1,2,3)
+import System.Directory
+         ( setModificationTime )
+import Data.Time.Clock.POSIX
+         ( posixSecondsToUTCTime )
+import Control.Exception
+         ( catch )
+import System.IO.Error
+         ( isPermissionError )
+#endif
+
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -105,7 +116,7 @@ setModTime :: FilePath -> EpochTime -> IO ()
 #if MIN_VERSION_directory(1,2,3)
 -- functionality only supported as of directory-1.2.3.x
 setModTime path t =
-    setModificationTime path (posixSecondsToUTCTime t)
+    setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
       `catch` \e -> if isPermissionError e then return () else throwIO e
 #else
 setModTime _path _t = return ()
