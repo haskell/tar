@@ -124,6 +124,7 @@ module Codec.Archive.Tar (
   mapEntries,
   mapEntriesNoFail,
   foldEntries,
+  foldlEntries,
   unfoldEntries,
 
   -- * Error handling
@@ -139,7 +140,6 @@ module Codec.Archive.Tar (
 
   -- ** Errors from reading tar files
   FormatError(..),
-
 
 #ifdef TESTS
   prop_write_read_ustar,
