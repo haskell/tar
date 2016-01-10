@@ -4,7 +4,7 @@
 -- Module      :  Codec.Archive.Tar
 -- Copyright   :  (c) 2007 Bjorn Bringert,
 --                    2008 Andrea Vezzosi,
---                    2008-2009 Duncan Coutts
+--                    2008-2009, 2012, 2016 Duncan Coutts
 -- License     :  BSD3
 --
 -- Maintainer  :  duncan@community.haskell.org
