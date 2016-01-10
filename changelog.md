@@ -3,6 +3,7 @@
   * Work with old version of bytestring (using bytestring-builder package).
   * Builds with GHC 6.10 -- 8.0.
   * Change type of Index.serialise to be simply strict bytestring.
+  * Preserve file timestamps on unpack (with directory-1.2.3+)
 
 0.4.5.0 Duncan Coutts <duncan@community.haskell.org> January 2016
 
