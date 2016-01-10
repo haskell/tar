@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -25,7 +26,7 @@ import qualified System.FilePath as FilePath.Native
 import System.Directory
          ( createDirectoryIfMissing, copyFile )
 import Control.Exception
-         ( Exception, throwIO )
+         ( Exception, throwIO, catch )
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -62,27 +63,33 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
     unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = case entryContent entry of
-      NormalFile file _ -> extractFile path file
+      NormalFile file _ -> extractFile path file mtime
                         >> unpackEntries links es
-      Directory         -> extractDir path
+      Directory         -> extractDir path mtime
                         >> unpackEntries links es
       HardLink     link -> (unpackEntries $! saveLink path link links) es
       SymbolicLink link -> (unpackEntries $! saveLink path link links) es
       _                 -> unpackEntries links es --ignore other file types
       where
-        path = entryPath entry
+        path  = entryPath entry
+        mtime = entryTime entry
 
-    extractFile path content = do
+    extractFile path content mtime = do
       -- Note that tar archives do not make sure each directory is created
       -- before files they contain, indeed we may have to create several
       -- levels of directory.
       createDirectoryIfMissing True absDir
       BS.writeFile absPath content
+      setModTime absPath mtime
       where
         absDir  = baseDir </> FilePath.Native.takeDirectory path
         absPath = baseDir </> path
 
-    extractDir path = createDirectoryIfMissing True (baseDir </> path)
+    extractDir path mtime = do
+      createDirectoryIfMissing True absPath
+      setModTime absPath mtime
+      where
+        absPath = baseDir </> path
 
     saveLink path link links = seq (length path)
                              $ seq (length link')
@@ -93,3 +100,13 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
       let absPath   = baseDir </> relPath
           absTarget = FilePath.Native.takeDirectory absPath </> relLinkTarget
        in copyFile absTarget absPath
+
+setModTime :: FilePath -> EpochTime -> IO ()
+#if MIN_VERSION_directory(1,2,3)
+-- functionality only supported as of directory-1.2.3.x
+setModTime path t =
+    setModificationTime path (posixSecondsToUTCTime t)
+      `catch` \e -> if isPermissionError e then return () else throwIO e
+#else
+setModTime _path _t = return ()
+#endif
