@@ -43,6 +43,9 @@ matrix:
     - env: CABALVER=head GHCVER=head NOTEST=1
       compiler: ": #GHC head"
       addons: {apt: {packages: [cabal-install-head,ghc-head,zlib1g-dev], sources: [hvr-ghc]}}
+    - env: CABALVER=head GHCVER=head
+      compiler: ": #GHC head"
+      addons: {apt: {packages: [cabal-install-head,ghc-head,zlib1g-dev], sources: [hvr-ghc]}}
 
   allow_failures:
     - env: CABALVER=head GHCVER=head
