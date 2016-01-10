@@ -1,3 +1,7 @@
+0.5.0.1 Duncan Coutts <duncan@community.haskell.org> January 2016
+
+  * Fix compatability with directory-1.2.3+
+
 0.5.0.0 Duncan Coutts <duncan@community.haskell.org> January 2016
 
   * Work with old version of bytestring (using bytestring-builder package).
