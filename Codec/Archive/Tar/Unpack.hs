@@ -32,7 +32,7 @@ import System.Directory
          ( setModificationTime )
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
-import Control.Exception
+import Control.Exception as Exception
          ( catch )
 import System.IO.Error
          ( isPermissionError )
@@ -117,7 +117,8 @@ setModTime :: FilePath -> EpochTime -> IO ()
 -- functionality only supported as of directory-1.2.3.x
 setModTime path t =
     setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
-      `catch` \e -> if isPermissionError e then return () else throwIO e
+      `Exception.catch` \e ->
+        if isPermissionError e then return () else throwIO e
 #else
 setModTime _path _t = return ()
 #endif
