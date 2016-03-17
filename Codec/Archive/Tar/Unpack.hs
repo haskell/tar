@@ -32,7 +32,7 @@ import System.Directory
          ( setModificationTime )
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
-import Control.Exception as Exception
+import qualified Control.Exception as Exception
          ( catch )
 import System.IO.Error
          ( isPermissionError )
