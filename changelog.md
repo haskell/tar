@@ -1,3 +1,8 @@
+0.5.0.3 Duncan Coutts <duncan@community.haskell.org> May 2016
+
+  * Fix tarbomb logic to ignore special PAX entries. Was breaking many
+    valid tarballs. https://github.com/haskell/cabal/issues/3390
+
 0.5.0.2 Duncan Coutts <duncan@community.haskell.org> April 2016
 
   * Fix compatability when using ghc-7.4.x and directory >= 1.2.3
