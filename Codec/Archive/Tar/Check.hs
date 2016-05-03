@@ -120,6 +120,15 @@ checkTarbomb :: FilePath -> Entries e -> Entries (Either e TarBombError)
 checkTarbomb expectedTopDir = checkEntries (checkEntryTarbomb expectedTopDir)
 
 checkEntryTarbomb :: FilePath -> Entry -> Maybe TarBombError
+checkEntryTarbomb _ entry | nonFilesystemEntry = Nothing
+  where
+    -- Ignore some special entries we will not unpack anyway
+    nonFilesystemEntry =
+      case entryContent entry of
+        OtherEntryType 'g' _ _ -> True --PAX global header
+        OtherEntryType 'x' _ _ -> True --PAX individual header
+        _                      -> False
+
 checkEntryTarbomb expectedTopDir entry =
   case FilePath.Native.splitDirectories (entryPath entry) of
     (topDir:_) | topDir == expectedTopDir -> Nothing
