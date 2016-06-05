@@ -562,7 +562,7 @@ instance Arbitrary Entry where
       arbitraryPermissions = fromIntegral <$> (arbitraryOctal 7 :: Gen Int)
 
       arbitraryEpochTime :: Gen EpochTime
-      arbitraryEpochTime = fromIntegral <$> (arbitraryOctal 11 :: Gen Int)
+      arbitraryEpochTime = fromIntegral <$> (arbitraryOctal 11 :: Gen Int64)
 
   shrink (Entry path content perms author time format) =
       [ Entry path' content' perms author' time' format 
