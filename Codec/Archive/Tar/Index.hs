@@ -60,6 +60,7 @@ module Codec.Archive.Tar.Index (
     -- * Serialising indexes
     serialise,
     deserialise,
+    toList,
 
     -- * Lower level operations with offsets and I\/O on tar files
     hReadEntryHeaderOrEof,
@@ -394,6 +395,8 @@ unfinalise (TarIndex pathTable pathTrie finalOffset) =
                  (IntTrie.unfinalise pathTrie)
                  finalOffset
 
+toList :: TarIndex -> [(FilePath, TarEntryOffset)]
+toList idx = let IndexBuilder list _next = resumeIndexBuilder idx in list
 
 -------------------------
 -- I/O operations
