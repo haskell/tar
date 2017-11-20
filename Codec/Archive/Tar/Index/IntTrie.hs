@@ -44,8 +44,11 @@ import qualified Data.Bits as Bits
 import Data.Word (Word32)
 import Data.Bits
 import Data.Monoid (Monoid(..))
-#if (MIN_VERSION_base(4,5,0))
+#if MIN_VERSION_base(4,5,0) && !(MIN_VERSION_base(4,9,0))
 import Data.Monoid ((<>))
+#endif
+#if MIN_VERSION_base(4,9,0) && !(MIN_VERSION_base(4,11,0))
+import Data.Semigroup (Semigroup(..))
 #endif
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS

@@ -62,6 +62,9 @@ module Codec.Archive.Tar.Types (
 
 import Data.Int      (Int64)
 import Data.Monoid   (Monoid(..))
+#if MIN_VERSION_base(4,9,0) && !(MIN_VERSION_base(4,11,0))
+import Data.Semigroup (Semigroup(..))
+#endif
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
@@ -534,6 +537,11 @@ mapEntries f =
 mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
 mapEntriesNoFail f =
   foldEntries (\entry -> Next (f entry)) Done Fail
+
+#if MIN_VERSION_base(4,9,0)
+instance Semigroup (Entries e) where
+  (<>) = mappend
+#endif
 
 instance Monoid (Entries e) where
   mempty      = Done
