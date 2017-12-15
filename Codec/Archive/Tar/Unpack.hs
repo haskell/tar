@@ -25,19 +25,18 @@ import System.FilePath
 import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
-         ( createDirectoryIfMissing, copyFile, setPermissions, emptyPermissions, readable, writable
-         , executable, searchable )
+         ( createDirectoryIfMissing, copyFile, setPermissions )
 import Control.Exception
          ( Exception, throwIO )
 import System.Directory
-         ( setModificationTime )
+         ( setModificationTime, emptyPermissions, setOwnerReadable, setOwnerWritable
+         , setOwnerExecutable, setOwnerSearchable )
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
 import Control.Exception as Exception
          ( catch )
 import System.IO.Error
          ( isPermissionError )
-
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -121,7 +120,11 @@ setModTime path t =
 
 setOwnerPermissions :: FilePath -> Permissions -> IO ()
 setOwnerPermissions path permissions =
-  setPermissions path emptyPermissions
-    { readable   = testBit permissions 8
-    , writable   = testBit permissions 7
-    , executable = testBit permissions 6 }
+  setPermissions path ownerPermissions
+  where
+    ownerPermissions =
+      setOwnerReadable   (testBit permissions 8) $
+      setOwnerWritable   (testBit permissions 7) $
+      setOwnerExecutable (testBit permissions 6) $
+      setOwnerSearchable (testBit permissions 6) $
+      emptyPermissions
