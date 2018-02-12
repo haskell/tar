@@ -80,7 +80,8 @@ import System.Posix.Types
 
 #ifdef TESTS
 import Test.QuickCheck
-import Control.Applicative ((<$>), pure, (<*>))
+import Control.Applicative ((<$>), (<*>), pure)
+import Data.Word (Word16)
 #endif
 
 
@@ -563,13 +564,13 @@ instance Arbitrary Entry where
                     <*> arbitrary <*> arbitraryEpochTime <*> arbitrary
     where
       arbitraryPermissions :: Gen Permissions
-      arbitraryPermissions = fromIntegral <$> (arbitraryOctal 7 :: Gen Int)
+      arbitraryPermissions = fromIntegral <$> (arbitrary :: Gen Word16)
 
       arbitraryEpochTime :: Gen EpochTime
-      arbitraryEpochTime = fromIntegral <$> (arbitraryOctal 11 :: Gen Int64)
+      arbitraryEpochTime = arbitraryOctal 11
 
   shrink (Entry path content perms author time format) =
-      [ Entry path' content' perms author' time' format 
+      [ Entry path' content' perms author' time' format
       | (path', content', author', time') <-
          shrink (path, content, author, time) ]
    ++ [ Entry path content perms' author time format
@@ -655,7 +656,11 @@ instance Arbitrary Ownership where
   arbitrary = Ownership <$> name <*> name
                         <*> idno <*> idno
     where
-      name = listOf0ToN 32 (arbitrary `suchThat` (/= '\0'))
+      -- restrict user/group to posix ^[a-z][-a-z0-9]{0,30}$
+      name = do
+        first <- choose ('a', 'z')
+        rest <- listOf0ToN 30 (oneof [choose ('a', 'z'), choose ('0', '9'), pure '-'])
+        return $ first : rest
       idno = arbitraryOctal 7
 
   shrink (Ownership oname gname oid gid) =
