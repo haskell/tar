@@ -62,6 +62,7 @@ module Codec.Archive.Tar.Types (
 
 import Data.Int      (Int64)
 import Data.Monoid   (Monoid(..))
+import Data.Semigroup as Sem
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
@@ -535,9 +536,12 @@ mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
 mapEntriesNoFail f =
   foldEntries (\entry -> Next (f entry)) Done Fail
 
+instance Sem.Semigroup (Entries e) where
+  a <> b = foldEntries Next b Fail a
+
 instance Monoid (Entries e) where
-  mempty      = Done
-  mappend a b = foldEntries Next b Fail a
+  mempty  = Done
+  mappend = (Sem.<>)
 
 instance Functor Entries where
   fmap f = foldEntries Next Done (Fail . f)
