@@ -38,21 +38,21 @@ flag old-bytestring
   default: False
 
 library
-  build-depends: base == 4.*,
-                 filepath,
-                 directory,
-                 array,
-                 containers >= 0.2,
-                 deepseq >= 1.1 && < 1.5
+  build-depends: base       == 4.*,
+                 filepath             < 1.5,
+                 array                < 0.6,
+                 containers >= 0.2 && < 0.6,
+                 deepseq    >= 1.1 && < 1.5
+
   if flag(old-time)
-    build-depends: directory < 1.2, old-time
+    build-depends: directory < 1.2, old-time < 1.2
   else
-    build-depends: directory >= 1.2, time
+    build-depends: directory >= 1.2 && < 1.4, time < 1.9
 
   if flag(old-bytestring)
-    build-depends: bytestring-builder, bytestring >= 0.9 && <0.10
+    build-depends: bytestring-builder >= 0.10.4.0.2 && < 0.11, bytestring == 0.9.*
   else
-    build-depends: bytestring >= 0.10
+    build-depends: bytestring == 0.10.*
 
   if !impl(ghc >= 8.0)
     build-depends: semigroups == 0.18.*
@@ -73,8 +73,12 @@ library
     Codec.Archive.Tar.Index.IntTrie
 
   other-extensions:
-    CPP, BangPatterns,
-    DeriveDataTypeable, ScopedTypeVariables
+    BangPatterns
+    CPP
+    DeriveDataTypeable
+    GeneralizedNewtypeDeriving
+    PatternGuards
+    ScopedTypeVariables
 
   ghc-options: -Wall -fno-warn-unused-imports
 
@@ -86,7 +90,7 @@ test-suite properties
                  containers,
                  deepseq,
                  bytestring-handle,
-                 QuickCheck == 2.*,
+                 QuickCheck       == 2.*,
                  tasty            >= 0.10 && <0.12,
                  tasty-quickcheck == 0.8.*
 
@@ -113,9 +117,21 @@ test-suite properties
     Codec.Archive.Tar.Index.StringTable
     Codec.Archive.Tar.Index.IntTrie
 
+  -- shared w/ lib:tar component
+  other-modules:
+    Codec.Archive.Tar
+    Codec.Archive.Tar.Check
+    Codec.Archive.Tar.Pack
+    Codec.Archive.Tar.Read
+    Codec.Archive.Tar.Types
+    Codec.Archive.Tar.Unpack
+    Codec.Archive.Tar.Write
+
   other-extensions:
-    CPP, BangPatterns,
-    DeriveDataTypeable, ScopedTypeVariables
+    CPP
+    BangPatterns,
+    DeriveDataTypeable
+    ScopedTypeVariables
 
   ghc-options: -fno-ignore-asserts
 
@@ -124,14 +140,27 @@ benchmark bench
   hs-source-dirs: . bench
   main-is:       bench/Main.hs
   build-depends: base,
-                 bytestring,
-                 filepath, directory,
+                 bytestring >= 0.10,
+                 filepath,
+                 directory >= 1.2,
                  array,
                  containers,
                  deepseq,
-                 old-time, time,
+                 time,
                  criterion >= 1.0
 
   if !impl(ghc >= 8.0)
     build-depends: semigroups == 0.18.*
 
+  -- shared w/ lib:tar component
+  other-modules:
+    Codec.Archive.Tar
+    Codec.Archive.Tar.Check
+    Codec.Archive.Tar.Index
+    Codec.Archive.Tar.Index.IntTrie
+    Codec.Archive.Tar.Index.StringTable
+    Codec.Archive.Tar.Pack
+    Codec.Archive.Tar.Read
+    Codec.Archive.Tar.Types
+    Codec.Archive.Tar.Unpack
+    Codec.Archive.Tar.Write
