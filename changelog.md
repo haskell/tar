@@ -1,3 +1,8 @@
+0.5.1.0 Herbert Valerio Riedel <hvr@gnu.org> March 2018
+
+  * Add support for GHC 8.4.1 / base-4.11
+  * Add `Semigroup` instance for `Entries`
+
 0.5.0.3 Duncan Coutts <duncan@community.haskell.org> May 2016
 
   * Fix tarbomb logic to ignore special PAX entries. Was breaking many
