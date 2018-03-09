@@ -132,19 +132,19 @@ checkEntryTarbomb _ entry | nonFilesystemEntry = Nothing
 checkEntryTarbomb expectedTopDir entry =
   case FilePath.Native.splitDirectories (entryPath entry) of
     (topDir:_) | topDir == expectedTopDir -> Nothing
-    _ -> Just $ TarBombError expectedTopDir
+    _ -> Just $ TarBombError expectedTopDir (entryPath entry)
 
 -- | An error that occurs if a tar file is a \"tar bomb\" that would extract
 -- files outside of the intended directory.
-data TarBombError = TarBombError FilePath
+data TarBombError = TarBombError FilePath FilePath
                   deriving (Typeable)
 
 instance Exception TarBombError
 
 instance Show TarBombError where
-  show (TarBombError expectedTopDir)
-    = "File in tar archive is not in the expected directory " ++ show expectedTopDir
-
+  show (TarBombError expectedTopDir tarBombPath)
+    = "File in tar archive, " ++ show tarBombPath ++
+    ", is not in the expected directory " ++ show expectedTopDir
 
 --------------------------
 -- Portability
