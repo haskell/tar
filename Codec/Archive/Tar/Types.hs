@@ -537,6 +537,7 @@ mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
 mapEntriesNoFail f =
   foldEntries (\entry -> Next (f entry)) Done Fail
 
+-- | @since 0.5.1.0
 instance Sem.Semigroup (Entries e) where
   a <> b = foldEntries Next b Fail a
 
