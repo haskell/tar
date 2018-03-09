@@ -1,3 +1,7 @@
+0.6.0.0 *TODO*
+
+  * Add offending path as new field to `TarBombError` constructor
+
 0.5.1.0 Herbert Valerio Riedel <hvr@gnu.org> March 2018
 
   * Add support for GHC 8.4.1 / base-4.11
