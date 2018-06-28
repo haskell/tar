@@ -34,7 +34,7 @@ import Data.Typeable (Typeable)
 import Control.Exception (Exception)
 import Control.Monad (MonadPlus(mplus))
 import qualified System.FilePath as FilePath.Native
-         ( splitDirectories, isAbsolute, isValid )
+         ( splitDirectories, isAbsolute, isValid, (</>) )
 
 import qualified System.FilePath.Windows as FilePath.Windows
 import qualified System.FilePath.Posix   as FilePath.Posix
@@ -49,7 +49,7 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 --
 -- * file paths are not absolute
 --
--- * file paths do not contain any path components that are \"@..@\"
+-- * file paths resolve within the directory (i.e. doesn't \"@..@\" out of the directory)
 --
 -- * file names are valid
 --
@@ -64,11 +64,11 @@ checkSecurity = checkEntries checkEntrySecurity
 
 checkEntrySecurity :: Entry -> Maybe FileNameError
 checkEntrySecurity entry = case entryContent entry of
-    HardLink     link -> check (entryPath entry)
-                 `mplus` check (fromLinkTarget link)
-    SymbolicLink link -> check (entryPath entry)
-                 `mplus` check (fromLinkTarget link)
-    _                 -> check (entryPath entry)
+    HardLink     link -> checkPath (entryPath entry)
+                 `mplus` checkLink (fromLinkTarget link)
+    SymbolicLink link -> checkPath (entryPath entry)
+                 `mplus` checkLink (fromLinkTarget link)
+    _                 -> checkPath (entryPath entry)
 
   where
     check name
@@ -78,10 +78,22 @@ checkEntrySecurity entry = case entryContent entry of
       | not (FilePath.Native.isValid name)
       = Just $ InvalidFileName name
 
-      | any (=="..") (FilePath.Native.splitDirectories name)
-      = Just $ InvalidFileName name
-
       | otherwise = Nothing
+
+    checkPath name
+      | isOutsideArchive name = Just $ InvalidFileName name
+      | otherwise = check name
+
+    checkLink name
+      | isOutsideArchive (entryPath entry FilePath.Native.</> name) = Just $ InvalidFileName name
+      | otherwise = check name
+
+    isOutsideArchive = isOutsideArchive' [] . FilePath.Native.splitDirectories
+    isOutsideArchive' _ [] = False
+    isOutsideArchive' [] ("..":_) = True
+    isOutsideArchive' xs (".":rest) = isOutsideArchive' xs rest
+    isOutsideArchive' (_:xs) ("..":rest) = isOutsideArchive' xs rest
+    isOutsideArchive' xs (x:rest) = isOutsideArchive' (x:xs) rest
 
 -- | Errors arising from tar file names being in some way invalid or dangerous
 data FileNameError
