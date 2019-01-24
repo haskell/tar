@@ -41,13 +41,13 @@ library
   build-depends: base       == 4.*,
                  filepath             < 1.5,
                  array                < 0.6,
-                 containers >= 0.2 && < 0.6,
+                 containers >= 0.2,
                  deepseq    >= 1.1 && < 1.5
 
   if flag(old-time)
     build-depends: directory < 1.2, old-time < 1.2
   else
-    build-depends: directory >= 1.2 && < 1.4, time < 1.9
+    build-depends: directory >= 1.2, time
 
   if flag(old-bytestring)
     build-depends: bytestring-builder >= 0.10.4.0.2 && < 0.11, bytestring == 0.9.*
