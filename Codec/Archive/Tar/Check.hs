@@ -65,23 +65,45 @@ checkSecurity = checkEntries checkEntrySecurity
 checkEntrySecurity :: Entry -> Maybe FileNameError
 checkEntrySecurity entry = case entryContent entry of
     HardLink     link -> check (entryPath entry)
-                 `mplus` check (fromLinkTarget link)
+                 `mplus` checkLink (entryPath entry) (fromLinkTarget link)
     SymbolicLink link -> check (entryPath entry)
-                 `mplus` check (fromLinkTarget link)
+                 `mplus` checkLink (entryPath entry) (fromLinkTarget link)
     _                 -> check (entryPath entry)
 
   where
-    check name
-      | FilePath.Native.isAbsolute name
-      = Just $ AbsoluteFileName name
 
-      | not (FilePath.Native.isValid name)
-      = Just $ InvalidFileName name
+    checkCommon name =
+        FilePath.Native.isAbsolute name || not (FilePath.Native.isValid name)
+
+    check name
+      | checkCommon name
+      = Just $ AbsoluteFileName name
 
       | any (=="..") (FilePath.Native.splitDirectories name)
       = Just $ InvalidFileName name
 
       | otherwise = Nothing
+
+    -- checkLink introduced to handle https://github.com/haskell/tar/issues/32
+    checkLink name link
+      | checkCommon name
+      = Just $ AbsoluteFileName name
+
+      | linkDepth link name > 0
+      = Just $ InvalidFileName name
+
+      | otherwise = Nothing
+
+linkDepth :: FilePath -- ^ Name of link
+          -> FilePath -- ^ Contents of link
+          -> Int
+linkDepth link name =
+  let allPaths = FilePath.Native.splitDirectories link ++ FilePath.Native.splitDirectories name
+  in getDepth allPaths
+
+  where getDepth []         = 0
+        getDepth ("..":fps) = 1 + getDepth fps
+        getDepth (_:fps)    = getDepth fps - 1
 
 -- | Errors arising from tar file names being in some way invalid or dangerous
 data FileNameError
