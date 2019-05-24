@@ -62,6 +62,7 @@ module Codec.Archive.Tar.Entry (
 
   -- * TarPath type
   TarPath,
+  tarPathNameHasSuffix,
   toTarPath,
   fromTarPath,
   fromTarPathToPosixPath,

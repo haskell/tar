@@ -37,6 +37,7 @@ module Codec.Archive.Tar.Types (
   directoryPermissions,
 
   TarPath(..),
+  tarPathNameHasSuffix,
   toTarPath,
   fromTarPath,
   fromTarPathToPosixPath,
@@ -347,6 +348,13 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id
 
+-- | Test that the entry name has a particular suffix.
+--
+-- Used to avoid always computing `fromTarPath` when iterating through an archive
+-- with a lot of uninteresting files.
+tarPathNameHasSuffix :: ByteString -> TarPath -> Bool
+tarPathNameHasSuffix pre (TarPath name _) = pre `ByteString.isSuffixOf` name
+
 -- | Convert a native 'FilePath' to a 'TarPath'.
 --
 -- The conversion may fail if the 'FilePath' is too long. See 'TarPath' for a
@@ -632,7 +640,7 @@ instance Arbitrary EntryContent where
                return (OtherEntryType c bs (LBS.length bs)))
       ]
 
-  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs') 
+  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs')
                                | bs' <- shrink bs ]
   shrink  Directory          = []
   shrink (SymbolicLink link) = [ SymbolicLink link' | link' <- shrink link ]
@@ -642,7 +650,7 @@ instance Arbitrary EntryContent where
   shrink (BlockDevice     ma mi) = [ BlockDevice ma' mi'
                                    | (ma', mi') <- shrink (ma, mi) ]
   shrink  NamedPipe              = []
-  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs') 
+  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs')
                                    | bs' <- shrink bs ]
 
 instance Arbitrary LBS.ByteString where
