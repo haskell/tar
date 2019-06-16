@@ -252,7 +252,9 @@ instance Monad (Partial e) where
     return        = pure
     Error m >>= _ = Error m
     Ok    x >>= k = k x
+#if !MIN_VERSION_base(4,13,0)
     fail          = error "fail @(Partial e)"
+#endif
 
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int   #-}
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int64 #-}
