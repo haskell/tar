@@ -1,6 +1,12 @@
+See also http://pvp.haskell.org/faq
+
 0.6.0.0 *TODO*
 
   * Add offending path as new field to `TarBombError` constructor
+
+0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
+
+  * Add support for GHC 8.8.1 / base-4.13
 
 0.5.1.0 Herbert Valerio Riedel <hvr@gnu.org> March 2018
 
