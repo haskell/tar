@@ -55,7 +55,7 @@ library
     build-depends: bytestring == 0.10.*
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups == 0.18.*
+    build-depends: semigroups >= 0.18 && <0.20
 
   exposed-modules:
     Codec.Archive.Tar
