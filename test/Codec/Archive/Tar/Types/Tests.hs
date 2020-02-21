@@ -45,13 +45,13 @@ instance Arbitrary Entry where
       | perms' <- shrinkIntegral perms ]
 
 instance Arbitrary TarPath where
-  arbitrary = either error id
+  arbitrary = these (error . show) id (flip const)
             . toTarPath False
             . FilePath.Posix.joinPath
           <$> listOf1ToN (255 `div` 5)
                          (elements (map (replicate 4) "abcd"))
 
-  shrink = map (either error id . toTarPath False)
+  shrink = map (these (error . show) id (flip const) . toTarPath False)
          . map FilePath.Posix.joinPath
          . filter (not . null)
          . shrinkList shrinkNothing
