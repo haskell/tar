@@ -27,8 +27,11 @@ module Codec.Archive.Tar.Types (
   DevMajor,
   DevMinor,
   Format(..),
+  These(..),
+  these,
 
   simpleEntry,
+  longLinkEntry,
   fileEntry,
   directoryEntry,
 
@@ -37,6 +40,7 @@ module Codec.Archive.Tar.Types (
   directoryPermissions,
 
   TarPath(..),
+  SplitError(..),
   toTarPath,
   fromTarPath,
   fromTarPathToPosixPath,
@@ -226,6 +230,22 @@ fileEntry :: TarPath -> LBS.ByteString -> Entry
 fileEntry name fileContent =
   simpleEntry name (NormalFile fileContent (LBS.length fileContent))
 
+
+-- | Gnu entry for when a filepath is too long to be in entryTarPath.
+-- Gnu tar uses OtherEntryType 'L' then as the first Entry and puts path
+-- in the entryContent. The Next entry will then be the "original"
+-- entry with the entryTarPath truncated.
+longLinkEntry :: FilePath -> Entry
+longLinkEntry tarpath = Entry {
+    entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
+    entryContent     = OtherEntryType 'L' (LBS.fromStrict $ packAscii tarpath) (fromIntegral $ length tarpath),
+    entryPermissions = ordinaryFilePermissions,
+    entryOwnership   = Ownership "" "" 0 0,
+    entryTime        = 0,
+    entryFormat      = GnuFormat
+  }
+
+
 -- | A tar 'Entry' for a directory.
 --
 -- Entry fields such as file permissions and ownership have default values.
@@ -339,7 +359,7 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
 --
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
-          -> FilePath -> Either String TarPath
+          -> FilePath -> These SplitError TarPath
 toTarPath isDir = splitLongPath
                 . addTrailingSep
                 . FilePath.Posix.joinPath
@@ -348,6 +368,11 @@ toTarPath isDir = splitLongPath
     addTrailingSep | isDir     = FilePath.Posix.addTrailingPathSeparator
                    | otherwise = id
 
+data SplitError = FileNameEmpty
+                | FileNameTooLong
+                deriving Show
+
+
 -- | Take a sanitised path, split on directory separators and try to pack it
 -- into the 155 + 100 tar file name format.
 --
@@ -355,18 +380,17 @@ toTarPath isDir = splitLongPath
 -- and try to fit as many components into the 100 long name area as possible.
 -- If all the remaining components fit in the 155 name area then we win.
 --
-splitLongPath :: FilePath -> Either String TarPath
+splitLongPath :: FilePath -> These SplitError TarPath
 splitLongPath path =
   case packName nameMax (reverse (FilePath.Posix.splitPath path)) of
-    Left err                 -> Left err
-    Right (name, [])         -> Right $! TarPath (packAscii name)
-                                                  BS.empty
+    Left FileNameTooLong     -> These FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
+    Left e                   -> This e
+    Right (name, [])         -> That $! TarPath (packAscii name) BS.empty
     Right (name, first:rest) -> case packName prefixMax remainder of
-      Left err               -> Left err
-      Right (_     , (_:_))  -> Left $ "Filename " ++ path ++
-                                       " too long (cannot split)"
-      Right (prefix, [])     -> Right $! TarPath (packAscii name)
-                                                 (packAscii prefix)
+      Left FileNameTooLong   -> These FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
+      Left e                 -> This e
+      Right (_     , (_:_))  -> These FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
+      Right (prefix, [])     -> That $! TarPath (packAscii name) (packAscii prefix)
       where
         -- drop the '/' between the name and prefix:
         remainder = init first : rest
@@ -376,9 +400,9 @@ splitLongPath path =
     nameMax   = 100
     prefixMax = 155
 
-    packName _      []     = Left "File name empty"
+    packName _      []     = Left FileNameEmpty
     packName maxLen (c:cs)
-      | n > maxLen         = Left "File name too long"
+      | n > maxLen         = Left FileNameTooLong
       | otherwise          = Right (packName' maxLen n [c] cs)
       where n = length c
 
@@ -531,3 +555,12 @@ instance NFData e => NFData (Entries e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
+
+data These a b = This a | That b | These a b
+  deriving (Eq, Ord, Read, Show)
+
+-- | Case analysis for the 'These' type.
+these :: (a -> c) -> (b -> c) -> (a -> b -> c) -> These a b -> c
+these l _ _ (This a) = l a
+these _ r _ (That x) = r x
+these _ _ lr (These a x) = lr a x
