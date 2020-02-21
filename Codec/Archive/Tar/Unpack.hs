@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -17,6 +18,8 @@ module Codec.Archive.Tar.Unpack (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
 
+import Data.List (partition)
+import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
@@ -61,8 +64,12 @@ import System.IO.Error
 -- use 'checkSecurity' before 'checkTarbomb' or other checks.
 --
 unpack :: Exception e => FilePath -> Entries e -> IO ()
-unpack baseDir entries = unpackEntries [] (checkSecurity entries)
-                     >>= emulateLinks
+unpack baseDir entries = do
+  uEntries <- unpackEntries [] (checkSecurity entries)
+  let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
+  -- emulate hardlinks first, in case a symlink points to it
+  emulateLinks hardlinks
+  emulateLinks symlinks
 
   where
     -- We're relying here on 'checkSecurity' to make sure we're not scribbling
@@ -71,16 +78,28 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
     unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = case entryContent entry of
-      NormalFile file _ -> extractFile path file mtime
+      NormalFile file _ -> do
+        extractFile (entryPath entry) file (entryTime entry)
+        unpackEntries links es
+      Directory         -> extractDir (entryPath entry) (entryTime entry)
                         >> unpackEntries links es
-      Directory         -> extractDir path mtime
-                        >> unpackEntries links es
-      HardLink     link -> (unpackEntries $! saveLink path link links) es
-      SymbolicLink link -> (unpackEntries $! saveLink path link links) es
-      _                 -> unpackEntries links es --ignore other file types
-      where
-        path  = entryPath entry
-        mtime = entryTime entry
+      HardLink     link -> (unpackEntries $! saveLink True (entryPath entry) link links) es
+      SymbolicLink link -> (unpackEntries $! saveLink False (entryPath entry) link links) es
+      OtherEntryType 'L' (Char8.unpack . BS.toStrict -> fn) _ ->
+        case es of
+             (Next entry' es') -> case entryContent entry' of
+               NormalFile file _ -> do
+                extractFile fn file (entryTime entry')
+                unpackEntries links es'
+               Directory         -> extractDir fn (entryTime entry')
+                                 >> unpackEntries links es'
+               HardLink     link -> (unpackEntries $! saveLink True fn link links) es'
+               SymbolicLink link -> (unpackEntries $! saveLink False fn link links) es'
+               OtherEntryType 'L' _ _ -> throwIO $ userError "Two subsequent OtherEntryType 'L'"
+               _ -> unpackEntries links es'
+             (Fail err)      -> either throwIO throwIO err
+             Done            -> throwIO $ userError "././@LongLink without a subsequent entry"
+      _ -> unpackEntries links es --ignore other file types
 
     extractFile path content mtime = do
       -- Note that tar archives do not make sure each directory is created
@@ -99,15 +118,17 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
       where
         absPath = baseDir </> path
 
-    saveLink path link links = seq (length path)
-                             $ seq (length link')
-                             $ (path, link'):links
+    saveLink isHardLink path link links = seq (length path)
+                                        $ seq (length link')
+                                        $ (path, link', isHardLink):links
       where link' = fromLinkTarget link
 
-    emulateLinks = mapM_ $ \(relPath, relLinkTarget) ->
+    emulateLinks = mapM_ $ \(relPath, relLinkTarget, isHardLink) ->
       let absPath   = baseDir </> relPath
-          absTarget = FilePath.Native.takeDirectory absPath </> relLinkTarget
-       in copyFile absTarget absPath
+          -- hard links link targets are always "absolute" paths in
+          -- the context of the tar root
+          absTarget = if isHardLink then baseDir </> relLinkTarget else FilePath.Native.takeDirectory absPath </> relLinkTarget
+      in copyFile absTarget absPath
 
 setModTime :: FilePath -> EpochTime -> IO ()
 setModTime path t =

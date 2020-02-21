@@ -19,7 +19,7 @@ module Codec.Archive.Tar.Pack (
   ) where
 
 import Codec.Archive.Tar.Types
-
+import Control.Monad (join)
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
@@ -72,8 +72,8 @@ preparePaths baseDir paths =
 
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
-  interleave
-    [ do tarpath <- either fail return (toTarPath isDir relpath)
+  fmap concat $ interleave
+    [ do let tarpath = toTarPath isDir relpath
          if isDir then packDirectoryEntry filepath tarpath
                   else packFileEntry      filepath tarpath
     | relpath <- paths
@@ -98,19 +98,26 @@ interleave = unsafeInterleaveIO . go
 -- * The file contents is read lazily.
 --
 packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
-              -> TarPath  -- ^ Path to use for the tar Entry in the archive
-              -> IO Entry
+              -> These SplitError TarPath  -- ^ Path to use for the tar Entry in the archive
+              -> IO [Entry]
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
   file    <- openBinaryFile filepath ReadMode
   size    <- hFileSize file
   content <- BS.hGetContents file
-  return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
-    entryPermissions = if executable perms then executableFilePermissions
-                                           else ordinaryFilePermissions,
-    entryTime = mtime
-  }
+  let entry tp = (simpleEntry tp (NormalFile content (fromIntegral size))) {
+         entryPermissions = if executable perms then executableFilePermissions
+                                                else ordinaryFilePermissions,
+         entryTime = mtime
+         }
+
+  case tarpath of
+       This e     -> fail $ show e
+       That tp    -> return [entry tp]
+       These _ tp -> do
+         let lEntry = longLinkEntry filepath
+         return [lEntry, entry tp]
 
 -- | Construct a tar 'Entry' based on a local directory (but not its contents).
 --
@@ -118,13 +125,20 @@ packFileEntry filepath tarpath = do
 -- Directory ownership and detailed permissions are not preserved.
 --
 packDirectoryEntry :: FilePath -- ^ Full path to find the file on the local disk
-                   -> TarPath  -- ^ Path to use for the tar Entry in the archive
-                   -> IO Entry
+                   -> These SplitError TarPath  -- ^ Path to use for the tar Entry in the archive
+                   -> IO [Entry]
 packDirectoryEntry filepath tarpath = do
   mtime   <- getModTime filepath
-  return (directoryEntry tarpath) {
+  let dEntry tp = (directoryEntry tp) {
     entryTime = mtime
   }
+
+  case tarpath of
+       This e     -> fail $ show e
+       That tp    -> return [dEntry tp]
+       These _ tp -> do
+         let lEntry = longLinkEntry filepath
+         return [lEntry, dEntry tp]
 
 -- | This is a utility function, much like 'getDirectoryContents'. The
 -- difference is that it includes the contents of subdirectories.
