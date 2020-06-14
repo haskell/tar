@@ -50,7 +50,7 @@ library
   if flag(old-time)
     build-depends: directory < 1.2, old-time < 1.2
   else
-    build-depends: directory >= 1.2 && < 1.4, time < 1.10
+    build-depends: directory >= 1.2 && < 1.4, time < 1.11
 
   if flag(old-bytestring)
     build-depends: bytestring-builder >= 0.10.4.0.2 && < 0.11, bytestring == 0.9.*
@@ -102,8 +102,8 @@ test-suite properties
                  deepseq,
                  bytestring-handle,
                  QuickCheck       == 2.*,
-                 tasty            >= 0.10 && <0.12,
-                 tasty-quickcheck == 0.8.*
+                 tasty            >= 0.10 && <1.4,
+                 tasty-quickcheck == 0.8.* || ==0.10.*
 
   if flag(old-time)
     build-depends: directory < 1.2, old-time
