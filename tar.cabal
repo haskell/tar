@@ -41,21 +41,21 @@ library
   build-depends: base       == 4.*,
                  filepath             < 1.5,
                  array                < 0.6,
-                 containers >= 0.2 && < 0.6,
+                 containers >= 0.2 && < 0.7,
                  deepseq    >= 1.1 && < 1.5
 
   if flag(old-time)
     build-depends: directory < 1.2, old-time < 1.2
   else
-    build-depends: directory >= 1.2 && < 1.4, time < 1.10
+    build-depends: directory >= 1.2 && < 1.4, time < 1.12
 
   if flag(old-bytestring)
     build-depends: bytestring-builder >= 0.10.4.0.2 && < 0.11, bytestring == 0.9.*
   else
-    build-depends: bytestring == 0.10.*
+    build-depends: bytestring >= 0.10 && < 0.12
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups == 0.18.*
+    build-depends: semigroups >= 0.18 && < 0.20
 
   exposed-modules:
     Codec.Archive.Tar
@@ -91,8 +91,8 @@ test-suite properties
                  deepseq,
                  bytestring-handle,
                  QuickCheck       == 2.*,
-                 tasty            >= 0.10 && <0.12,
-                 tasty-quickcheck == 0.8.*
+                 tasty            >= 0.10 && <1.5,
+                 tasty-quickcheck >= 0.8  && <0.11
 
   if flag(old-time)
     build-depends: directory < 1.2, old-time
@@ -105,7 +105,7 @@ test-suite properties
     build-depends: bytestring >= 0.10
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups == 0.18.*
+    build-depends: semigroups >= 0.18 && <0.20
 
   hs-source-dirs: . test
 
@@ -150,7 +150,7 @@ benchmark bench
                  criterion >= 1.0
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups == 0.18.*
+    build-depends: semigroups >= 0.18 && <0.20
 
   -- shared w/ lib:tar component
   other-modules:
