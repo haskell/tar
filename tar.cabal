@@ -22,7 +22,7 @@ description:     This library is for working with \"@.tar@\" archive files. It
                  It also provides features for random access to archive
                  content using an index.
 build-type:      Simple
-cabal-version:   >=1.8
+cabal-version:   >=1.10
 extra-source-files: changelog.md
 tested-with:     GHC==9.0.1,
                  GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4,
@@ -40,6 +40,7 @@ flag old-bytestring
   default: False
 
 library
+  default-language: Haskell2010
   build-depends: base       == 4.*,
                  filepath             < 1.5,
                  array                < 0.6,
@@ -86,6 +87,7 @@ library
 
 test-suite properties
   type:          exitcode-stdio-1.0
+  default-language: Haskell2010
   build-depends: base,
                  filepath,
                  array,
@@ -139,6 +141,7 @@ test-suite properties
 
 benchmark bench
   type:          exitcode-stdio-1.0
+  default-language: Haskell2010
   hs-source-dirs: . bench
   main-is:       bench/Main.hs
   build-depends: base,
