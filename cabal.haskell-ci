@@ -1,0 +1,2 @@
+benchmarks: >=7.6
+tests: >=7.2 && <9.0
