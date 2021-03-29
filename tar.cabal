@@ -153,7 +153,7 @@ benchmark bench
                  containers,
                  deepseq,
                  time,
-                 criterion >= 1.0
+                 tasty-bench
 
   if !impl(ghc >= 8.0)
     build-depends: semigroups >= 0.18 && <0.20

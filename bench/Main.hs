@@ -6,8 +6,7 @@ import qualified Codec.Archive.Tar.Index as TarIndex
 import qualified Data.ByteString.Lazy    as BS
 import Control.Exception
 
-import Criterion
-import Criterion.Main
+import Test.Tasty.Bench
 
 main = defaultMain benchmarks
 
