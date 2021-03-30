@@ -72,7 +72,7 @@ import qualified System.FilePath as FilePath.Native
          ( joinPath, splitDirectories, addTrailingPathSeparator )
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
-         , addTrailingPathSeparator )
+         , addTrailingPathSeparator, pathSeparator )
 import qualified System.FilePath.Windows as FilePath.Windows
          ( joinPath, addTrailingPathSeparator )
 import System.Posix.Types
@@ -318,13 +318,12 @@ fromTarPath (TarPath namebs prefixbs) = adjustDirectory $
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
-                         ++ FilePath.Posix.splitDirectories name
+fromTarPathToPosixPath (TarPath namebs prefixbs) = adjustDirectory $ BS.Char8.unpack $
+   if BS.null prefixbs
+   then namebs
+   else prefixbs <> BS.Char8.pack [FilePath.Posix.pathSeparator] <> namebs
   where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+    adjustDirectory | BS.Char8.pack [FilePath.Posix.pathSeparator] `BS.isPrefixOf` namebs
                     = FilePath.Posix.addTrailingPathSeparator
                     | otherwise = id
 
@@ -343,7 +342,7 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
   where
     name   = BS.Char8.unpack namebs
     prefix = BS.Char8.unpack prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+    adjustDirectory | BS.Char8.pack [FilePath.Posix.pathSeparator] `BS.isPrefixOf` namebs
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id
 
@@ -632,7 +631,7 @@ instance Arbitrary EntryContent where
                return (OtherEntryType c bs (LBS.length bs)))
       ]
 
-  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs') 
+  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs')
                                | bs' <- shrink bs ]
   shrink  Directory          = []
   shrink (SymbolicLink link) = [ SymbolicLink link' | link' <- shrink link ]
@@ -642,7 +641,7 @@ instance Arbitrary EntryContent where
   shrink (BlockDevice     ma mi) = [ BlockDevice ma' mi'
                                    | (ma', mi') <- shrink (ma, mi) ]
   shrink  NamedPipe              = []
-  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs') 
+  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs')
                                    | bs' <- shrink bs ]
 
 instance Arbitrary LBS.ByteString where
