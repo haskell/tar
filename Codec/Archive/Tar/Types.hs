@@ -56,7 +56,8 @@ module Codec.Archive.Tar.Types (
   unfoldEntries,
 
 #ifdef TESTS
-  limitToV7FormatCompat
+  limitToV7FormatCompat,
+  fromTarPathToPosixPath_shortcut
 #endif
   ) where
 
@@ -69,10 +70,10 @@ import qualified Data.ByteString.Lazy  as LBS
 import Control.DeepSeq
 
 import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories, addTrailingPathSeparator )
+         ( joinPath, splitDirectories, addTrailingPathSeparator, pathSeparator )
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
-         , addTrailingPathSeparator )
+         , addTrailingPathSeparator, pathSeparator )
 import qualified System.FilePath.Windows as FilePath.Windows
          ( joinPath, addTrailingPathSeparator )
 import System.Posix.Types
@@ -299,9 +300,12 @@ instance Show TarPath where
 --   responsibility to check for these conditions (eg using 'checkSecurity').
 --
 fromTarPath :: TarPath -> FilePath
-fromTarPath (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
-                          ++ FilePath.Posix.splitDirectories name
+fromTarPath tp@(TarPath namebs prefixbs)
+  | FilePath.Native.pathSeparator == FilePath.Posix.pathSeparator =
+    fromTarPathToPosixPath tp
+  | otherwise = adjustDirectory $
+    FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
+                            ++ FilePath.Posix.splitDirectories name
   where
     name   = BS.Char8.unpack namebs
     prefix = BS.Char8.unpack prefixbs
@@ -318,15 +322,23 @@ fromTarPath (TarPath namebs prefixbs) = adjustDirectory $
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
-                         ++ FilePath.Posix.splitDirectories name
+fromTarPathToPosixPath (TarPath namebs prefixbs) | BS.null prefixbs =
+  BS.Char8.unpack namebs
+fromTarPathToPosixPath (TarPath namebs prefixbs) | otherwise =
+  FilePath.Posix.joinPath [BS.Char8.unpack prefixbs, BS.Char8.unpack namebs]
+
+#ifdef TESTS
+fromTarPathToPosixPath_shortcut tp@(TarPath namebs prefixbs) =
+  fromTarPathToPosixPath tp ==
+    adjustDirectory (FilePath.Posix.joinPath (FilePath.Posix.splitDirectories prefix ++ FilePath.Posix.splitDirectories name))
   where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Posix.addTrailingPathSeparator
-                    | otherwise = id
+  name   = BS.Char8.unpack namebs
+  prefix = BS.Char8.unpack prefixbs
+  adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                  = FilePath.Posix.addTrailingPathSeparator
+                  | otherwise = id
+
+#endif
 
 -- | Convert a 'TarPath' to a Windows 'FilePath'.
 --
@@ -632,7 +644,7 @@ instance Arbitrary EntryContent where
                return (OtherEntryType c bs (LBS.length bs)))
       ]
 
-  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs') 
+  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs')
                                | bs' <- shrink bs ]
   shrink  Directory          = []
   shrink (SymbolicLink link) = [ SymbolicLink link' | link' <- shrink link ]
@@ -642,7 +654,7 @@ instance Arbitrary EntryContent where
   shrink (BlockDevice     ma mi) = [ BlockDevice ma' mi'
                                    | (ma', mi') <- shrink (ma, mi) ]
   shrink  NamedPipe              = []
-  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs') 
+  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs')
                                    | bs' <- shrink bs ]
 
 instance Arbitrary LBS.ByteString where
