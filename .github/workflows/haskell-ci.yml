@@ -19,39 +19,19 @@ on:
 jobs:
   linux:
     name: Haskell-CI - Linux - GHC ${{ matrix.ghc }}
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }} 
     container:
       image: buildpack-deps:bionic
-    continue-on-error: ${{ matrix.allow-failure }}
+    continue-on-error: false
     strategy:
       matrix:
+        os: [ubuntu-latest]
+        ghc: ['7.0.4', '7.2.2', '7.4.2', '7.6.3', '7.8.4', '7.10.3', '8.0.2', '8.2.2', '8.4.4', '8.6.5', '8.8.5', '8.10.4', '9.0.1']
         include:
-          - ghc: 9.0.1
-            allow-failure: false
-          - ghc: 8.10.4
-            allow-failure: false
-          - ghc: 8.8.4
-            allow-failure: false
-          - ghc: 8.6.5
-            allow-failure: false
-          - ghc: 8.4.4
-            allow-failure: false
-          - ghc: 8.2.2
-            allow-failure: false
-          - ghc: 8.0.2
-            allow-failure: false
-          - ghc: 7.10.3
-            allow-failure: false
-          - ghc: 7.8.4
-            allow-failure: false
-          - ghc: 7.6.3
-            allow-failure: false
-          - ghc: 7.4.2
-            allow-failure: false
-          - ghc: 7.2.2
-            allow-failure: false
-          - ghc: 7.0.4
-            allow-failure: false
+          - os: windows-latest
+            ghc: latest
+          - os: macOS-latest
+            ghc: latest
       fail-fast: false
     steps:
       - name: apt
