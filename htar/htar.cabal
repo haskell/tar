@@ -23,12 +23,12 @@ executable htar
   main-is: htar.hs
   ghc-options: -Wall
   build-depends:
-    base       >= 4.9 && < 5,
+    base       == 4.*,
     time       >= 1.1,
     directory  >= 1.0,
     filepath   >= 1.0,
     bytestring >= 0.9,
-    tar        >= 0.4.2,
+    tar        == 0.6.*,
     zlib       >= 0.4 && < 0.7,
     bzlib      >= 0.4 && < 0.7,
     time       >= 1.5
