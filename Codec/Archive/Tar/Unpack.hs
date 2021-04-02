@@ -18,7 +18,7 @@ module Codec.Archive.Tar.Unpack (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
 
-import Data.List (partition)
+import Data.List (partition, nub)
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
@@ -26,9 +26,14 @@ import System.FilePath
 import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
-         ( createDirectoryIfMissing, copyFile )
+         ( createDirectoryIfMissing, copyFile, getDirectoryContents, doesDirectoryExist )
 import Control.Exception
-         ( Exception, throwIO )
+         ( Exception, throwIO, handle )
+import System.IO.Error
+         ( ioeGetErrorType )
+import GHC.IO (unsafeInterleaveIO)
+import Data.Foldable (traverse_)
+import GHC.IO.Exception (IOErrorType(InappropriateType))
 import System.Directory
          ( setModificationTime )
 import Data.Time.Clock.POSIX
@@ -128,7 +133,71 @@ unpack baseDir entries = do
           -- hard links link targets are always "absolute" paths in
           -- the context of the tar root
           absTarget = if isHardLink then baseDir </> relLinkTarget else FilePath.Native.takeDirectory absPath </> relLinkTarget
-      in copyFile absTarget absPath
+          -- need to handle cases where a symlink points to
+          -- a directory: https://github.com/haskell/tar/issues/35
+      in handle (\e -> if ioeGetErrorType e == InappropriateType
+                       then copyDirectoryRecursive absTarget absPath
+                       else throwIO e
+                )
+         $ copyFile absTarget absPath
+
+
+-- | Recursively copy the contents of one directory to another path.
+--
+-- This is a rip-off of Cabal library.
+copyDirectoryRecursive :: FilePath -> FilePath -> IO ()
+copyDirectoryRecursive srcDir destDir = do
+  srcFiles <- getDirectoryContentsRecursive srcDir
+  copyFilesWith copyFile destDir [ (srcDir, f)
+                                   | f <- srcFiles ]
+  where
+    -- | Common implementation of 'copyFiles', 'installOrdinaryFiles',
+    -- 'installExecutableFiles' and 'installMaybeExecutableFiles'.
+    copyFilesWith :: (FilePath -> FilePath -> IO ())
+                  -> FilePath -> [(FilePath, FilePath)] -> IO ()
+    copyFilesWith doCopy targetDir srcFiles = do
+
+      -- Create parent directories for everything
+      let dirs = map (targetDir </>) . nub . map (FilePath.Native.takeDirectory . snd) $ srcFiles
+      traverse_ (createDirectoryIfMissing True) dirs
+
+      -- Copy all the files
+      sequence_ [ let src  = srcBase   </> srcFile
+                      dest = targetDir </> srcFile
+                   in doCopy src dest
+                | (srcBase, srcFile) <- srcFiles ]
+
+    -- | List all the files in a directory and all subdirectories.
+    --
+    -- The order places files in sub-directories after all the files in their
+    -- parent directories. The list is generated lazily so is not well defined if
+    -- the source directory structure changes before the list is used.
+    --
+    getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
+    getDirectoryContentsRecursive topdir = recurseDirectories [""]
+      where
+        recurseDirectories :: [FilePath] -> IO [FilePath]
+        recurseDirectories []         = return []
+        recurseDirectories (dir:dirs) = unsafeInterleaveIO $ do
+          (files, dirs') <- collect [] [] =<< getDirectoryContents (topdir </> dir)
+          files' <- recurseDirectories (dirs' ++ dirs)
+          return (files ++ files')
+
+          where
+            collect files dirs' []              = return (reverse files
+                                                         ,reverse dirs')
+            collect files dirs' (entry:entries) | ignore entry
+                                                = collect files dirs' entries
+            collect files dirs' (entry:entries) = do
+              let dirEntry = dir </> entry
+              isDirectory <- doesDirectoryExist (topdir </> dirEntry)
+              if isDirectory
+                then collect files (dirEntry:dirs') entries
+                else collect (dirEntry:files) dirs' entries
+
+            ignore ['.']      = True
+            ignore ['.', '.'] = True
+            ignore _          = False
 
 setModTime :: FilePath -> EpochTime -> IO ()
 setModTime path t =
