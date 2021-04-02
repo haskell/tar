@@ -3,7 +3,8 @@ See also http://pvp.haskell.org/faq
 0.6.0.0 *TODO*
 
   * Add offending path as new field to `TarBombError` constructor
-  * Add support for over-long filepaths via GNU extension and fix hardlinks
+  * Add support for over-long filepaths via GNU extension
+  * Fix handling of hardlinks and symlinks
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
