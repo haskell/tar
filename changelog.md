@@ -10,7 +10,8 @@ See also http://pvp.haskell.org/faq
   * Prohibit non-ASCII file names instead of silent corruption
   * Fix tests on 32-bit architectures
   * Do not leak file handles in `packFileEntry`
-  * Add support for over-long filepaths via GNU extension and fix hardlinks
+  * Add support for over-long filepaths via GNU extension
+  * Fix handling of hardlinks and symlinks
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
