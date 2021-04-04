@@ -1,3 +1,6 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiWayIf #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -14,17 +17,20 @@ module Codec.Archive.Tar.Pack (
     pack,
     packFileEntry,
     packDirectoryEntry,
+#if MIN_VERSION_directory(1,3,1)
+    packSymlinkEntry,
+#endif
 
     getDirectoryContentsRecursive,
   ) where
 
 import Codec.Archive.Tar.Types
-import Control.Monad (join)
+import Control.Monad (join, when, forM)
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
 import qualified System.FilePath as FilePath.Native
-         ( addTrailingPathSeparator, hasTrailingPathSeparator )
+         ( addTrailingPathSeparator, hasTrailingPathSeparator, splitDirectories )
 import System.Directory
          ( getDirectoryContents, doesDirectoryExist, getModificationTime
          , Permissions(..), getPermissions )
@@ -32,19 +38,24 @@ import Data.Time.Clock
          ( UTCTime )
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
+#if MIN_VERSION_directory(1,3,1)
+import System.Directory
+         ( pathIsSymbolicLink, getSymbolicLinkTarget )
+#endif
 import System.IO
          ( IOMode(ReadMode), openBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
+import Control.Exception (throwIO)
+import Codec.Archive.Tar.Check (checkEntrySecurity)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
 -- specified will have their contents included recursively. Paths in the
 -- archive will be relative to the given base directory.
 --
 -- This is a portable implementation of packing suitable for portable archives.
--- In particular it only constructs 'NormalFile' and 'Directory' entries. Hard
--- links and symbolic links are treated like ordinary files. It cannot be used
--- to pack directories containing recursive symbolic links. Special files like
--- FIFOs (named pipes), sockets or device files will also cause problems.
+-- In particular it only constructs 'NormalFile', 'Directory' and 'SymbolicLink'
+-- entries. Hard links are treated like ordinary files. Special files like
+-- FIFOs (named pipes), sockets or device files will cause problems.
 --
 -- An exception will be thrown for any file names that are too long to
 -- represent as a 'TarPath'.
@@ -74,8 +85,14 @@ packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
   fmap concat $ interleave
     [ do let tarpath = toTarPath isDir relpath
-         if isDir then packDirectoryEntry filepath tarpath
-                  else packFileEntry      filepath tarpath
+#if MIN_VERSION_directory(1,3,1)
+         isSymlink <- pathIsSymbolicLink filepath
+         if | isSymlink -> packSymlinkEntry filepath tarpath
+#else
+         if
+#endif
+            | isDir -> packDirectoryEntry filepath tarpath
+            | otherwise -> packFileEntry filepath tarpath
     | relpath <- paths
     , let isDir    = FilePath.Native.hasTrailingPathSeparator filepath
           filepath = baseDir </> relpath ]
@@ -118,6 +135,7 @@ packFileEntry filepath tarpath = do
        These _ tp -> do
          let lEntry = longLinkEntry filepath
          return [lEntry, entry tp]
+  where
 
 -- | Construct a tar 'Entry' based on a local directory (but not its contents).
 --
@@ -139,6 +157,28 @@ packDirectoryEntry filepath tarpath = do
        These _ tp -> do
          let lEntry = longLinkEntry filepath
          return [lEntry, dEntry tp]
+
+
+#if MIN_VERSION_directory(1,3,1)
+-- | Construct a tar 'Entry' based on a local symlink.
+--
+-- This automatically checks symlink safety via 'checkEntrySecurity'.
+packSymlinkEntry :: FilePath -- ^ Full path to find the file on the local disk
+                -> These SplitError TarPath  -- ^ Path to use for the tar Entry in the archive
+                -> IO [Entry]
+packSymlinkEntry filepath tarpath = do
+  linkTarget <- getSymbolicLinkTarget filepath
+  let entry tp = symlinkEntry tp linkTarget
+      safeReturn tps = forM tps $ \tp ->
+        maybe (pure tp) throwIO $ checkEntrySecurity tp
+  case tarpath of
+       This e     -> fail $ show e
+       That tp    -> safeReturn [entry tp]
+       These _ tp -> do
+         let lEntry = longLinkEntry filepath
+         safeReturn [lEntry, entry tp]
+#endif
+
 
 -- | This is a utility function, much like 'getDirectoryContents'. The
 -- difference is that it includes the contents of subdirectories.

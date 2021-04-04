@@ -16,6 +16,7 @@ module Codec.Archive.Tar.Check (
 
   -- * Security
   checkSecurity,
+  checkEntrySecurity,
   FileNameError(..),
 
   -- * Tarbombs
