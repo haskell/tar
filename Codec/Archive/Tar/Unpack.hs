@@ -1,4 +1,6 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -29,13 +31,17 @@ import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
          ( createDirectoryIfMissing, copyFile, setPermissions, getDirectoryContents, doesDirectoryExist )
+#if MIN_VERSION_directory(1,3,1)
+import System.Directory
+         ( createDirectoryLink, createFileLink )
+#endif
 import Control.Exception
          ( Exception, throwIO, handle )
 import System.IO.Error
          ( ioeGetErrorType )
 import GHC.IO (unsafeInterleaveIO)
 import Data.Foldable (traverse_)
-import GHC.IO.Exception (IOErrorType(InappropriateType))
+import GHC.IO.Exception (IOErrorType(InappropriateType, IllegalOperation, PermissionDenied, InvalidArgument))
 import System.Directory
          ( setModificationTime, emptyPermissions, setOwnerReadable, setOwnerWritable
          , setOwnerExecutable, setOwnerSearchable )
@@ -74,9 +80,9 @@ unpack :: Exception e => FilePath -> Entries e -> IO ()
 unpack baseDir entries = do
   uEntries <- unpackEntries [] (checkSecurity entries)
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
-  -- emulate hardlinks first, in case a symlink points to it
-  emulateLinks hardlinks
-  emulateLinks symlinks
+  -- handle hardlinks first, in case a symlink points to it
+  handleHardLinks hardlinks
+  handleSymlinks symlinks
 
   where
     -- We're relying here on 'checkSecurity' to make sure we're not scribbling
@@ -132,19 +138,53 @@ unpack baseDir entries = do
                                         $ (path, link', isHardLink):links
       where link' = fromLinkTarget link
 
-    emulateLinks = mapM_ $ \(relPath, relLinkTarget, isHardLink) ->
+
+    -- for hardlinks, we just copy
+    handleHardLinks = mapM_ $ \(relPath, relLinkTarget, _) ->
       let absPath   = baseDir </> relPath
           -- hard links link targets are always "absolute" paths in
           -- the context of the tar root
-          absTarget = if isHardLink then baseDir </> relLinkTarget else FilePath.Native.takeDirectory absPath </> relLinkTarget
-          -- need to handle cases where a symlink points to
-          -- a directory: https://github.com/haskell/tar/issues/35
-      in handle (\e -> if ioeGetErrorType e == InappropriateType
-                       then copyDirectoryRecursive absTarget absPath
-                       else throwIO e
-                )
-         $ copyFile absTarget absPath
+          absTarget = baseDir </> relLinkTarget
+      -- we don't expect races here, since we should be the
+      -- only process unpacking the tar archive and writing to
+      -- the destination
+      in doesDirectoryExist absTarget >>= \case
+          True -> copyDirectoryRecursive absTarget absPath
+          False -> copyFile absTarget absPath
 
+    -- For symlinks, we first try to recreate them and if that fails
+    -- with 'IllegalOperation', 'PermissionDenied' or 'InvalidArgument',
+    -- we fall back to copying.
+    -- This error handling isn't too fine grained and maybe should be
+    -- platform specific, but this way it might catch erros on unix even on
+    -- FAT32 fuse mounted volumes.
+    handleSymlinks = mapM_ $ \(relPath, relLinkTarget, _) ->
+      let absPath   = baseDir </> relPath
+          -- hard links link targets are always "absolute" paths in
+          -- the context of the tar root
+          absTarget = FilePath.Native.takeDirectory absPath </> relLinkTarget
+      -- we don't expect races here, since we should be the
+      -- only process unpacking the tar archive and writing to
+      -- the destination
+      in doesDirectoryExist absTarget >>= \case
+#if MIN_VERSION_directory(1,3,1)
+          True -> handleSymlinkError (copyDirectoryRecursive absTarget absPath)
+            $ createDirectoryLink relLinkTarget absPath
+          False -> handleSymlinkError (copyFile absTarget absPath)
+            $ createFileLink relLinkTarget absPath
+
+      where
+        handleSymlinkError action =
+          handle (\e -> if ioeGetErrorType e `elem` [IllegalOperation
+                                                    ,PermissionDenied
+                                                    ,InvalidArgument]
+                      then action
+                      else throwIO e
+                 )
+#else
+          True -> copyDirectoryRecursive absTarget absPath
+          False -> copyFile absTarget absPath
+#endif
 
 -- | Recursively copy the contents of one directory to another path.
 --
