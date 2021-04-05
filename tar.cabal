@@ -65,6 +65,7 @@ library tar-internal
     Codec.Archive.Tar.Unpack
     Codec.Archive.Tar.Index.StringTable
     Codec.Archive.Tar.Index.IntTrie
+    Codec.Archive.Tar.Index.Internal
 
   other-extensions:
     BangPatterns
