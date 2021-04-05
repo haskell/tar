@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Index
@@ -70,17 +69,7 @@ module Codec.Archive.Tar.Index (
 
     -- * Deprecated aliases
     emptyIndex,
-    finaliseIndex,
-
-#ifdef TESTS
-    prop_lookup,
-    prop_toList,
-    prop_valid,
-    prop_serialise_deserialise,
-    prop_serialiseSize,
-    prop_index_matches_tar,
-    prop_finalise_unfinalise,
-#endif
+    finaliseIndex
   ) where
 
 import Prelude hiding (lookup)

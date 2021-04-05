@@ -89,29 +89,21 @@ test-suite properties
                  directory >= 1.2,
                  filepath,
                  QuickCheck       == 2.*,
+                 tar-internal,
                  tasty            >= 0.10 && <1.5,
                  tasty-quickcheck >= 0.8  && <0.11,
                  time
 
-  hs-source-dirs: . test
+  hs-source-dirs: test
 
-  main-is: test/Properties.hs
-  cpp-options: -DTESTS
+  main-is: Properties.hs
 
   other-modules:
-    Codec.Archive.Tar.Index
-    Codec.Archive.Tar.Index.StringTable
-    Codec.Archive.Tar.Index.IntTrie
-
-  -- shared w/ lib:tar component
-  other-modules:
-    Codec.Archive.Tar
-    Codec.Archive.Tar.Check
-    Codec.Archive.Tar.Pack
-    Codec.Archive.Tar.Read
-    Codec.Archive.Tar.Types
-    Codec.Archive.Tar.Unpack
-    Codec.Archive.Tar.Write
+    Codec.Archive.Tar.Tests
+    Codec.Archive.Tar.Index.Tests
+    Codec.Archive.Tar.Index.IntTrie.Tests
+    Codec.Archive.Tar.Index.StringTable.Tests
+    Codec.Archive.Tar.Types.Tests
 
   other-extensions:
     CPP
