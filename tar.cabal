@@ -26,39 +26,22 @@ cabal-version:   >=1.10
 extra-source-files: changelog.md
 tested-with:     GHC==9.0.1,
                  GHC==8.10.4, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4,
-                 GHC==8.2.2, GHC==8.0.2, GHC==7.10.3, GHC==7.8.4,
-                 GHC==7.6.3, GHC==7.4.2, GHC==7.2.2, GHC==7.0.4
+                 GHC==8.2.2, GHC==8.0.2
 
 source-repository head
   type: git
   location: https://github.com/haskell/tar.git
 
-flag old-time
-  default: False
-
-flag old-bytestring
-  default: False
-
 library
   default-language: Haskell2010
-  build-depends: base       == 4.*,
-                 filepath             < 1.5,
-                 array                < 0.6,
-                 containers >= 0.2 && < 0.7,
-                 deepseq    >= 1.1 && < 1.5
-
-  if flag(old-time)
-    build-depends: directory < 1.2, old-time < 1.2
-  else
-    build-depends: directory >= 1.2 && < 1.4, time < 1.12
-
-  if flag(old-bytestring)
-    build-depends: bytestring-builder >= 0.10.4.0.2 && < 0.11, bytestring == 0.9.*
-  else
-    build-depends: bytestring >= 0.10 && < 0.12
-
-  if !impl(ghc >= 8.0)
-    build-depends: semigroups >= 0.18 && < 0.20
+  build-depends: base       >= 4.9  && < 5,
+                 array                 < 0.6,
+                 bytestring >= 0.10 && < 0.12,
+                 containers >= 0.2  && < 0.7,
+                 deepseq    >= 1.1  && < 1.5,
+                 directory  >= 1.2  && < 1.4,
+                 filepath              < 1.5,
+                 time                  < 1.12
 
   exposed-modules:
     Codec.Archive.Tar
@@ -89,27 +72,17 @@ test-suite properties
   type:          exitcode-stdio-1.0
   default-language: Haskell2010
   build-depends: base,
-                 filepath,
                  array,
+                 bytestring >= 0.10,
+                 bytestring-handle,
                  containers,
                  deepseq,
-                 bytestring-handle,
+                 directory >= 1.2,
+                 filepath,
                  QuickCheck       == 2.*,
                  tasty            >= 0.10 && <1.5,
-                 tasty-quickcheck >= 0.8  && <0.11
-
-  if flag(old-time)
-    build-depends: directory < 1.2, old-time
-  else
-    build-depends: directory >= 1.2, time
-
-  if flag(old-bytestring)
-    build-depends: bytestring-builder, bytestring >= 0.9 && <0.10
-  else
-    build-depends: bytestring >= 0.10
-
-  if !impl(ghc >= 8.0)
-    build-depends: semigroups >= 0.18 && <0.20
+                 tasty-quickcheck >= 0.8  && <0.11,
+                 time
 
   hs-source-dirs: . test
 
@@ -154,6 +127,3 @@ benchmark bench
                  deepseq,
                  time,
                  tasty-bench
-
-  if !impl(ghc >= 8.0)
-    build-depends: semigroups >= 0.18 && <0.20

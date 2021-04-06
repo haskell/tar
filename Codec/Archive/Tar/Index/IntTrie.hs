@@ -44,27 +44,15 @@ import qualified Data.Bits as Bits
 import Data.Word (Word32)
 import Data.Bits
 import Data.Monoid (Monoid(..))
-#if (MIN_VERSION_base(4,5,0))
 import Data.Monoid ((<>))
-#endif
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS
-#if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
-#else
-import Data.ByteString.Lazy.Builder     as BS
-#endif
 import Control.Exception (assert)
-#if MIN_VERSION_containers(0,5,0)
 import qualified Data.Map.Strict        as Map
 import qualified Data.IntMap.Strict     as IntMap
 import Data.IntMap.Strict (IntMap)
-#else
-import qualified Data.Map               as Map
-import qualified Data.IntMap            as IntMap
-import Data.IntMap (IntMap)
-#endif
 
 import Data.List hiding (lookup, insert)
 import Data.Function (on)
@@ -120,7 +108,7 @@ mknode ::  Enum k          => k -> IntTrieBuilder k v -> (Int, TrieNode k v)
 
 mktrie = IntTrieBuilder . IntMap.fromList
 mkleaf k v = (fromEnum k, TrieLeaf (enumToWord32 v))
-mknode k t = (fromEnum k, TrieNode t) 
+mknode k t = (fromEnum k, TrieNode t)
 
 example2 :: IntTrieBuilder Word32 Word32
 example2 = mktrie [ mknode 1 t1 ]
@@ -418,15 +406,9 @@ flattenTrie trie = go (queue [trie]) (size trie)
                    : Map.keys  keysValues
                   ++ Map.elems keysValues
             (!offset', !keysValues, !tries') =
-#if MIN_VERSION_containers(0,4,2)
               IntMap.foldlWithKey' accumNodes
                                    (offset, Map.empty, tries)
                                    tnodes
-#else
-              foldl' (\a (k,v) -> accumNodes a k v)
-                     (offset, Map.empty, tries)
-                     (IntMap.toList tnodes)
-#endif
 
     accumNodes :: (Offset, Map.Map Word32 Word32, Q (IntTrieBuilder k v))
                -> Int -> TrieNode k v
@@ -521,7 +503,7 @@ prop_lookup paths =
 
 prop_completions :: forall k v. (Ord k, Enum k, Eq v, Enum v) => [([k], v)] -> Bool
 prop_completions paths =
-    inserts paths empty 
+    inserts paths empty
  == convertCompletions (completionsFrom (construct paths) 0)
   where
     convertCompletions :: Ord k => Completions k v -> IntTrieBuilder k v
@@ -555,7 +537,7 @@ prop_finalise_unfinalise (ValidPaths paths) =
 prop_serialise_deserialise :: ValidPaths -> Bool
 prop_serialise_deserialise (ValidPaths paths) =
     Just (trie, BS.empty) == (deserialise
-                            . toStrict . BS.toLazyByteString
+                            . LBS.toStrict . BS.toLazyByteString
                             . serialise) trie
   where
     trie :: IntTrie Char Char
@@ -591,17 +573,4 @@ instance Arbitrary ValidPaths where
 
 isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
 
-toStrict :: LBS.ByteString -> BS.ByteString
-#if MIN_VERSION_bytestring(0,10,0)
-toStrict = LBS.toStrict
-#else
-toStrict = BS.concat . LBS.toChunks
 #endif
-
-#endif
-
-#if !(MIN_VERSION_base(4,5,0))
-(<>) :: Monoid m => m -> m -> m
-(<>) = mappend
-#endif
-

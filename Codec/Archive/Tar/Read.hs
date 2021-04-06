@@ -32,11 +32,6 @@ import qualified Data.ByteString.Lazy   as LBS
 
 import Prelude hiding (read)
 
-#if !MIN_VERSION_bytestring(0,10,0)
-import Data.Monoid (Monoid(..))
-import qualified Data.ByteString.Lazy.Internal as LBS
-#endif
-
 -- | Errors that can be encountered when parsing a Tar archive.
 data FormatError
   = TruncatedArchive
@@ -47,7 +42,6 @@ data FormatError
   | NotTarFormat
   | UnrecognisedTarFormat
   | HeaderBadNumericEncoding
-#if MIN_VERSION_base(4,8,0)
   deriving (Eq, Show, Typeable)
 
 instance Exception FormatError where
@@ -59,21 +53,6 @@ instance Exception FormatError where
   displayException NotTarFormat             = "data is not in tar format"
   displayException UnrecognisedTarFormat    = "tar entry not in a recognised format"
   displayException HeaderBadNumericEncoding = "tar header is malformed (bad numeric encoding)"
-#else
-  deriving (Eq, Typeable)
-
-instance Show FormatError where
-  show TruncatedArchive         = "truncated tar archive"
-  show ShortTrailer             = "short tar trailer"
-  show BadTrailer               = "bad tar trailer"
-  show TrailingJunk             = "tar file has trailing junk"
-  show ChecksumIncorrect        = "tar checksum error"
-  show NotTarFormat             = "data is not in tar format"
-  show UnrecognisedTarFormat    = "tar entry not in a recognised format"
-  show HeaderBadNumericEncoding = "tar header is malformed (bad numeric encoding)"
-
-instance Exception FormatError
-#endif
 
 instance NFData    FormatError where
   rnf !_ = () -- enumerations are fully strict by construction
@@ -143,12 +122,7 @@ getEntry bs
   return (Just (entry, bs'))
 
   where
-#if MIN_VERSION_bytestring(0,10,0)
    header = LBS.toStrict (LBS.take 512 bs)
-#else
-   header = toStrict (LBS.take 512 bs)
-   toStrict = LBS.foldrChunks mappend mempty
-#endif
 
    name       = getString   0 100 header
    mode_      = getOct    100   8 header
