@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -27,7 +26,6 @@ import System.Directory
          ( createDirectoryIfMissing, copyFile )
 import Control.Exception
          ( Exception, throwIO )
-#if MIN_VERSION_directory(1,2,3)
 import System.Directory
          ( setModificationTime )
 import Data.Time.Clock.POSIX
@@ -36,7 +34,6 @@ import Control.Exception as Exception
          ( catch )
 import System.IO.Error
          ( isPermissionError )
-#endif
 
 
 -- | Create local files and directories based on the entries of a tar archive.
@@ -113,12 +110,7 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
        in copyFile absTarget absPath
 
 setModTime :: FilePath -> EpochTime -> IO ()
-#if MIN_VERSION_directory(1,2,3)
--- functionality only supported as of directory-1.2.3.x
 setModTime path t =
     setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
       `Exception.catch` \e ->
         if isPermissionError e then return () else throwIO e
-#else
-setModTime _path _t = return ()
-#endif

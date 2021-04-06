@@ -184,15 +184,9 @@ instance NFData Entry where
 
 instance NFData EntryContent where
   rnf x = case x of
-      NormalFile       c _  -> rnflbs c
-      OtherEntryType _ c _  -> rnflbs c
+      NormalFile       c _  -> rnf c
+      OtherEntryType _ c _  -> rnf c
       _                     -> seq x ()
-    where
-#if MIN_VERSION_bytestring(0,10,0)
-      rnflbs = rnf
-#else
-      rnflbs = foldr (\ !_bs r -> r) () . LBS.toChunks
-#endif
 
 instance NFData Ownership where
   rnf (Ownership o g _ _) = rnf o `seq` rnf g
@@ -408,11 +402,7 @@ newtype LinkTarget = LinkTarget BS.ByteString
   deriving (Eq, Ord, Show)
 
 instance NFData LinkTarget where
-#if MIN_VERSION_bytestring(0,10,0)
     rnf (LinkTarget bs) = rnf bs
-#else
-    rnf (LinkTarget !_bs) = ()
-#endif
 
 -- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the
 -- string is longer than 100 characters or if it contains non-portable
@@ -632,7 +622,7 @@ instance Arbitrary EntryContent where
                return (OtherEntryType c bs (LBS.length bs)))
       ]
 
-  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs') 
+  shrink (NormalFile bs _)   = [ NormalFile bs' (LBS.length bs')
                                | bs' <- shrink bs ]
   shrink  Directory          = []
   shrink (SymbolicLink link) = [ SymbolicLink link' | link' <- shrink link ]
@@ -642,7 +632,7 @@ instance Arbitrary EntryContent where
   shrink (BlockDevice     ma mi) = [ BlockDevice ma' mi'
                                    | (ma', mi') <- shrink (ma, mi) ]
   shrink  NamedPipe              = []
-  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs') 
+  shrink (OtherEntryType c bs _) = [ OtherEntryType c bs' (LBS.length bs')
                                    | bs' <- shrink bs ]
 
 instance Arbitrary LBS.ByteString where

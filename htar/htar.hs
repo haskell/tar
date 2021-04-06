@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 module Main where
 
 import qualified Codec.Archive.Tar       as Tar
@@ -19,11 +18,7 @@ import System.Exit           (exitFailure)
 import System.IO             (hPutStrLn, stderr)
 import Data.Time             (formatTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-#if MIN_VERSION_time(1,5,0)
 import Data.Time             (defaultTimeLocale)
-#else
-import System.Locale         (defaultTimeLocale)
-#endif
 
 main :: IO ()
 main = do

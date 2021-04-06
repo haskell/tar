@@ -19,23 +19,17 @@ description:     A Command-line utility to create, extract and list the
 build-type:      Simple
 cabal-version:   >= 1.6
 
-flag old-locale
-
 executable htar
   main-is: htar.hs
   ghc-options: -Wall
   build-depends:
-    base       == 4.*,
+    base       >= 4.9 && < 5,
     time       >= 1.1,
     directory  >= 1.0,
     filepath   >= 1.0,
     bytestring >= 0.9,
-    tar        == 0.4.* && >= 0.4.2,
+    tar        >= 0.4.2,
     zlib       >= 0.4 && < 0.7,
-    bzlib      >= 0.4 && < 0.7
-
-  if flag(old-locale)
-    build-depends: time < 1.5, old-locale >= 1.0
-  else
-    build-depends: time >= 1.5
+    bzlib      >= 0.4 && < 0.7,
+    time       >= 1.5
 
