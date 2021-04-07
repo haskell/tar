@@ -379,6 +379,11 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
 -- The conversion may fail if the 'FilePath' is too long. See 'TarPath' for a
 -- description of the problem with splitting long 'FilePath's.
 --
+-- Returns:
+-- 
+-- - 'This': on unrecoverable errors, such as 'FileNameEmpty'
+-- - 'That': on no errors
+-- - 'These': when the filepath is too long to fit into a tar 'Entry' and needs long filepath mangling via GNU extension
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
           -> FilePath
@@ -404,7 +409,6 @@ instance Exception SplitError
 -- The strategy is this: take the name-directory components in reverse order
 -- and try to fit as many components into the 100 long name area as possible.
 -- If all the remaining components fit in the 155 name area then we win.
---
 splitLongPath :: FilePath -> These SplitError TarPath
 splitLongPath path =
   case packName nameMax (reverse (FilePath.Posix.splitPath path)) of
