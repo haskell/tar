@@ -73,6 +73,7 @@ import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
 import Control.DeepSeq
+import Control.Exception (Exception)
 
 import qualified System.FilePath as FilePath.Native
          ( joinPath, splitDirectories, addTrailingPathSeparator )
@@ -380,7 +381,8 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
 --
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
-          -> FilePath -> These SplitError TarPath
+          -> FilePath
+          -> These SplitError TarPath
 toTarPath isDir = splitLongPath
                 . addTrailingSep
                 . FilePath.Posix.joinPath
@@ -392,6 +394,8 @@ toTarPath isDir = splitLongPath
 data SplitError = FileNameEmpty
                 | FileNameTooLong
                 deriving Show
+
+instance Exception SplitError
 
 
 -- | Take a sanitised path, split on directory separators and try to pack it
@@ -742,4 +746,3 @@ limitToV7FormatCompat entry@Entry { entryFormat = V7Format } =
 limitToV7FormatCompat entry = entry
 
 #endif
-

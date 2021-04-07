@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -----------------------------------------------------------------------------
@@ -20,6 +21,7 @@ module Codec.Archive.Tar.Pack (
 #if MIN_VERSION_directory(1,3,1)
     packSymlinkEntry,
 #endif
+    longLinkEntry,
 
     getDirectoryContentsRecursive,
   ) where
@@ -81,21 +83,37 @@ preparePaths baseDir paths =
            else return [path]
     | path <- paths ]
 
+
+-- | Pack paths while accounting for overlong filepaths.
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
   fmap concat $ interleave
     [ do let tarpath = toTarPath isDir relpath
 #if MIN_VERSION_directory(1,3,1)
          isSymlink <- pathIsSymbolicLink filepath
-         if | isSymlink -> packSymlinkEntry filepath tarpath
+         if | isSymlink -> withLongLinkEntry filepath tarpath packSymlinkEntry
 #else
          if
 #endif
-            | isDir -> packDirectoryEntry filepath tarpath
-            | otherwise -> packFileEntry filepath tarpath
+            | isDir -> withLongLinkEntry filepath tarpath packDirectoryEntry
+            | otherwise -> withLongLinkEntry filepath tarpath packFileEntry
     | relpath <- paths
     , let isDir    = FilePath.Native.hasTrailingPathSeparator filepath
           filepath = baseDir </> relpath ]
+  where
+    -- prepend the long filepath entry if necessary
+    withLongLinkEntry
+      :: FilePath
+      -> These SplitError TarPath
+      -> (FilePath -> TarPath -> IO Entry)
+      -> IO [Entry]
+    withLongLinkEntry _ (This e) _ = throwIO e
+    withLongLinkEntry filepath (That tarpath) f = (:[]) <$> f filepath tarpath
+    withLongLinkEntry filepath (These _ tarpath) f = do
+      mainEntry <- f filepath tarpath
+      pure [longLinkEntry filepath, mainEntry]
+
+      
 
 interleave :: [IO a] -> IO [a]
 interleave = unsafeInterleaveIO . go
@@ -115,8 +133,8 @@ interleave = unsafeInterleaveIO . go
 -- * The file contents is read lazily.
 --
 packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
-              -> These SplitError TarPath  -- ^ Path to use for the tar Entry in the archive
-              -> IO [Entry]
+              -> TarPath  -- ^ Path to use for the tar Entry in the archive
+              -> IO Entry
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
@@ -128,14 +146,7 @@ packFileEntry filepath tarpath = do
                                                 else ordinaryFilePermissions,
          entryTime = mtime
          }
-
-  case tarpath of
-       This e     -> fail $ show e
-       That tp    -> return [entry tp]
-       These _ tp -> do
-         let lEntry = longLinkEntry filepath
-         return [lEntry, entry tp]
-  where
+  return (entry tarpath)
 
 -- | Construct a tar 'Entry' based on a local directory (but not its contents).
 --
@@ -143,20 +154,14 @@ packFileEntry filepath tarpath = do
 -- Directory ownership and detailed permissions are not preserved.
 --
 packDirectoryEntry :: FilePath -- ^ Full path to find the file on the local disk
-                   -> These SplitError TarPath  -- ^ Path to use for the tar Entry in the archive
-                   -> IO [Entry]
+                   -> TarPath  -- ^ Path to use for the tar Entry in the archive
+                   -> IO Entry
 packDirectoryEntry filepath tarpath = do
   mtime   <- getModTime filepath
   let dEntry tp = (directoryEntry tp) {
     entryTime = mtime
   }
-
-  case tarpath of
-       This e     -> fail $ show e
-       That tp    -> return [dEntry tp]
-       These _ tp -> do
-         let lEntry = longLinkEntry filepath
-         return [lEntry, dEntry tp]
+  return (dEntry tarpath)
 
 
 #if MIN_VERSION_directory(1,3,1)
@@ -164,19 +169,13 @@ packDirectoryEntry filepath tarpath = do
 --
 -- This automatically checks symlink safety via 'checkEntrySecurity'.
 packSymlinkEntry :: FilePath -- ^ Full path to find the file on the local disk
-                -> These SplitError TarPath  -- ^ Path to use for the tar Entry in the archive
-                -> IO [Entry]
+                 -> TarPath  -- ^ Path to use for the tar Entry in the archive
+                 -> IO Entry
 packSymlinkEntry filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
   let entry tp = symlinkEntry tp linkTarget
-      safeReturn tps = forM tps $ \tp ->
-        maybe (pure tp) throwIO $ checkEntrySecurity tp
-  case tarpath of
-       This e     -> fail $ show e
-       That tp    -> safeReturn [entry tp]
-       These _ tp -> do
-         let lEntry = longLinkEntry filepath
-         safeReturn [lEntry, entry tp]
+      safeReturn tp = maybe (pure tp) throwIO $ checkEntrySecurity tp
+  safeReturn $ entry tarpath
 #endif
 
 
