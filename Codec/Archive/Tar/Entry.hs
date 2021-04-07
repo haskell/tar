@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Entry
@@ -49,6 +50,7 @@ module Codec.Archive.Tar.Entry (
   simpleEntry,
   fileEntry,
   directoryEntry,
+  longLinkEntry,
 
   -- * Standard file permissions
   -- | For maximum portability when constructing archives use only these file
@@ -60,6 +62,9 @@ module Codec.Archive.Tar.Entry (
   -- * Constructing entries from disk files
   packFileEntry,
   packDirectoryEntry,
+#if MIN_VERSION_directory(1,3,1)
+  packSymlinkEntry,
+#endif
   getDirectoryContentsRecursive,
 
   -- * TarPath type
