@@ -249,6 +249,9 @@ symlinkEntry name targetLink =
 -- Gnu tar uses OtherEntryType 'L' then as the first Entry and puts path
 -- in the entryContent. The Next entry will then be the "original"
 -- entry with the entryTarPath truncated.
+--
+-- So make sure this entry comes before the actual entry, when
+-- manually constructing entries.
 longLinkEntry :: FilePath -> Entry
 longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
@@ -375,7 +378,7 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
 -- 
 -- - 'This': on unrecoverable errors, such as 'FileNameEmpty'
 -- - 'That': on no errors
--- - 'These': when the filepath is too long to fit into a tar 'Entry' and needs long filepath mangling via GNU extension
+-- - 'These': when the filepath is too long to fit into a single tar 'Entry' and needs long filepath mangling via GNU extension. This can either be treated as an error (like older versions of 'tar') or be used with 'longLinkEntry' to create a compatible set of entries.
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
           -> FilePath
