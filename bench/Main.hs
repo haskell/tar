@@ -5,6 +5,7 @@ import qualified Codec.Archive.Tar.Index as TarIndex
 
 import qualified Data.ByteString.Lazy    as BS
 import Control.Exception
+import System.Directory
 
 import Test.Tasty.Bench
 
@@ -14,6 +15,9 @@ benchmarks :: [Benchmark]
 benchmarks =
   [ env loadTarFile $ \tarfile ->
       bench "read" (nf Tar.read tarfile)
+
+  , env loadTarEntries $ \entries ->
+      bench "unpack" (nfIO $ Tar.unpack "index" entries >> removeDirectoryRecursive "index")
 
   , env loadTarEntriesList $ \entries ->
       bench "write" (nf Tar.write entries)

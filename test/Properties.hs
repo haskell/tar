@@ -4,6 +4,7 @@ import qualified Codec.Archive.Tar.Index as Index
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 import qualified Codec.Archive.Tar       as Tar
+import qualified Codec.Archive.Tar.Types as Types
 
 import qualified Data.ByteString as BS
 
@@ -14,6 +15,8 @@ main :: IO ()
 main =
   defaultMain $
     testGroup "tar tests" [
+
+      testProperty "fromTarPathToPosixPath shortcut" Types.fromTarPathToPosixPath_shortcut,
 
       testGroup "write/read" [
         testProperty "ustar format" Tar.prop_write_read_ustar,
