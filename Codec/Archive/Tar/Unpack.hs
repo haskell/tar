@@ -122,6 +122,8 @@ setOwnerPermissions :: FilePath -> Permissions -> IO ()
 setOwnerPermissions path permissions =
   setPermissions path ownerPermissions
   where
+    -- | Info on Permission bits can be found here:
+    -- https://www.gnu.org/software/libc/manual/html_node/Permission-Bits.html
     ownerPermissions =
       setOwnerReadable   (testBit permissions 8) $
       setOwnerWritable   (testBit permissions 7) $
