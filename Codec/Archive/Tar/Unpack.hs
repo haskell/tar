@@ -17,24 +17,26 @@ module Codec.Archive.Tar.Unpack (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
 
+import Data.Bits
+         ( testBit )
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
 import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
-         ( createDirectoryIfMissing, copyFile )
+         ( createDirectoryIfMissing, copyFile, setPermissions )
 import Control.Exception
          ( Exception, throwIO )
 import System.Directory
-         ( setModificationTime )
+         ( setModificationTime, emptyPermissions, setOwnerReadable, setOwnerWritable
+         , setOwnerExecutable, setOwnerSearchable )
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
 import Control.Exception as Exception
          ( catch )
 import System.IO.Error
          ( isPermissionError )
-
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -71,7 +73,7 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
     unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = case entryContent entry of
-      NormalFile file _ -> extractFile path file mtime
+      NormalFile file _ -> extractFile (entryPermissions entry) path file mtime
                         >> unpackEntries links es
       Directory         -> extractDir path mtime
                         >> unpackEntries links es
@@ -82,12 +84,13 @@ unpack baseDir entries = unpackEntries [] (checkSecurity entries)
         path  = entryPath entry
         mtime = entryTime entry
 
-    extractFile path content mtime = do
+    extractFile permissions path content mtime = do
       -- Note that tar archives do not make sure each directory is created
       -- before files they contain, indeed we may have to create several
       -- levels of directory.
       createDirectoryIfMissing True absDir
       BS.writeFile absPath content
+      setOwnerPermissions absPath permissions
       setModTime absPath mtime
       where
         absDir  = baseDir </> FilePath.Native.takeDirectory path
@@ -114,3 +117,16 @@ setModTime path t =
     setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
       `Exception.catch` \e ->
         if isPermissionError e then return () else throwIO e
+
+setOwnerPermissions :: FilePath -> Permissions -> IO ()
+setOwnerPermissions path permissions =
+  setPermissions path ownerPermissions
+  where
+    -- | Info on Permission bits can be found here:
+    -- https://www.gnu.org/software/libc/manual/html_node/Permission-Bits.html
+    ownerPermissions =
+      setOwnerReadable   (testBit permissions 8) $
+      setOwnerWritable   (testBit permissions 7) $
+      setOwnerExecutable (testBit permissions 6) $
+      setOwnerSearchable (testBit permissions 6) $
+      emptyPermissions
