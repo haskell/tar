@@ -1,11 +1,9 @@
 module Main where
 
-import qualified Codec.Archive.Tar.Index as Index
-import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
-import qualified Codec.Archive.Tar.Index.StringTable as StringTable
-import qualified Codec.Archive.Tar       as Tar
-
-import qualified Data.ByteString as BS
+import qualified Codec.Archive.Tar.Index.Tests as Index
+import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie
+import qualified Codec.Archive.Tar.Index.StringTable.Tests as StringTable
+import qualified Codec.Archive.Tar.Tests       as Tar
 
 import Test.Tasty
 import Test.Tasty.QuickCheck
