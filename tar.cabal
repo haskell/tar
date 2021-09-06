@@ -51,7 +51,7 @@ library tar-internal
                  deepseq    >= 1.1  && < 1.5,
                  directory  >= 1.2  && < 1.4,
                  filepath              < 1.5,
-                 time                  < 1.12
+                 time                  < 1.13
 
   exposed-modules:
     Codec.Archive.Tar
