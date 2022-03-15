@@ -44,7 +44,7 @@ import qualified Data.ByteString.Lazy   as LBS
 import Data.ByteString.Builder          as BS
 import Data.ByteString.Builder.Extra    as BS (byteStringCopy)
 
--- | An effecient mapping from strings to a dense set of integers.
+-- | An efficient mapping from strings to a dense set of integers.
 --
 data StringTable id = StringTable
          {-# UNPACK #-} !BS.ByteString           -- all strings concatenated

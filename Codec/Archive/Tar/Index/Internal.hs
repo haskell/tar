@@ -209,7 +209,7 @@ build = go empty
 
 -- $incremental-construction
 -- If you need more control than 'build' then you can construct the index
--- in an acumulator style using the 'IndexBuilder' and operations.
+-- in an accumulator style using the 'IndexBuilder' and operations.
 --
 -- Start with 'empty' and use 'addNextEntry' (or 'skipNextEntry') for
 -- each 'Entry' in the tar file in order. Every entry must added or skipped in
