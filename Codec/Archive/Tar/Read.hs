@@ -207,7 +207,7 @@ getString :: Int -> Int -> BS.ByteString -> BS.ByteString
 getString off len = BS.copy . BS.Char8.takeWhile (/='\0') . getBytes off len
 
 -- These days we'd just use Either, but in older versions of base there was no
--- Monad instance for Either, it was in mtl with an anoying Error constraint.
+-- Monad instance for Either, it was in mtl with an annoying Error constraint.
 --
 data Partial e a = Error e | Ok a
 
