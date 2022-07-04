@@ -1,6 +1,7 @@
 cabal-version:   1.12
 name:            tar
 version:         0.5.1.1
+x-revision: 5
 
 license:         BSD3
 license-file:    LICENSE
@@ -27,7 +28,7 @@ build-type:      Simple
 extra-source-files: changelog.md
 tested-with:     GHC==7.0.4, GHC==7.2.2, GHC==7.4.2, GHC==7.6.3,
                  GHC==7.8.4, GHC==7.10.3, GHC==8.0.2, GHC==8.2.2, GHC==8.4.4,
-                 GHC==8.6.5, GHC==8.8.3, GHC==8.10.1
+                 GHC==8.6.5, GHC==8.8.3, GHC==8.10.7, GHC==9.0.2, GHC==9.2.3, GHC==9.4.1
 
 source-repository head
   type: git
@@ -41,7 +42,7 @@ flag old-bytestring
 
 library
 
-  build-depends: base       >= 4 && < 4.15,
+  build-depends: base       >= 4 && < 4.18,
                  filepath             < 1.5,
                  array                < 0.6,
                  containers >= 0.2 && < 0.7,
@@ -50,15 +51,15 @@ library
   if flag(old-time)
     build-depends: directory < 1.2, old-time < 1.2
   else
-    build-depends: directory >= 1.2 && < 1.4, time < 1.10
+    build-depends: directory >= 1.2 && < 1.4, time < 1.13
 
   if flag(old-bytestring)
     build-depends: bytestring-builder >= 0.10.4.0.2 && < 0.11, bytestring == 0.9.*
   else
-    build-depends: bytestring == 0.10.*
+    build-depends: bytestring >= 0.10 && < 0.12
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups >= 0.18 && <0.20
+    build-depends: semigroups >= 0.18 && < 0.21
 
   exposed-modules:
     Codec.Archive.Tar
@@ -102,8 +103,8 @@ test-suite properties
                  deepseq,
                  bytestring-handle,
                  QuickCheck       == 2.*,
-                 tasty            >= 0.10 && <0.12,
-                 tasty-quickcheck == 0.8.*
+                 tasty            >= 0.10 && <1.5,
+                 tasty-quickcheck >= 0.8  && <0.11
 
   if flag(old-time)
     build-depends: directory < 1.2, old-time
@@ -163,7 +164,7 @@ benchmark bench
                  criterion >= 1.0
 
   if !impl(ghc >= 8.0)
-    build-depends: semigroups >= 0.18 && <0.20
+    build-depends: semigroups >= 0.18 && <0.21
 
   default-language: Haskell2010
 
