@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, BangPatterns #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, BangPatterns, DeriveTraversable #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
@@ -457,7 +457,7 @@ fromLinkTargetToWindowsPath (LinkTarget pathbs) = adjustDirectory $
 data Entries e = Next Entry (Entries e)
                | Done
                | Fail e
-  deriving (Eq, Show)
+  deriving (Eq, Show, Functor, Foldable, Traversable)
 
 infixr 5 `Next`
 
@@ -523,9 +523,6 @@ instance Sem.Semigroup (Entries e) where
 instance Monoid (Entries e) where
   mempty  = Done
   mappend = (Sem.<>)
-
-instance Functor Entries where
-  fmap f = foldEntries Next Done (Fail . f)
 
 instance NFData e => NFData (Entries e) where
   rnf (Next e es) = rnf e `seq` rnf es
