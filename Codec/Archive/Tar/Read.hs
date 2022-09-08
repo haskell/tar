@@ -168,12 +168,8 @@ correctChecksum header checksum = checksum == checksum'
 {-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Partial FormatError Int   #-}
 {-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Partial FormatError Int64 #-}
 getOct :: (Integral a, Bits a) => Int -> Int -> BS.ByteString -> Partial FormatError a
-getOct off len = parseOct
-               . BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
-               . BS.Char8.dropWhile (== ' ')
-               . getBytes off len
+getOct off len = parseOct . getBytes off len
   where
-    parseOct s | BS.null s = return 0
     -- As a star extension, octal fields can hold a base-256 value if the high
     -- bit of the initial character is set. The initial character can be:
     --   0x80 ==> trailing characters hold a positive base-256 value
@@ -187,9 +183,14 @@ getOct off len = parseOct
     -- which is what I will assume.
     parseOct s | BS.head s == 128 = return (readBytes (BS.tail s))
                | BS.head s == 255 = return (negate (readBytes (BS.tail s)))
-    parseOct s  = case readOct s of
-      Just x  -> return x
-      Nothing -> Error HeaderBadNumericEncoding
+    parseOct s
+      | BS.null stripped = return 0
+      | otherwise = case readOct stripped of
+        Just x  -> return x
+        Nothing -> Error HeaderBadNumericEncoding
+     where
+      stripped = BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
+               $ BS.Char8.dropWhile (== ' ') s
 
     readBytes :: (Integral a, Bits a) => BS.ByteString -> a
     readBytes = BS.foldl' (\acc x -> acc `shiftL` 8 + fromIntegral x) 0

@@ -14,7 +14,9 @@ module Codec.Archive.Tar.Write (write) where
 
 import Codec.Archive.Tar.Types
 
-import Data.Char     (ord)
+import Data.Bits
+import Data.Char     (chr,ord)
+import Data.Int
 import Data.List     (foldl')
 import Data.Monoid   (mempty)
 import Numeric       (showOct)
@@ -70,7 +72,7 @@ putHeaderNoChkSum Entry {
     , putOct       8 $ permissions
     , putOct       8 $ ownerId ownership
     , putOct       8 $ groupId ownership
-    , putOct      12 $ contentSize
+    , numField    12 $ contentSize
     , putOct      12 $ modTime
     , fill         8 $ ' ' -- dummy checksum
     , putChar8       $ typeCode
@@ -98,6 +100,11 @@ putHeaderNoChkSum Entry {
     , fill        12 $ '\NUL'
     ]
   where
+    numField :: (Integral a, Bits a, Show a) => FieldWidth -> a -> String
+    numField = case format of
+      V7Format -> putOct
+      _other -> putLarge
+
     (typeCode, contentSize, linkTarget,
      deviceMajor, deviceMinor) = case content of
        NormalFile      _ size            -> ('0' , size, mempty, 0,     0)
@@ -128,7 +135,12 @@ putBString n s = BS.Char8.unpack (BS.take n s) ++ fill (n - BS.length s) '\NUL'
 putString :: FieldWidth -> String -> String
 putString n s = take n s ++ fill (n - length s) '\NUL'
 
---TODO: check integer widths, eg for large file sizes
+{-# SPECIALISE putLarge :: FieldWidth -> Int64 -> String #-}
+putLarge :: (Bits a, Integral a) => FieldWidth -> a -> String
+putLarge n0 x0 = '\x80' : reverse (go (n0-1) x0)
+  where go 0 _ = []
+        go n x = chr (fromIntegral (x .&. 0xff)) : go (n-1) (x `shiftR` 8)
+
 putOct :: (Integral a, Show a) => FieldWidth -> a -> String
 putOct n x =
   let octStr = take (n-1) $ showOct x ""
