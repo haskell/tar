@@ -46,9 +46,9 @@ library tar-internal
   default-language: Haskell2010
   build-depends: base       >= 4.9  && < 5,
                  array                 < 0.6,
-                 bytestring >= 0.10 && < 0.12,
+                 bytestring >= 0.10 && < 0.13,
                  containers >= 0.2  && < 0.7,
-                 deepseq    >= 1.1  && < 1.5,
+                 deepseq    >= 1.1  && < 1.6,
                  directory  >= 1.2  && < 1.4,
                  filepath              < 1.5,
                  time                  < 1.13
@@ -90,7 +90,7 @@ test-suite properties
                  filepath,
                  QuickCheck       == 2.*,
                  tar-internal,
-                 tasty            >= 0.10 && <1.5,
+                 tasty            >= 0.10 && <1.6,
                  tasty-quickcheck >= 0.8  && <0.11,
                  time
 
