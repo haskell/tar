@@ -47,7 +47,7 @@ library tar-internal
   build-depends: base       >= 4.9  && < 5,
                  array                 < 0.6,
                  bytestring >= 0.10 && < 0.13,
-                 containers >= 0.2  && < 0.7,
+                 containers >= 0.2  && < 0.8,
                  deepseq    >= 1.1  && < 1.6,
                  directory  >= 1.2  && < 1.4,
                  filepath              < 1.5,
