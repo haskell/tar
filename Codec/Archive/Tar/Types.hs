@@ -361,7 +361,8 @@ splitLongPath path =
                                                   BS.empty
     Right (name, first:rest) -> case packName prefixMax remainder of
       Left err               -> Left err
-      Right (_     , (_:_))  -> Left "File name too long (cannot split)"
+      Right (_     , (_:_))  -> Left $ "Filename " ++ path ++
+                                       " too long (cannot split)"
       Right (prefix, [])     -> Right $! TarPath (BS.Char8.pack name)
                                                  (BS.Char8.pack prefix)
       where
