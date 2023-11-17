@@ -4,6 +4,9 @@ See also http://pvp.haskell.org/faq
 
   * Add offending path as new field to `TarBombError` constructor
   * Add `Traversable Entries` instance
+  * Speed up `fromTarPathToPosixPath`
+  * Set permissions on extracted files
+  * Handle > 8 GB files
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
