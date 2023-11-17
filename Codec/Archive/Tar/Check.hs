@@ -63,6 +63,7 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 checkSecurity :: Entries e -> Entries (Either e FileNameError)
 checkSecurity = checkEntries checkEntrySecurity
 
+-- | @since 0.6.0.0
 checkEntrySecurity :: Entry -> Maybe FileNameError
 checkEntrySecurity entry = case entryContent entry of
     HardLink     link -> check (entryPath entry)

@@ -60,9 +60,7 @@ module Codec.Archive.Tar.Entry (
   -- * Constructing entries from disk files
   packFileEntry,
   packDirectoryEntry,
-#if MIN_VERSION_directory(1,3,1)
   packSymlinkEntry,
-#endif
   getDirectoryContentsRecursive,
 
   -- * TarPath type
