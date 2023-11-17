@@ -43,8 +43,6 @@ module Codec.Archive.Tar.Entry (
   DevMinor,
   TypeCode,
   Format(..),
-  These(..),
-  these,
 
   -- * Constructing simple entry values
   simpleEntry,

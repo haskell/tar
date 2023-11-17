@@ -27,8 +27,6 @@ module Codec.Archive.Tar.Types (
   DevMajor,
   DevMinor,
   Format(..),
-  These(..),
-  these,
 
   simpleEntry,
   longLinkEntry,
@@ -42,8 +40,9 @@ module Codec.Archive.Tar.Types (
   directoryPermissions,
 
   TarPath(..),
-  SplitError(..),
   toTarPath,
+  toTarPath',
+  ToTarPathResult(..),
   fromTarPath,
   fromTarPathToPosixPath,
   fromTarPathToWindowsPath,
@@ -63,6 +62,7 @@ module Codec.Archive.Tar.Types (
   ) where
 
 import Data.Int      (Int64)
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid   (Monoid(..))
 import Data.Semigroup as Sem
 import qualified Data.ByteString       as BS
@@ -244,14 +244,15 @@ symlinkEntry :: TarPath -> FilePath -> Entry
 symlinkEntry name targetLink =
   simpleEntry name (SymbolicLink . LinkTarget . packAscii $ targetLink)
 
-
--- | Gnu entry for when a filepath is too long to be in entryTarPath.
--- Gnu tar uses OtherEntryType 'L' then as the first Entry and puts path
--- in the entryContent. The Next entry will then be the "original"
--- entry with the entryTarPath truncated.
+-- | [GNU extension](https://www.gnu.org/software/tar/manual/html_node/Standard.html)
+-- to store a filepath too long to fit into 'entryTarPath'
+-- as 'OtherEntryType' @\'L\'@ with the full filepath as 'entryContent'.
+-- The next entry must contain the actual
+-- data with truncated 'entryTarPath'.
 --
--- So make sure this entry comes before the actual entry, when
--- manually constructing entries.
+-- See [What exactly is the GNU tar ././@LongLink "trick"?](https://stackoverflow.com/questions/2078778/what-exactly-is-the-gnu-tar-longlink-trick)
+--
+-- @since 0.6.0.0
 longLinkEntry :: FilePath -> Entry
 longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
@@ -261,7 +262,6 @@ longLinkEntry tarpath = Entry {
     entryTime        = 0,
     entryFormat      = GnuFormat
   }
-
 
 -- | A tar 'Entry' for a directory.
 --
@@ -371,19 +371,25 @@ fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
 
 -- | Convert a native 'FilePath' to a 'TarPath'.
 --
--- The conversion may fail if the 'FilePath' is too long. See 'TarPath' for a
--- description of the problem with splitting long 'FilePath's.
---
--- Returns:
--- 
--- - 'This': on unrecoverable errors, such as 'FileNameEmpty'
--- - 'That': on no errors
--- - 'These': when the filepath is too long to fit into a single tar 'Entry' and needs long filepath mangling via GNU extension. This can either be treated as an error (like older versions of 'tar') or be used with 'longLinkEntry' to create a compatible set of entries.
+-- The conversion may fail if the 'FilePath' is empty or too long.
+-- Use 'toTarPath'' for a structured output.
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
           -> FilePath
-          -> These SplitError TarPath
-toTarPath isDir = splitLongPath
+          -> Either String TarPath
+toTarPath isDir path = case toTarPath' isDir path of
+  FileNameEmpty      -> Left "File name empty"
+  FileNameOK tarPath -> Right tarPath
+  FileNameTooLong{}  -> Left "File name too long"
+
+-- | Convert a native 'FilePath' to a 'TarPath'.
+--
+-- @since 0.6.0.0
+toTarPath' :: Bool -- ^ Is the path for a directory? This is needed because for
+                  -- directories a 'TarPath' must always use a trailing @\/@.
+          -> FilePath
+          -> ToTarPathResult
+toTarPath' isDir = splitLongPath
                 . addTrailingSep
                 . FilePath.Posix.joinPath
                 . FilePath.Native.splitDirectories
@@ -391,12 +397,18 @@ toTarPath isDir = splitLongPath
     addTrailingSep | isDir     = FilePath.Posix.addTrailingPathSeparator
                    | otherwise = id
 
-data SplitError = FileNameEmpty
-                | FileNameTooLong
-                deriving Show
-
-instance Exception SplitError
-
+-- | Return type of 'toTarPath''.
+--
+-- @since 0.6.0.0
+data ToTarPathResult
+  = FileNameEmpty
+  -- ^ 'FilePath' was empty, but 'TarPath' must be non-empty.
+  | FileNameOK TarPath
+  -- ^ All good, this is just a normal 'TarPath'.
+  | FileNameTooLong TarPath
+  -- ^ 'FilePath' was longer than 255 characters, 'TarPath' contains
+  -- a truncated part only. An actual entry must be preceded by
+  -- 'longLinkEntry'.
 
 -- | Take a sanitised path, split on directory separators and try to pack it
 -- into the 155 + 100 tar file name format.
@@ -404,32 +416,32 @@ instance Exception SplitError
 -- The strategy is this: take the name-directory components in reverse order
 -- and try to fit as many components into the 100 long name area as possible.
 -- If all the remaining components fit in the 155 name area then we win.
-splitLongPath :: FilePath -> These SplitError TarPath
-splitLongPath path =
-  case packName nameMax (reverse (FilePath.Posix.splitPath path)) of
-    Left FileNameTooLong     -> These FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
-    Left e                   -> This e
-    Right (name, [])         -> That $! TarPath (packAscii name) BS.empty
-    Right (name, first:rest) -> case packName prefixMax remainder of
-      Left FileNameTooLong   -> These FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
-      Left e                 -> This e
-      Right (_     , (_:_))  -> These FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
-      Right (prefix, [])     -> That $! TarPath (packAscii name) (packAscii prefix)
+splitLongPath :: FilePath -> ToTarPathResult
+splitLongPath path = case reverse (FilePath.Posix.splitPath path) of
+  [] -> FileNameEmpty
+  c : cs -> case packName nameMax (c :| cs) of
+    Nothing                 -> FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
+    Just (name, [])         -> FileNameOK $! TarPath (packAscii name) BS.empty
+    Just (name, first:rest) -> case packName prefixMax remainder of
+      Nothing               -> FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
+      Just (_     , _:_)    -> FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
+      Just (prefix, [])     -> FileNameOK $! TarPath (packAscii name) (packAscii prefix)
       where
         -- drop the '/' between the name and prefix:
-        remainder = init first : rest
+        remainder = init first :| rest
 
   where
     nameMax, prefixMax :: Int
     nameMax   = 100
     prefixMax = 155
 
-    packName _      []     = Left FileNameEmpty
-    packName maxLen (c:cs)
-      | n > maxLen         = Left FileNameTooLong
-      | otherwise          = Right (packName' maxLen n [c] cs)
+    packName :: Int -> NonEmpty FilePath -> Maybe (FilePath, [FilePath])
+    packName maxLen (c :| cs)
+      | n > maxLen         = Nothing
+      | otherwise          = Just (packName' maxLen n [c] cs)
       where n = length c
 
+    packName' :: Int -> Int -> [FilePath] -> [FilePath] -> (FilePath, [FilePath])
     packName' maxLen n ok (c:cs)
       | n' <= maxLen             = packName' maxLen n' (c:ok) cs
                                      where n' = n + length c
@@ -579,12 +591,3 @@ instance NFData e => NFData (Entries e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
-
-data These a b = This a | That b | These a b
-  deriving (Eq, Ord, Read, Show)
-
--- | Case analysis for the 'These' type.
-these :: (a -> c) -> (b -> c) -> (a -> b -> c) -> These a b -> c
-these l _ _ (This a) = l a
-these _ r _ (That x) = r x
-these _ _ lr (These a x) = lr a x

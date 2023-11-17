@@ -88,7 +88,7 @@ preparePaths baseDir paths =
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
   fmap concat $ interleave
-    [ do let tarpath = toTarPath isDir relpath
+    [ do let tarpath = toTarPath' isDir relpath
 #if MIN_VERSION_directory(1,3,1)
          isSymlink <- pathIsSymbolicLink filepath
          if | isSymlink -> withLongLinkEntry filepath tarpath packSymlinkEntry
@@ -104,16 +104,14 @@ packPaths baseDir paths =
     -- prepend the long filepath entry if necessary
     withLongLinkEntry
       :: FilePath
-      -> These SplitError TarPath
+      -> ToTarPathResult
       -> (FilePath -> TarPath -> IO Entry)
       -> IO [Entry]
-    withLongLinkEntry _ (This e) _ = throwIO e
-    withLongLinkEntry filepath (That tarpath) f = (:[]) <$> f filepath tarpath
-    withLongLinkEntry filepath (These _ tarpath) f = do
+    withLongLinkEntry _ FileNameEmpty _ = throwIO $ userError "File name empty"
+    withLongLinkEntry filepath (FileNameOK tarpath) f = (:[]) <$> f filepath tarpath
+    withLongLinkEntry filepath (FileNameTooLong tarpath) f = do
       mainEntry <- f filepath tarpath
       pure [longLinkEntry filepath, mainEntry]
-
-      
 
 interleave :: [IO a] -> IO [a]
 interleave = unsafeInterleaveIO . go
