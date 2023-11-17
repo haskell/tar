@@ -30,11 +30,7 @@ import System.FilePath
 import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
-         ( createDirectoryIfMissing, copyFile, setPermissions, getDirectoryContents, doesDirectoryExist )
-#if MIN_VERSION_directory(1,3,1)
-import System.Directory
-         ( createDirectoryLink, createFileLink )
-#endif
+         ( createDirectoryIfMissing, copyFile, setPermissions, getDirectoryContents, doesDirectoryExist, createDirectoryLink, createFileLink )
 import Control.Exception
          ( Exception, throwIO, handle )
 import System.IO.Error
@@ -167,7 +163,6 @@ unpack baseDir entries = do
       -- only process unpacking the tar archive and writing to
       -- the destination
       in doesDirectoryExist absTarget >>= \case
-#if MIN_VERSION_directory(1,3,1)
           True -> handleSymlinkError (copyDirectoryRecursive absTarget absPath)
             $ createDirectoryLink relLinkTarget absPath
           False -> handleSymlinkError (copyFile absTarget absPath)
@@ -181,10 +176,6 @@ unpack baseDir entries = do
                       then action
                       else throwIO e
                  )
-#else
-          True -> copyDirectoryRecursive absTarget absPath
-          False -> copyFile absTarget absPath
-#endif
 
 -- | Recursively copy the contents of one directory to another path.
 --

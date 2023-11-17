@@ -194,6 +194,8 @@ ordinaryFilePermissions :: Permissions
 ordinaryFilePermissions   = 0o0644
 
 -- | @rw-r--r--@ for normal files
+--
+-- @since 0.6.0.0
 symbolicLinkPermission :: Permissions
 symbolicLinkPermission   = 0o0777
 

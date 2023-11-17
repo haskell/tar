@@ -13,6 +13,7 @@ See also http://pvp.haskell.org/faq
   * Add support for over-long filepaths via GNU extension
   * Add `toTarPath'`, `ToTarPathResult`, `longLinkEntry`
   * Fix handling of hardlinks and symlinks
+  * Add `packSymlinkEntry` and `symbolicLinkPermission`, export `checkEntrySecurity`
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
