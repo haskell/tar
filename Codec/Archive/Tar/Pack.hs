@@ -1,6 +1,3 @@
-{-# LANGUAGE CPP #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiWayIf #-}
 -----------------------------------------------------------------------------
 -- |
@@ -129,12 +126,11 @@ packFileEntry filepath tarpath = do
   perms   <- getPermissions filepath
   content <- BS.readFile filepath
   let size = BS.length content
-  let entry tp = (simpleEntry tp (NormalFile content (fromIntegral size))) {
+  return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
          entryPermissions = if executable perms then executableFilePermissions
                                                 else ordinaryFilePermissions,
          entryTime = mtime
          }
-  return (entry tarpath)
 
 -- | Construct a tar 'Entry' based on a local directory (but not its contents).
 --
@@ -146,10 +142,9 @@ packDirectoryEntry :: FilePath -- ^ Full path to find the file on the local disk
                    -> IO Entry
 packDirectoryEntry filepath tarpath = do
   mtime   <- getModTime filepath
-  let dEntry tp = (directoryEntry tp) {
+  return (directoryEntry tarpath) {
     entryTime = mtime
   }
-  return (dEntry tarpath)
 
 -- | Construct a tar 'Entry' based on a local symlink.
 --
