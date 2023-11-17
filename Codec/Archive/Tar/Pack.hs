@@ -18,9 +18,7 @@ module Codec.Archive.Tar.Pack (
     pack,
     packFileEntry,
     packDirectoryEntry,
-#if MIN_VERSION_directory(1,3,1)
     packSymlinkEntry,
-#endif
     longLinkEntry,
 
     getDirectoryContentsRecursive,
@@ -35,15 +33,12 @@ import qualified System.FilePath as FilePath.Native
          ( addTrailingPathSeparator, hasTrailingPathSeparator, splitDirectories )
 import System.Directory
          ( getDirectoryContents, doesDirectoryExist, getModificationTime
+         , pathIsSymbolicLink, getSymbolicLinkTarget
          , Permissions(..), getPermissions )
 import Data.Time.Clock
          ( UTCTime )
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
-#if MIN_VERSION_directory(1,3,1)
-import System.Directory
-         ( pathIsSymbolicLink, getSymbolicLinkTarget )
-#endif
 import System.IO
          ( IOMode(ReadMode), withBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
@@ -89,12 +84,8 @@ packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
   fmap concat $ interleave
     [ do let tarpath = toTarPath' isDir relpath
-#if MIN_VERSION_directory(1,3,1)
          isSymlink <- pathIsSymbolicLink filepath
          if | isSymlink -> withLongLinkEntry filepath tarpath packSymlinkEntry
-#else
-         if
-#endif
             | isDir -> withLongLinkEntry filepath tarpath packDirectoryEntry
             | otherwise -> withLongLinkEntry filepath tarpath packFileEntry
     | relpath <- paths
@@ -160,11 +151,11 @@ packDirectoryEntry filepath tarpath = do
   }
   return (dEntry tarpath)
 
-
-#if MIN_VERSION_directory(1,3,1)
 -- | Construct a tar 'Entry' based on a local symlink.
 --
 -- This automatically checks symlink safety via 'checkEntrySecurity'.
+--
+-- @since 0.6.0.0
 packSymlinkEntry :: FilePath -- ^ Full path to find the file on the local disk
                  -> TarPath  -- ^ Path to use for the tar Entry in the archive
                  -> IO Entry
@@ -173,8 +164,6 @@ packSymlinkEntry filepath tarpath = do
   let entry tp = symlinkEntry tp linkTarget
       safeReturn tp = maybe (pure tp) throwIO $ checkEntrySecurity tp
   safeReturn $ entry tarpath
-#endif
-
 
 -- | This is a utility function, much like 'getDirectoryContents'. The
 -- difference is that it includes the contents of subdirectories.
