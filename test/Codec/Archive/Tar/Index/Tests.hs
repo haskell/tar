@@ -165,7 +165,7 @@ example1 =
 testEntry :: FilePath -> Int64 -> Entry
 testEntry name size = Tar.simpleEntry path (NormalFile mempty size)
   where
-    Tar.That path = Tar.toTarPath False name
+    Right path = Tar.toTarPath False name
 
 -- | Simple tar archive containing regular files only
 data SimpleTarArchive = SimpleTarArchive {
@@ -232,7 +232,7 @@ instance Arbitrary SimpleTarArchive where
       mkList []            = []
       mkList ((fp, bs):es) = entry : mkList es
         where
-          Tar.That path = Tar.toTarPath False fp
+          Right path = Tar.toTarPath False fp
           entry   = Tar.simpleEntry path content
           content = NormalFile bs (LBS.length bs)
 
