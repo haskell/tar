@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Codec.Archive.Tar.Index.IntTrie.Tests (
   test1, test2, test3,
@@ -39,6 +40,8 @@ import Data.IntMap (IntMap)
 
 import Test.QuickCheck
 import Control.Applicative ((<$>), (<*>))
+import Data.Bits
+import Data.Int
 
 -- Example mapping:
 --
@@ -163,11 +166,8 @@ test1 :: Property
 prop_lookup :: [([Key], Value)] -> Property
 prop_lookup paths =
   conjoin $ flip map paths $ \(key, value) ->
-    case lookup trie key of
-      Just (Entry value')   -> value' === value
-      Nothing               -> error $ "IntTrie: didn't find " ++ show key
-      Just (Completions xs) -> error $ "IntTrie: " ++ show xs
-
+    counterexample (show (trie, key)) $
+      lookup trie key === Just (Entry value)
   where
     trie = construct paths
 
@@ -226,23 +226,27 @@ newtype ValidPaths = ValidPaths [([Key], Value)] deriving Show
 instance Arbitrary ValidPaths where
   arbitrary =
       ValidPaths . makeNoPrefix <$> listOf ((,)
-        <$> listOf1 (fmap (Key . fromIntegral . ord) arbitrary)
-        <*> (fmap (Value . fromIntegral . ord) arbitrary))
+        -- Key is actually Word31
+        <$> listOf1 (fmap (Key . fromIntegral @Int32 . getNonNegative) arbitrary)
+        <*> fmap Value arbitrary)
     where
+      makeNoPrefix :: [([Key], Value)] -> [([Key], Value)]
       makeNoPrefix [] = []
-      makeNoPrefix ((k,v):kvs)
-        | all (\(k', _) -> not (isPrefixOfOther k k')) kvs
-                     = (k,v) : makeNoPrefix kvs
-        | otherwise  =         makeNoPrefix kvs
+      makeNoPrefix ((ks, v) : ksvs)
+        | all (\(ks', _) -> not (isPrefixOfOther ks ks')) ksvs
+                     = (ks, v) : makeNoPrefix ksvs
+        | otherwise  =           makeNoPrefix ksvs
 
   shrink (ValidPaths kvs)
       = map ValidPaths . filter noPrefix . filter nonEmpty . map (map (\(ks, v) -> (map Key ks, Value v)))
       . shrink
       . map (\(ks, v) -> (map unKey ks, unValue v)) $ kvs
     where
+      noPrefix :: [([Key], Value)] -> Bool
       noPrefix []           = True
       noPrefix ((k,_):kvs') = all (\(k', _) -> not (isPrefixOfOther k k')) kvs'
                            && noPrefix kvs'
       nonEmpty = all (not . null . fst)
 
+isPrefixOfOther :: [Key] -> [Key] -> Bool
 isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a

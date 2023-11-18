@@ -63,6 +63,8 @@ import Data.Function (on)
 newtype IntTrie = IntTrie (A.UArray Word32 Word32)
     deriving (Eq, Show, Typeable)
 
+-- | The most significant bit is used for tagging,
+-- see 'tagLeaf' / 'tagNode' below, so morally it's Word31 only.
 newtype Key = Key { unKey :: Word32 }
   deriving (Eq, Ord, Show)
 
@@ -134,7 +136,9 @@ construct = finalise . flip inserts empty
 -- Looking up in the trie array
 --
 
-data TrieLookup  = Entry !Value | Completions Completions deriving Show
+data TrieLookup = Entry !Value | Completions Completions
+  deriving (Eq, Ord, Show)
+
 type Completions = [(Key, TrieLookup)]
 
 lookup :: IntTrie -> [Key] -> Maybe TrieLookup
