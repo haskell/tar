@@ -7,6 +7,7 @@ See also http://pvp.haskell.org/faq
   * Speed up `fromTarPathToPosixPath`
   * Set permissions on extracted files
   * Handle > 8 GB files
+  * Prohibit non-ASCII file names instead of silent corruption
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 

@@ -67,6 +67,7 @@ import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 import Codec.Archive.Tar.Index.StringTable (StringTable, StringTableBuilder)
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import Codec.Archive.Tar.Index.IntTrie (IntTrie, IntTrieBuilder)
+import Codec.Archive.Tar.PackAscii
 
 import qualified System.FilePath.Posix as FilePath
 import Data.Monoid (Monoid(..))
@@ -174,7 +175,7 @@ toComponentIds table =
     lookupComponents []
   . filter (/= BS.Char8.singleton '.')
   . splitDirectories
-  . BS.Char8.pack
+  . packAscii
   where
     lookupComponents cs' []     = Just (reverse cs')
     lookupComponents cs' (c:cs) = case StringTable.lookup table c of

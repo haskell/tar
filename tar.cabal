@@ -62,6 +62,7 @@ library tar-internal
     Codec.Archive.Tar.Read
     Codec.Archive.Tar.Write
     Codec.Archive.Tar.Pack
+    Codec.Archive.Tar.PackAscii
     Codec.Archive.Tar.Unpack
     Codec.Archive.Tar.Index.StringTable
     Codec.Archive.Tar.Index.IntTrie

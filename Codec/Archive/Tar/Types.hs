@@ -74,6 +74,8 @@ import qualified System.FilePath.Windows as FilePath.Windows
 import System.Posix.Types
          ( FileMode )
 
+import Codec.Archive.Tar.PackAscii
+
 type FileSize  = Int64
 -- | The number of seconds since the UNIX epoch
 type EpochTime = Int64
@@ -357,14 +359,14 @@ splitLongPath :: FilePath -> Either String TarPath
 splitLongPath path =
   case packName nameMax (reverse (FilePath.Posix.splitPath path)) of
     Left err                 -> Left err
-    Right (name, [])         -> Right $! TarPath (BS.Char8.pack name)
+    Right (name, [])         -> Right $! TarPath (packAscii name)
                                                   BS.empty
     Right (name, first:rest) -> case packName prefixMax remainder of
       Left err               -> Left err
       Right (_     , (_:_))  -> Left $ "Filename " ++ path ++
                                        " too long (cannot split)"
-      Right (prefix, [])     -> Right $! TarPath (BS.Char8.pack name)
-                                                 (BS.Char8.pack prefix)
+      Right (prefix, [])     -> Right $! TarPath (packAscii name)
+                                                 (packAscii prefix)
       where
         -- drop the '/' between the name and prefix:
         remainder = init first : rest
@@ -399,7 +401,7 @@ instance NFData LinkTarget where
 -- characters.
 --
 toLinkTarget   :: FilePath -> Maybe LinkTarget
-toLinkTarget path | length path <= 100 = Just $! LinkTarget (BS.Char8.pack path)
+toLinkTarget path | length path <= 100 = Just $! LinkTarget (packAscii path)
                   | otherwise          = Nothing
 
 -- | Convert a tar 'LinkTarget' to a native 'FilePath'.
