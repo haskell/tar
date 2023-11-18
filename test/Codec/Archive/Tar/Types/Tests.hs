@@ -8,6 +8,8 @@
 -- License     :  BSD3
 --
 -----------------------------------------------------------------------------
+{-# LANGUAGE RecordWildCards #-}
+
 module Codec.Archive.Tar.Types.Tests (
   limitToV7FormatCompat
   ) where
@@ -28,14 +30,16 @@ import Control.Applicative ((<$>), (<*>), pure)
 import Data.Word (Word16)
 
 instance Arbitrary Entry where
-  arbitrary = Entry <$> arbitrary <*> arbitrary <*> arbitraryPermissions
-                    <*> arbitrary <*> arbitraryEpochTime <*> arbitrary
-    where
-      arbitraryPermissions :: Gen Permissions
-      arbitraryPermissions = fromIntegral <$> (arbitrary :: Gen Word16)
-
-      arbitraryEpochTime :: Gen EpochTime
-      arbitraryEpochTime = arbitraryOctal 11
+  arbitrary = do
+    entryTarPath <- arbitrary
+    entryContent <- arbitrary
+    entryPermissions <- fromIntegral <$> (arbitrary :: Gen Word16)
+    entryOwnership <- arbitrary
+    entryTime <- arbitraryOctal 11
+    entryFormat <- case entryContent of
+      OtherEntryType 'L' _ _ -> pure GnuFormat
+      _ -> arbitrary
+    pure Entry{..}
 
   shrink (Entry path content perms author time format) =
       [ Entry path' content' perms author' time' format
@@ -137,7 +141,8 @@ instance Arbitrary Ownership where
 
 instance Arbitrary Format where
   arbitrary = elements [V7Format, UstarFormat, GnuFormat]
-
+  shrink GnuFormat = []
+  shrink _ = [GnuFormat]
 
 --arbitraryOctal :: (Integral n, Random n) => Int -> Gen n
 arbitraryOctal n =

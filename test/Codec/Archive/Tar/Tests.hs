@@ -27,17 +27,16 @@ prop_write_read_ustar :: [Entry] -> Property
 prop_write_read_ustar entries =
     foldr Next Done entries' === read (write entries')
   where
-    entries' = [ e { entryFormat = UstarFormat } | e <- entries ]
+    entries' = filter ((== UstarFormat) . entryFormat) entries
 
 prop_write_read_gnu :: [Entry] -> Property
 prop_write_read_gnu entries =
     foldr Next Done entries' === read (write entries')
   where
-    entries' = [ e { entryFormat = GnuFormat } | e <- entries ]
+    entries' = filter ((== GnuFormat) . entryFormat) entries
 
 prop_write_read_v7 :: [Entry] -> Property
 prop_write_read_v7 entries =
     foldr Next Done entries' === read (write entries')
   where
-    entries' = [ limitToV7FormatCompat e { entryFormat = V7Format }
-               | e <- entries ]
+    entries' = map limitToV7FormatCompat $ filter ((== V7Format) . entryFormat) entries
