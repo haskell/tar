@@ -22,12 +22,15 @@ module Codec.Archive.Tar.Index.Tests (
     prop_finalise_unfinalise,
   ) where
 
-import Codec.Archive.Tar.Index.Internal
-import Codec.Archive.Tar.Types as Tar
+import Codec.Archive.Tar (Entries(..), Entry(..), EntryContent(..))
+import Codec.Archive.Tar.Index.Internal (TarIndexEntry(..), TarIndex(..), IndexBuilder, TarEntryOffset(..))
+import qualified Codec.Archive.Tar.Index.Internal as Tar
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 import qualified Codec.Archive.Tar.Index.StringTable.Tests as StringTable
+import qualified Codec.Archive.Tar.Types as Tar
+import qualified Codec.Archive.Tar.Write as Tar
 
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
@@ -49,7 +52,6 @@ import Data.List (nub, sort, sortBy, stripPrefix, isPrefixOf)
 import Data.Maybe
 import Data.Function (on)
 import Control.Exception (SomeException, try, throwIO)
-import Codec.Archive.Tar.Write          as Tar
 
 #ifdef MIN_VERSION_bytestring_handle
 import qualified Data.ByteString.Handle as HBS
@@ -60,7 +62,7 @@ import qualified Data.ByteString.Handle as HBS
 
 prop_lookup :: ValidPaths -> NonEmptyFilePath -> Property
 prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
-  case (lookup index p, Prelude.lookup p paths) of
+  case (Tar.lookup index p, Prelude.lookup p paths) of
     (Nothing,                    Nothing)          -> property True
     (Just (TarFileEntry offset), Just (_,offset')) -> offset === offset'
     (Just (TarDir entries),      Nothing)          -> sort (nub (map fst entries))
@@ -74,7 +76,7 @@ prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
 
 prop_toList :: ValidPaths -> Property
 prop_toList (ValidPaths paths) =
-    sort (toList index)
+    sort (Tar.toList index)
  === sort [ (path, off) | (path, (_sz, off)) <- paths ]
   where
     index = construct paths
@@ -93,22 +95,22 @@ prop_valid (ValidPaths paths) =
                          paths
     intpaths = [ (cids, offset)
                | (path, (_size, offset)) <- paths
-               , let Just cids = toComponentIds pathTable path ]
+               , let Just cids = Tar.toComponentIds pathTable path ]
     prop' = conjoin $ flip map paths $ \(file, (_size, offset)) ->
-      case lookup index file of
+      case Tar.lookup index file of
         Just (TarFileEntry offset') -> offset' === offset
         _                           -> property False
 
 prop_serialise_deserialise :: ValidPaths -> Property
 prop_serialise_deserialise (ValidPaths paths) =
-    Just (index, BS.empty) === (deserialise . serialise) index
+    Just (index, BS.empty) === (Tar.deserialise . Tar.serialise) index
   where
     index = construct paths
 
 prop_serialiseSize :: ValidPaths -> Property
 prop_serialiseSize (ValidPaths paths) =
-    case (LBS.toChunks . serialiseLBS) index of
-      [c1] -> BS.length c1 === serialiseSize index
+    case (LBS.toChunks . Tar.serialiseLBS) index of
+      [c1] -> BS.length c1 === Tar.serialiseSize index
       _    -> property False
   where
     index = construct paths
@@ -145,7 +147,7 @@ instance Arbitrary ValidPaths where
 construct :: [(FilePath, (Int64, TarEntryOffset))] -> TarIndex
 construct =
     either (const undefined) id
-  . build
+  . Tar.build
   . foldr (\(path, (size, _off)) es -> Next (testEntry path size) es) Done
 
 example0 :: Entries ()
@@ -160,9 +162,9 @@ example1 =
   Next (testEntry "./" 1500) Done <> example0
 
 testEntry :: FilePath -> Int64 -> Entry
-testEntry name size = simpleEntry path (NormalFile mempty size)
+testEntry name size = Tar.simpleEntry path (NormalFile mempty size)
   where
-    Right path = toTarPath False name
+    Right path = Tar.toTarPath False name
 
 -- | Simple tar archive containing regular files only
 data SimpleTarArchive = SimpleTarArchive {
@@ -185,18 +187,18 @@ prop_index_matches_tar sta =
       h <- HBS.readHandle True (simpleTarBS sta)
       goEntries h 0 (simpleTarEntries sta)
 
-    goEntries :: Handle -> TarEntryOffset -> Tar.Entries () -> IO ()
-    goEntries _ _ Tar.Done =
+    goEntries :: Handle -> TarEntryOffset -> Entries () -> IO ()
+    goEntries _ _ Done =
       return ()
-    goEntries _ _ (Tar.Fail _) =
+    goEntries _ _ (Fail _) =
       throwIO (userError "Fail entry in SimpleTarArchive")
     goEntries h offset (Tar.Next e es) = do
       goEntry h offset e
-      goEntries h (nextEntryOffset e offset) es
+      goEntries h (Tar.nextEntryOffset e offset) es
 
     goEntry :: Handle -> TarEntryOffset -> Tar.Entry -> IO ()
     goEntry h offset e = do
-      e' <- hReadEntry h offset
+      e' <- Tar.hReadEntry h offset
       case (Tar.entryContent e, Tar.entryContent e') of
         (Tar.NormalFile bs sz, Tar.NormalFile bs' sz') ->
           unless (sz == sz' && bs == bs') $
@@ -229,8 +231,8 @@ instance Arbitrary SimpleTarArchive where
       mkList []            = []
       mkList ((fp, bs):es) = entry : mkList es
         where
-          Right path = toTarPath False fp
-          entry   = simpleEntry path content
+          Right path = Tar.toTarPath False fp
+          entry   = Tar.simpleEntry path content
           content = NormalFile bs (LBS.length bs)
 
       mkEntries :: [Tar.Entry] -> Tar.Entries ()
@@ -254,15 +256,15 @@ instance Arbitrary SimpleIndexBuilder where
     where
       -- like 'build', but don't finalize
       build' :: Show e => Entries e -> IndexBuilder
-      build' = go empty
+      build' = go Tar.empty
         where
-          go !builder (Next e es) = go (addNextEntry e builder) es
+          go !builder (Next e es) = go (Tar.addNextEntry e builder) es
           go !builder  Done       = builder
           go !_       (Fail err)  = error (show err)
 
 prop_finalise_unfinalise :: SimpleIndexBuilder -> Property
 prop_finalise_unfinalise (SimpleIndexBuilder index) =
-    unfinalise (finalise index) === index
+    Tar.unfinalise (Tar.finalise index) === index
 
 #if !(MIN_VERSION_base(4,5,0))
 (<>) :: Monoid m => m -> m -> m
