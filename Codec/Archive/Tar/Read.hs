@@ -80,12 +80,12 @@ getEntry bs
         | not (LBS.all (== 0) trailing) -> Left TrailingJunk
         | otherwise                     -> Right Nothing
 
-  | otherwise  = partial $ do
+  | otherwise  = do
 
   case (chksum_, format_) of
-    (Ok chksum, _   ) | correctChecksum header chksum -> return ()
-    (Ok _,      Ok _) -> Error ChecksumIncorrect
-    _                 -> Error NotTarFormat
+    (Right chksum, _ ) | correctChecksum header chksum -> return ()
+    (Right _, Right _) -> Left ChecksumIncorrect
+    _                  -> Left NotTarFormat
 
   -- These fields are partial, have to check them
   format   <- format_;   mode     <- mode_;
@@ -145,7 +145,7 @@ getEntry bs
      | magic == ustarMagic = return UstarFormat
      | magic == gnuMagic   = return GnuFormat
      | magic == v7Magic    = return V7Format
-     | otherwise           = Error UnrecognisedTarFormat
+     | otherwise           = Left UnrecognisedTarFormat
 
 v7Magic, ustarMagic, gnuMagic :: BS.ByteString
 v7Magic    = BS.Char8.pack "\0\0\0\0\0\0\0\0"
@@ -165,9 +165,9 @@ correctChecksum header checksum = checksum == checksum'
 
 -- * TAR format primitive input
 
-{-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Partial FormatError Int   #-}
-{-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Partial FormatError Int64 #-}
-getOct :: (Integral a, Bits a) => Int -> Int -> BS.ByteString -> Partial FormatError a
+{-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Either FormatError Int   #-}
+{-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Either FormatError Int64 #-}
+getOct :: (Integral a, Bits a) => Int -> Int -> BS.ByteString -> Either FormatError a
 getOct off len = parseOct . getBytes off len
   where
     -- As a star extension, octal fields can hold a base-256 value if the high
@@ -187,7 +187,7 @@ getOct off len = parseOct . getBytes off len
       | BS.null stripped = return 0
       | otherwise = case readOct stripped of
         Just x  -> return x
-        Nothing -> Error HeaderBadNumericEncoding
+        Nothing -> Left HeaderBadNumericEncoding
      where
       stripped = BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
                $ BS.Char8.dropWhile (== ' ') s
@@ -202,34 +202,10 @@ getByte :: Int -> BS.ByteString -> Char
 getByte off bs = BS.Char8.index bs off
 
 getChars :: Int -> Int -> BS.ByteString -> BS.ByteString
-getChars off len = getBytes off len
+getChars = getBytes
 
 getString :: Int -> Int -> BS.ByteString -> BS.ByteString
 getString off len = BS.copy . BS.Char8.takeWhile (/='\0') . getBytes off len
-
--- These days we'd just use Either, but in older versions of base there was no
--- Monad instance for Either, it was in mtl with an annoying Error constraint.
---
-data Partial e a = Error e | Ok a
-
-partial :: Partial e a -> Either e a
-partial (Error msg) = Left msg
-partial (Ok x)      = Right x
-
-instance Functor (Partial e) where
-    fmap = liftM
-
-instance Applicative (Partial e) where
-    pure  = Ok
-    (<*>) = ap
-
-instance Monad (Partial e) where
-    return        = pure
-    Error m >>= _ = Error m
-    Ok    x >>= k = k x
-#if !MIN_VERSION_base(4,13,0)
-    fail          = error "fail @(Partial e)"
-#endif
 
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int   #-}
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int64 #-}
