@@ -20,6 +20,7 @@ module Codec.Archive.Tar.Index.Internal (
     lookup,
     TarIndexEntry(..),
     toList,
+    PathComponentId(..),
 
     -- ** I\/O operations
     TarEntryOffset,
@@ -115,7 +116,7 @@ data TarIndex = TarIndex
   {-# UNPACK #-} !(StringTable PathComponentId)
 
   -- Mapping of sequences of filepath component ids to tar entry offsets.
-  {-# UNPACK #-} !(IntTrie PathComponentId TarEntryOffset)
+  {-# UNPACK #-} !IntTrie -- key = PathComponentId, value = TarEntryOffset
 
   -- The offset immediatly after the last entry, where we would append any
   -- additional entries.
@@ -161,12 +162,12 @@ type TarEntryOffset = Word32
 lookup :: TarIndex -> FilePath -> Maybe TarIndexEntry
 lookup (TarIndex pathTable pathTrie _) path = do
     fpath  <- toComponentIds pathTable path
-    tentry <- IntTrie.lookup pathTrie fpath
+    tentry <- IntTrie.lookup pathTrie $ map pathComponentIdToKey fpath
     return (mkIndexEntry tentry)
   where
-    mkIndexEntry (IntTrie.Entry offset)        = TarFileEntry offset
+    mkIndexEntry (IntTrie.Entry offset)        = TarFileEntry $ IntTrie.unValue offset
     mkIndexEntry (IntTrie.Completions entries) =
-      TarDir [ (fromComponentId pathTable key, mkIndexEntry entry)
+      TarDir [ (fromComponentId pathTable $ keyToPathComponentId key, mkIndexEntry entry)
              | (key, entry) <- entries ]
 
 
@@ -192,9 +193,9 @@ fromComponentId table = BS.Char8.unpack . StringTable.index table
 --
 toList :: TarIndex -> [(FilePath, TarEntryOffset)]
 toList (TarIndex pathTable pathTrie _) =
-    [ (path, off)
+    [ (path, IntTrie.unValue off)
     | (cids, off) <- IntTrie.toList pathTrie
-    , let path = FilePath.joinPath (map (fromComponentId pathTable) cids) ]
+    , let path = FilePath.joinPath (map (fromComponentId pathTable . keyToPathComponentId) cids) ]
 
 
 -- | Build a 'TarIndex' from a sequence of tar 'Entries'. The 'Entries' are
@@ -230,7 +231,7 @@ build = go empty
 --
 data IndexBuilder
    = IndexBuilder !(StringTableBuilder PathComponentId)
-                  !(IntTrieBuilder PathComponentId TarEntryOffset)
+                  !IntTrieBuilder -- key = PathComponentId, value = TarEntryOffset
    {-# UNPACK #-} !TarEntryOffset
   deriving (Eq, Show)
 
@@ -255,7 +256,7 @@ addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
   where
     !entrypath    = splitTarPath (entryTarPath entry)
     (stbl', cids) = StringTable.inserts entrypath stbl
-    itrie'        = IntTrie.insert cids nextOffset itrie
+    itrie'        = IntTrie.insert (map pathComponentIdToKey cids) (IntTrie.Value nextOffset) itrie
 
 -- | Use this function if you want to skip some entries and not add them to the
 -- final 'TarIndex'.
@@ -549,3 +550,13 @@ readWord32BE bs i =
 
 toStrict :: LBS.ByteString -> BS.ByteString
 toStrict = LBS.toStrict
+
+-- 'fromIntegral' is safe even on 32-bit machines, but 'fromEnum' / 'toEnum' is not,
+-- because 'fromEnum' on 'Word32' near 'maxBound' fails, as well as
+-- 'toEnum :: Int -> Word32' on negative arguments.
+
+pathComponentIdToKey :: PathComponentId -> IntTrie.Key
+pathComponentIdToKey (PathComponentId n) = IntTrie.Key (fromIntegral n)
+
+keyToPathComponentId :: IntTrie.Key -> PathComponentId
+keyToPathComponentId (IntTrie.Key n) = PathComponentId (fromIntegral n)

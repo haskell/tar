@@ -18,6 +18,7 @@ import Prelude hiding (lookup)
 import Codec.Archive.Tar.Index.IntTrie
 
 import qualified Data.Array.Unboxed as A
+import Data.Char
 import Data.Function (on)
 import Data.List hiding (lookup, insert)
 import Data.Word (Word32)
@@ -49,11 +50,11 @@ example0 =
 
 -- After converting path components to integers this becomes:
 --
-example1 :: [([Word32], Word32)]
+example1 :: [([Key], Value)]
 example1 =
-  [([1,2],   512)
-  ,([1,3],   2048)
-  ,([1,4,5], 4096)]
+  [([Key 1, Key 2], Value 512)
+  ,([Key 1, Key 3], Value 2048)
+  ,([Key 1, Key 4, Key 5], Value 4096)]
 
 -- As a trie this looks like:
 
@@ -65,28 +66,28 @@ example1 =
 
 -- We use an intermediate trie representation
 
-mktrie :: [(Int, TrieNode k v)] -> IntTrieBuilder k v
-mkleaf :: (Enum k, Enum v) => k -> v                  -> (Int, TrieNode k v)
-mknode ::  Enum k          => k -> IntTrieBuilder k v -> (Int, TrieNode k v)
+mktrie :: [(Int, TrieNode)] -> IntTrieBuilder
+mkleaf :: Key -> Value          -> (Int, TrieNode)
+mknode :: Key -> IntTrieBuilder -> (Int, TrieNode)
 
 mktrie = IntTrieBuilder . IntMap.fromList
-mkleaf k v = (fromEnum k, TrieLeaf (enumToWord32 v))
-mknode k t = (fromEnum k, TrieNode t)
+mkleaf k v = (fromIntegral $ unKey k, TrieLeaf (unValue v))
+mknode k t = (fromIntegral $ unKey k, TrieNode t)
 
-example2 :: IntTrieBuilder Word32 Word32
-example2 = mktrie [ mknode 1 t1 ]
+example2 :: IntTrieBuilder
+example2 = mktrie [ mknode (Key 1) t1 ]
   where
-    t1   = mktrie [ mkleaf 2 512, mkleaf 3 2048, mknode 4 t2 ]
-    t2   = mktrie [ mkleaf 5 4096 ]
+    t1   = mktrie [ mkleaf (Key 2) (Value 512), mkleaf (Key 3) (Value 2048), mknode (Key 4) t2 ]
+    t2   = mktrie [ mkleaf (Key 5) (Value 4096) ]
 
 
-example2' :: IntTrieBuilder Word32 Word32
-example2' = mktrie [ mknode 0 t1 ]
+example2' :: IntTrieBuilder
+example2' = mktrie [ mknode (Key 0) t1 ]
   where
-    t1   = mktrie [ mknode 3 t2 ]
-    t2   = mktrie [ mknode 1 t3, mknode 2 t4 ]
-    t3   = mktrie [ mkleaf 4 10608 ]
-    t4   = mktrie [ mkleaf 4 10612 ]
+    t1   = mktrie [ mknode (Key 3) t2 ]
+    t2   = mktrie [ mknode (Key 1) t3, mknode (Key 2) t4 ]
+    t3   = mktrie [ mkleaf (Key 4) (Value 10608) ]
+    t4   = mktrie [ mkleaf (Key 4) (Value 10612) ]
 {-
 0: [1,N0,3]
 
@@ -98,21 +99,21 @@ example2' = mktrie [ mknode 0 t1 ]
      14: [1,4,10612]
 -}
 
-example2'' :: IntTrieBuilder Word32 Word32
-example2'' = mktrie [ mknode 1 t1, mknode 2 t2 ]
+example2'' :: IntTrieBuilder
+example2'' = mktrie [ mknode (Key 1) t1, mknode (Key 2) t2 ]
   where
-    t1   = mktrie [ mkleaf 4 10608 ]
-    t2   = mktrie [ mkleaf 4 10612 ]
+    t1   = mktrie [ mkleaf (Key 4) (Value 10608) ]
+    t2   = mktrie [ mkleaf (Key 4) (Value 10612) ]
 
-example2''' :: IntTrieBuilder Word32 Word32
-example2''' = mktrie [ mknode 0 t3 ]
+example2''' :: IntTrieBuilder
+example2''' = mktrie [ mknode (Key 0) t3 ]
   where
-    t3  = mktrie [ mknode 4 t8, mknode 6 t11 ]
-    t8  = mktrie [ mknode 1 t14 ]
-    t11 = mktrie [ mkleaf 5 10605 ]
-    t14 = mktrie [ mknode 2 t19, mknode 3 t22 ]
-    t19 = mktrie [ mkleaf 7 10608 ]
-    t22 = mktrie [ mkleaf 7 10612 ]
+    t3  = mktrie [ mknode (Key 4) t8, mknode (Key 6) t11 ]
+    t8  = mktrie [ mknode (Key 1) t14 ]
+    t11 = mktrie [ mkleaf (Key 5) (Value 10605) ]
+    t14 = mktrie [ mknode (Key 2) t19, mknode (Key 3) t22 ]
+    t19 = mktrie [ mkleaf (Key 7) (Value 10608) ]
+    t22 = mktrie [ mkleaf (Key 7) (Value 10612) ]
 {-
  0: [1,N0,3]
  3: [2,N4,N6,8,11]
@@ -147,20 +148,19 @@ example3 =
 
 test2 = example3 === flattenTrie example2
 
-example4 :: IntTrie Int Int
+example4 :: IntTrie
 example4 = IntTrie (mkArray example3)
 
 mkArray :: [Word32] -> A.UArray Word32 Word32
 mkArray xs = A.listArray (0, fromIntegral (length xs) - 1) xs
 
-test3 = case lookup example4 [1] of
-          Just (Completions [(2,_),(3,_),(4,_)]) -> True
+test3 = case lookup example4 [Key 1] of
+          Just (Completions [(Key 2,_),(Key 3,_),(Key 4,_)]) -> True
           _                          -> False
 
 test1 :: Property
 
-prop_lookup :: (Ord k, Enum k, Eq v, Enum v, Show k, Show v)
-            => [([k], v)] -> Property
+prop_lookup :: [([Key], Value)] -> Property
 prop_lookup paths =
   conjoin $ flip map paths $ \(key, value) ->
     case lookup trie key of
@@ -171,12 +171,12 @@ prop_lookup paths =
   where
     trie = construct paths
 
-prop_completions :: forall k v. (Ord k, Enum k, Eq v, Enum v) => [([k], v)] -> Property
+prop_completions :: [([Key], Value)] -> Property
 prop_completions paths =
     inserts paths empty
  === convertCompletions (completionsFrom (construct paths) 0)
   where
-    convertCompletions :: Ord k => Completions k v -> IntTrieBuilder k v
+    convertCompletions :: Completions -> IntTrieBuilder
     convertCompletions kls =
       IntTrieBuilder $
         IntMap.fromList
@@ -201,7 +201,7 @@ prop_finalise_unfinalise :: ValidPaths -> Property
 prop_finalise_unfinalise (ValidPaths paths) =
     builder === unfinalise (finalise builder)
   where
-    builder :: IntTrieBuilder Char Char
+    builder :: IntTrieBuilder
     builder = inserts paths empty
 
 prop_serialise_deserialise :: ValidPaths -> Property
@@ -210,7 +210,7 @@ prop_serialise_deserialise (ValidPaths paths) =
                             . LBS.toStrict . BS.toLazyByteString
                             . serialise) trie
   where
-    trie :: IntTrie Char Char
+    trie :: IntTrie
     trie = construct paths
 
 prop_serialiseSize :: ValidPaths -> Property
@@ -218,14 +218,16 @@ prop_serialiseSize (ValidPaths paths) =
     (fromIntegral . LBS.length . BS.toLazyByteString . serialise) trie
  === serialiseSize trie
   where
-    trie :: IntTrie Char Char
+    trie :: IntTrie
     trie = construct paths
 
-newtype ValidPaths = ValidPaths [([Char], Char)] deriving Show
+newtype ValidPaths = ValidPaths [([Key], Value)] deriving Show
 
 instance Arbitrary ValidPaths where
   arbitrary =
-      ValidPaths . makeNoPrefix <$> listOf ((,) <$> listOf1 arbitrary <*> arbitrary)
+      ValidPaths . makeNoPrefix <$> listOf ((,)
+        <$> listOf1 (fmap (Key . fromIntegral . ord) arbitrary)
+        <*> (fmap (Value . fromIntegral . ord) arbitrary))
     where
       makeNoPrefix [] = []
       makeNoPrefix ((k,v):kvs)
@@ -233,8 +235,10 @@ instance Arbitrary ValidPaths where
                      = (k,v) : makeNoPrefix kvs
         | otherwise  =         makeNoPrefix kvs
 
-  shrink (ValidPaths kvs) =
-      map ValidPaths . filter noPrefix . filter nonEmpty . shrink $ kvs
+  shrink (ValidPaths kvs)
+      = map ValidPaths . filter noPrefix . filter nonEmpty . map (map (\(ks, v) -> (map Key ks, Value v)))
+      . shrink
+      . map (\(ks, v) -> (map unKey ks, unValue v)) $ kvs
     where
       noPrefix []           = True
       noPrefix ((k,_):kvs') = all (\(k', _) -> not (isPrefixOfOther k k')) kvs'

@@ -27,8 +27,10 @@ module Codec.Archive.Tar.Index.IntTrie (
   flattenTrie,
   tagLeaf,
   tagNode,
-  enumToWord32
- ) where
+
+  Key(..),
+  Value(..),
+  ) where
 
 import Prelude hiding (lookup)
 
@@ -58,9 +60,14 @@ import Data.Function (on)
 -- NOTE: The tries in this module have values /only/ at the leaves (which
 -- correspond to files), they do not have values at the branch points (which
 -- correspond to directories).
-newtype IntTrie k v = IntTrie (A.UArray Word32 Word32)
+newtype IntTrie = IntTrie (A.UArray Word32 Word32)
     deriving (Eq, Show, Typeable)
 
+newtype Key = Key { unKey :: Word32 }
+  deriving (Eq, Ord, Show)
+
+newtype Value = Value { unValue :: Word32 }
+  deriving (Eq, Ord, Show)
 
 -- Compact, read-only implementation of a trie. It's intended for use with file
 -- paths, but we do that via string ids.
@@ -85,14 +92,14 @@ isNode = flip Bits.testBit 31
 -- Decoding the trie array form
 --
 
-completionsFrom :: (Enum k, Enum v) => IntTrie k v -> Word32 -> Completions k v
+completionsFrom :: IntTrie -> Word32 -> Completions
 completionsFrom trie@(IntTrie arr) nodeOff =
-    [ (word32ToEnum (untag key), next)
+    [ (Key (untag key), next)
     | keyOff <- [keysStart..keysEnd]
     , let key   = arr ! keyOff
           entry = arr ! (keyOff + nodeSize)
           next | isNode key = Completions (completionsFrom trie entry)
-               | otherwise  = Entry (word32ToEnum entry)
+               | otherwise  = Entry (Value entry)
     ]
   where
     nodeSize  = arr ! nodeOff
@@ -102,10 +109,10 @@ completionsFrom trie@(IntTrie arr) nodeOff =
 -- | Convert the trie to a list
 --
 -- This is the left inverse to 'construct' (modulo ordering).
-toList :: forall k v. (Enum k, Enum v) => IntTrie k v -> [([k], v)]
+toList :: IntTrie -> [([Key], Value)]
 toList = concatMap (aux []) . (`completionsFrom` 0)
   where
-    aux :: [k] -> (k, TrieLookup k v) -> [([k], v)]
+    aux :: [Key] -> (Key, TrieLookup) -> [([Key], Value)]
     aux ks (k, Entry v)        = [(reverse (k:ks), v)]
     aux ks (k, Completions cs) = concatMap (aux (k:ks)) cs
 
@@ -119,7 +126,7 @@ toList = concatMap (aux []) . (`completionsFrom` 0)
 -- | Build an 'IntTrie' from a bunch of (key, value) pairs, where the keys
 -- are sequences.
 --
-construct :: (Enum k, Enum v) => [([k], v)] -> IntTrie k v
+construct :: [([Key], Value)] -> IntTrie
 construct = finalise . flip inserts empty
 
 
@@ -127,13 +134,13 @@ construct = finalise . flip inserts empty
 -- Looking up in the trie array
 --
 
-data TrieLookup  k v = Entry !v | Completions (Completions k v) deriving Show
-type Completions k v = [(k, TrieLookup k v)]
+data TrieLookup  = Entry !Value | Completions Completions deriving Show
+type Completions = [(Key, TrieLookup)]
 
-lookup :: forall k v. (Enum k, Enum v) => IntTrie k v -> [k] -> Maybe (TrieLookup k v)
+lookup :: IntTrie -> [Key] -> Maybe TrieLookup
 lookup trie@(IntTrie arr) = go 0
   where
-    go :: Word32 -> [k] -> Maybe (TrieLookup k v)
+    go :: Word32 -> [Key] -> Maybe TrieLookup
     go nodeOff []     = Just (completions nodeOff)
     go nodeOff (k:ks) = case search nodeOff (tagLeaf k') of
       Just entryOff
@@ -143,9 +150,9 @@ lookup trie@(IntTrie arr) = go 0
         Nothing       -> Nothing
         Just entryOff -> go (arr ! entryOff) ks
       where
-        k' = enumToWord32 k
+        k' = unKey k
 
-    entry       entryOff = Entry (word32ToEnum (arr ! entryOff))
+    entry       entryOff = Entry (Value (arr ! entryOff))
     completions nodeOff  = Completions (completionsFrom trie nodeOff)
 
     search :: Word32 -> Word32 -> Maybe Word32
@@ -164,77 +171,73 @@ lookup trie@(IntTrie arr) = go 0
           GT -> bsearch (mid+1) b key
       where mid = (a + b) `div` 2
 
-
-enumToWord32 :: Enum n => n -> Word32
-enumToWord32 = fromIntegral . fromEnum
-
-word32ToEnum :: Enum n => Word32 -> n
-word32ToEnum = toEnum . fromIntegral
-
-
 -------------------------
 -- Building Tries
 --
 
-newtype IntTrieBuilder k v = IntTrieBuilder (IntMap (TrieNode k v))
+newtype IntTrieBuilder = IntTrieBuilder (IntMap TrieNode)
   deriving (Show, Eq)
 
-data TrieNode k v = TrieLeaf {-# UNPACK #-} !Word32
-                  | TrieNode !(IntTrieBuilder k v)
+data TrieNode = TrieLeaf {-# UNPACK #-} !Word32
+              | TrieNode !IntTrieBuilder
   deriving (Show, Eq)
 
-empty :: IntTrieBuilder k v
+empty :: IntTrieBuilder
 empty = IntTrieBuilder IntMap.empty
 
-insert :: (Enum k, Enum v) => [k] -> v
-       -> IntTrieBuilder k v -> IntTrieBuilder k v
+insert :: [Key] -> Value
+       -> IntTrieBuilder -> IntTrieBuilder
 insert []    _v t = t
-insert (k:ks) v t = insertTrie (fromEnum k) (map fromEnum ks) (enumToWord32 v) t
+insert (k:ks) v t = insertTrie
+  (fromIntegral (unKey k) :: Int)
+  (map (fromIntegral . unKey) ks :: [Int])
+  (unValue v)
+  t
 
 insertTrie :: Int -> [Int] -> Word32
-           -> IntTrieBuilder k v -> IntTrieBuilder k v
+           -> IntTrieBuilder -> IntTrieBuilder
 insertTrie k ks v (IntTrieBuilder t) =
     IntTrieBuilder $
       IntMap.alter (\t' -> Just $! maybe (freshTrieNode  ks v)
                                          (insertTrieNode ks v) t')
                    k t
 
-insertTrieNode :: [Int] -> Word32 -> TrieNode k v -> TrieNode k v
+insertTrieNode :: [Int] -> Word32 -> TrieNode -> TrieNode
 insertTrieNode []     v  _           = TrieLeaf v
 insertTrieNode (k:ks) v (TrieLeaf _) = TrieNode (freshTrie  k ks v)
 insertTrieNode (k:ks) v (TrieNode t) = TrieNode (insertTrie k ks v t)
 
-freshTrie :: Int -> [Int] -> Word32 -> IntTrieBuilder k v
+freshTrie :: Int -> [Int] -> Word32 -> IntTrieBuilder
 freshTrie k []      v =
   IntTrieBuilder (IntMap.singleton k (TrieLeaf v))
 freshTrie k (k':ks) v =
   IntTrieBuilder (IntMap.singleton k (TrieNode (freshTrie k' ks v)))
 
-freshTrieNode :: [Int] -> Word32 -> TrieNode k v
+freshTrieNode :: [Int] -> Word32 -> TrieNode
 freshTrieNode []     v = TrieLeaf v
 freshTrieNode (k:ks) v = TrieNode (freshTrie k ks v)
 
-inserts :: (Enum k, Enum v) => [([k], v)]
-        -> IntTrieBuilder k v -> IntTrieBuilder k v
+inserts :: [([Key], Value)]
+        -> IntTrieBuilder -> IntTrieBuilder
 inserts kvs t = foldl' (\t' (ks, v) -> insert ks v t') t kvs
 
-finalise :: IntTrieBuilder k v -> IntTrie k v
+finalise :: IntTrieBuilder -> IntTrie
 finalise trie =
     IntTrie $
       A.listArray (0, fromIntegral (flatTrieLength trie) - 1)
                   (flattenTrie trie)
 
-unfinalise :: (Enum k, Enum v) => IntTrie k v -> IntTrieBuilder k v
+unfinalise :: IntTrie -> IntTrieBuilder
 unfinalise trie =
     go (completionsFrom trie 0)
   where
     go kns =
       IntTrieBuilder $
         IntMap.fromList
-          [ (fromEnum k, t)
+          [ (fromIntegral (unKey k) :: Int, t)
           | (k, n) <- kns
           , let t = case n of
-                      Entry       v    -> TrieLeaf (enumToWord32 v)
+                      Entry       v    -> TrieLeaf (unValue v)
                       Completions kns' -> TrieNode (go kns')
           ]
 
@@ -244,7 +247,7 @@ unfinalise trie =
 
 type Offset = Int
 
-flatTrieLength :: IntTrieBuilder k v -> Int
+flatTrieLength :: IntTrieBuilder -> Int
 flatTrieLength (IntTrieBuilder tns) =
     1
   + 2 * IntMap.size tns
@@ -255,12 +258,12 @@ flatTrieLength (IntTrieBuilder tns) =
 -- time we put them into the list. We keep a running offset so we know where
 -- to allocate next.
 --
-flattenTrie :: IntTrieBuilder k v -> [Word32]
+flattenTrie :: IntTrieBuilder -> [Word32]
 flattenTrie trie = go (queue [trie]) (size trie)
   where
     size (IntTrieBuilder tns) = 1 + 2 * IntMap.size tns
 
-    go :: Q (IntTrieBuilder k v) -> Offset -> [Word32]
+    go :: Q IntTrieBuilder -> Offset -> [Word32]
     go todo !offset =
       case dequeue todo of
         Nothing                   -> []
@@ -276,9 +279,9 @@ flattenTrie trie = go (queue [trie]) (size trie)
                                    (offset, Map.empty, tries)
                                    tnodes
 
-    accumNodes :: (Offset, Map.Map Word32 Word32, Q (IntTrieBuilder k v))
-               -> Int -> TrieNode k v
-               -> (Offset, Map.Map Word32 Word32, Q (IntTrieBuilder k v))
+    accumNodes :: (Offset, Map.Map Word32 Word32, Q IntTrieBuilder)
+               -> Int -> TrieNode
+               -> (Offset, Map.Map Word32 Word32, Q IntTrieBuilder)
     accumNodes (!off, !kvs, !tries) !k (TrieLeaf v) =
         (off, kvs', tries)
       where
@@ -312,19 +315,19 @@ int2Word32 = fromIntegral
 -- (de)serialisation
 --
 
-serialise :: IntTrie k v -> BS.Builder
+serialise :: IntTrie -> BS.Builder
 serialise (IntTrie arr) =
     let (_, !ixEnd) = A.bounds arr in
     BS.word32BE (ixEnd+1)
  <> foldr (\n r -> BS.word32BE n <> r) mempty (A.elems arr)
 
-serialiseSize :: IntTrie k v -> Int
+serialiseSize :: IntTrie -> Int
 serialiseSize (IntTrie arr) =
     let (_, ixEnd) = A.bounds arr in
     4
   + 4 * (fromIntegral ixEnd + 1)
 
-deserialise :: BS.ByteString -> Maybe (IntTrie k v, BS.ByteString)
+deserialise :: BS.ByteString -> Maybe (IntTrie, BS.ByteString)
 deserialise bs
   | BS.length bs >= 4
   , let lenArr   = readWord32BE bs 0

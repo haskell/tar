@@ -93,7 +93,8 @@ prop_valid (ValidPaths paths) =
 
     pathbits = concatMap (map BS.Char8.pack . FilePath.splitDirectories . fst)
                          paths
-    intpaths = [ (cids, offset)
+    intpaths :: [([IntTrie.Key], IntTrie.Value)]
+    intpaths = [ (map (\(Tar.PathComponentId n) -> IntTrie.Key (fromIntegral n)) cids, IntTrie.Value offset)
                | (path, (_size, offset)) <- paths
                , let Just cids = Tar.toComponentIds pathTable path ]
     prop' = conjoin $ flip map paths $ \(file, (_size, offset)) ->
