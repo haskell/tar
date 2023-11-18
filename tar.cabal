@@ -92,6 +92,7 @@ test-suite properties
                  tar-internal,
                  tasty            >= 0.10 && <1.6,
                  tasty-quickcheck >= 0.8  && <0.11,
+                 temporary < 1.4,
                  time
   if impl(ghc < 9.0)
     build-depends: bytestring-handle < 0.2
@@ -105,6 +106,7 @@ test-suite properties
     Codec.Archive.Tar.Index.Tests
     Codec.Archive.Tar.Index.IntTrie.Tests
     Codec.Archive.Tar.Index.StringTable.Tests
+    Codec.Archive.Tar.Pack.Tests
     Codec.Archive.Tar.Types.Tests
 
   other-extensions:
