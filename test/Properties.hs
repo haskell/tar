@@ -5,6 +5,7 @@ module Main where
 import qualified Codec.Archive.Tar.Index.Tests as Index
 import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable.Tests as StringTable
+import qualified Codec.Archive.Tar.Pack.Tests  as Pack
 import qualified Codec.Archive.Tar.Tests       as Tar
 
 import Test.Tasty
@@ -51,6 +52,10 @@ main =
         testProperty "matches tar" Index.prop_index_matches_tar,
 #endif
         testProperty "unfinalise"  Index.prop_finalise_unfinalise
+      ]
+
+    , testGroup "pack" [
+      testProperty "roundtrip" Pack.prop_roundtrip
       ]
     ]
 
