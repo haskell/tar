@@ -33,7 +33,7 @@ import Data.Time.Clock
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
 import System.IO
-         ( IOMode(ReadMode), openBinaryFile, hFileSize )
+         ( IOMode(ReadMode), withBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
@@ -103,9 +103,8 @@ packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
-  file    <- openBinaryFile filepath ReadMode
-  size    <- hFileSize file
-  content <- BS.hGetContents file
+  content <- BS.readFile filepath
+  let size = BS.length content
   return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
     entryPermissions = if executable perms then executableFilePermissions
                                            else ordinaryFilePermissions,
