@@ -8,6 +8,8 @@ See also http://pvp.haskell.org/faq
   * Set permissions on extracted files
   * Handle > 8 GB files
   * Prohibit non-ASCII file names instead of silent corruption
+  * Fix tests on 32-bit architectures
+  * Do not leak file handles in `packFileEntry`
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
