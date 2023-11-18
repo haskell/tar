@@ -83,7 +83,6 @@ test-suite properties
   build-depends: base,
                  array,
                  bytestring >= 0.10,
-                 bytestring-handle,
                  containers,
                  deepseq,
                  directory >= 1.2,
@@ -93,6 +92,8 @@ test-suite properties
                  tasty            >= 0.10 && <1.6,
                  tasty-quickcheck >= 0.8  && <0.11,
                  time
+  if impl(ghc < 9.0)
+    build-depends: bytestring-handle < 0.2
 
   hs-source-dirs: test
 
@@ -127,4 +128,4 @@ benchmark bench
                  containers,
                  deepseq,
                  time,
-                 tasty-bench
+                 tasty-bench < 0.4

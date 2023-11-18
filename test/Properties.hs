@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Main where
 
 import qualified Codec.Archive.Tar.Index.Tests as Index
@@ -45,7 +47,9 @@ main =
         testProperty "toList"      Index.prop_toList,
         testProperty "serialise"   Index.prop_serialise_deserialise,
         testProperty "size"        Index.prop_serialiseSize,
+#ifdef MIN_VERSION_bytestring_handle
         testProperty "matches tar" Index.prop_index_matches_tar,
+#endif
         testProperty "unfinalise"  Index.prop_finalise_unfinalise
       ]
     ]

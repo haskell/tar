@@ -16,7 +16,9 @@ module Codec.Archive.Tar.Index.Tests (
     prop_valid,
     prop_serialise_deserialise,
     prop_serialiseSize,
+#ifdef MIN_VERSION_bytestring_handle
     prop_index_matches_tar,
+#endif
     prop_finalise_unfinalise,
   ) where
 
@@ -48,7 +50,10 @@ import Data.Maybe
 import Data.Function (on)
 import Control.Exception (SomeException, try, throwIO)
 import Codec.Archive.Tar.Write          as Tar
+
+#ifdef MIN_VERSION_bytestring_handle
 import qualified Data.ByteString.Handle as HBS
+#endif
 
 -- Not quite the properties of a finite mapping because we also have lookups
 -- that result in completions.
@@ -170,6 +175,7 @@ data SimpleTarArchive = SimpleTarArchive {
 instance Show SimpleTarArchive where
   show = show . simpleTarRaw
 
+#ifdef MIN_VERSION_bytestring_handle
 prop_index_matches_tar :: SimpleTarArchive -> Property
 prop_index_matches_tar sta =
     ioProperty (try go >>= either (\e -> throwIO (e :: SomeException))
@@ -198,6 +204,7 @@ prop_index_matches_tar sta =
             throwIO $ userError "Entry mismatch"
         _otherwise ->
           throwIO $ userError "unexpected entry types"
+#endif
 
 instance Arbitrary SimpleTarArchive where
   arbitrary = do
