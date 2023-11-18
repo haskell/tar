@@ -5,6 +5,7 @@ import qualified Codec.Archive.Tar.Index as TarIndex
 
 import qualified Data.ByteString.Lazy    as BS
 import Control.Exception
+import System.Directory
 
 import Test.Tasty.Bench
 
@@ -26,8 +27,12 @@ benchmarks =
   ]
 
 loadTarFile :: IO BS.ByteString
-loadTarFile =
-    BS.readFile "01-index.tar"
+loadTarFile = do
+    let tarFile = "01-index.tar"
+    exists <- doesFileExist tarFile
+    if exists
+      then BS.readFile tarFile
+      else error "01-index.tar does not exist, copy it from ~/.cabal/packages/hackage.haskell.org/01-index.tar"
 
 loadTarEntries :: IO (Tar.Entries Tar.FormatError)
 loadTarEntries =
