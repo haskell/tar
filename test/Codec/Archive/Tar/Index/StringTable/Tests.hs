@@ -10,6 +10,7 @@ module Codec.Archive.Tar.Index.StringTable.Tests (
 
 import Prelude hiding (lookup)
 import Codec.Archive.Tar.Index.StringTable
+import Test.Tasty.QuickCheck
 
 import Data.List hiding (lookup, insert)
 import qualified Data.Array.Unboxed as A
@@ -23,24 +24,26 @@ import Data.ByteString.Lazy.Builder     as BS
 import Data.ByteString.Lazy.Builder.Extras as BS (byteStringCopy)
 #endif
 
-prop_valid :: [BS.ByteString] -> Bool
+prop_valid :: [BS.ByteString] -> Property
 prop_valid strs =
-     all lookupIndex (enumStrings tbl)
-  && all indexLookup (enumIds tbl)
+       conjoin (map lookupIndex (enumStrings tbl))
+  .&&. conjoin (map indexLookup (enumIds tbl))
 
   where
     tbl :: StringTable Int
     tbl = construct strs
 
-    lookupIndex str = index tbl ident == str
+    lookupIndex :: BS.ByteString -> Property
+    lookupIndex str = index tbl ident === str
       where Just ident = lookup tbl str
 
-    indexLookup ident = lookup tbl str == Just ident
+    indexLookup :: Int -> Property
+    indexLookup ident = lookup tbl str === Just ident
       where str       = index tbl ident
 
 -- this is important so we can use Map.fromAscList
-prop_sorted :: [BS.ByteString] -> Bool
-prop_sorted strings =
+prop_sorted :: [BS.ByteString] -> Property
+prop_sorted strings = property $
     isSorted [ index' strs offsets ix
              | ix <- A.range (A.bounds ids) ]
   where
@@ -48,26 +51,26 @@ prop_sorted strings =
     _tbl@(StringTable strs offsets ids _ixs) = construct strings
     isSorted xs = and (zipWith (<) xs (tail xs))
 
-prop_finalise_unfinalise :: [BS.ByteString] -> Bool
+prop_finalise_unfinalise :: [BS.ByteString] -> Property
 prop_finalise_unfinalise strs =
-    builder == unfinalise (finalise builder)
+    builder === unfinalise (finalise builder)
   where
     builder :: StringTableBuilder Int
     builder = foldl' (\tbl s -> fst (insert s tbl)) empty strs
 
-prop_serialise_deserialise :: [BS.ByteString] -> Bool
+prop_serialise_deserialise :: [BS.ByteString] -> Property
 prop_serialise_deserialise strs =
-    Just (strtable, BS.empty) == (deserialiseV2
+    Just (strtable, BS.empty) === (deserialiseV2
                                 . LBS.toStrict . BS.toLazyByteString
                                 . serialise) strtable
   where
     strtable :: StringTable Int
     strtable = construct strs
 
-prop_serialiseSize :: [BS.ByteString] -> Bool
+prop_serialiseSize :: [BS.ByteString] -> Property
 prop_serialiseSize strs =
     (fromIntegral . LBS.length . BS.toLazyByteString . serialise) strtable
- == serialiseSize strtable
+ === serialiseSize strtable
   where
     strtable :: StringTable Int
     strtable = construct strs

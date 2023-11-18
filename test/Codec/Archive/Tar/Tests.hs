@@ -21,22 +21,23 @@ import Codec.Archive.Tar
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Types.Tests
 import Prelude hiding (read)
+import Test.Tasty.QuickCheck
 
-prop_write_read_ustar :: [Entry] -> Bool
+prop_write_read_ustar :: [Entry] -> Property
 prop_write_read_ustar entries =
-    foldr Next Done entries' == read (write entries')
+    foldr Next Done entries' === read (write entries')
   where
     entries' = [ e { entryFormat = UstarFormat } | e <- entries ]
 
-prop_write_read_gnu :: [Entry] -> Bool
+prop_write_read_gnu :: [Entry] -> Property
 prop_write_read_gnu entries =
-    foldr Next Done entries' == read (write entries')
+    foldr Next Done entries' === read (write entries')
   where
     entries' = [ e { entryFormat = GnuFormat } | e <- entries ]
 
-prop_write_read_v7 :: [Entry] -> Bool
+prop_write_read_v7 :: [Entry] -> Property
 prop_write_read_v7 entries =
-    foldr Next Done entries' == read (write entries')
+    foldr Next Done entries' === read (write entries')
   where
     entries' = [ limitToV7FormatCompat e { entryFormat = V7Format }
                | e <- entries ]

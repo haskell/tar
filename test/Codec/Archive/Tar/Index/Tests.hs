@@ -58,34 +58,33 @@ import qualified Data.ByteString.Handle as HBS
 -- Not quite the properties of a finite mapping because we also have lookups
 -- that result in completions.
 
-prop_lookup :: ValidPaths -> NonEmptyFilePath -> Bool
+prop_lookup :: ValidPaths -> NonEmptyFilePath -> Property
 prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
   case (lookup index p, Prelude.lookup p paths) of
-    (Nothing,                    Nothing)          -> True
-    (Just (TarFileEntry offset), Just (_,offset')) -> offset == offset'
+    (Nothing,                    Nothing)          -> property True
+    (Just (TarFileEntry offset), Just (_,offset')) -> offset === offset'
     (Just (TarDir entries),      Nothing)          -> sort (nub (map fst entries))
-                                                   == sort (nub completions)
-    _                                              -> False
+                                                   === sort (nub completions)
+    _                                              -> property False
   where
     index       = construct paths
     completions = [ head (FilePath.splitDirectories completion)
                   | (path,_) <- paths
                   , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
 
-prop_toList :: ValidPaths -> Bool
+prop_toList :: ValidPaths -> Property
 prop_toList (ValidPaths paths) =
     sort (toList index)
- == sort [ (path, off) | (path, (_sz, off)) <- paths ]
+ === sort [ (path, off) | (path, (_sz, off)) <- paths ]
   where
     index = construct paths
 
-prop_valid :: ValidPaths -> Bool
-prop_valid (ValidPaths paths)
-  | not $ StringTable.prop_valid   pathbits = error "TarIndex: bad string table"
-  | not $ IntTrie.prop_lookup      intpaths = error "TarIndex: bad int trie"
-  | not $ IntTrie.prop_completions intpaths = error "TarIndex: bad int trie"
-  | not $ prop'                             = error "TarIndex: bad prop"
-  | otherwise                               = True
+prop_valid :: ValidPaths -> Property
+prop_valid (ValidPaths paths) =
+  StringTable.prop_valid   pathbits .&&.
+  IntTrie.prop_lookup      intpaths .&&.
+  IntTrie.prop_completions intpaths .&&.
+  prop'
 
   where
     index@(TarIndex pathTable _ _) = construct paths
@@ -95,22 +94,22 @@ prop_valid (ValidPaths paths)
     intpaths = [ (cids, offset)
                | (path, (_size, offset)) <- paths
                , let Just cids = toComponentIds pathTable path ]
-    prop' = flip all paths $ \(file, (_size, offset)) ->
+    prop' = conjoin $ flip map paths $ \(file, (_size, offset)) ->
       case lookup index file of
-        Just (TarFileEntry offset') -> offset' == offset
-        _                           -> False
+        Just (TarFileEntry offset') -> offset' === offset
+        _                           -> property False
 
-prop_serialise_deserialise :: ValidPaths -> Bool
+prop_serialise_deserialise :: ValidPaths -> Property
 prop_serialise_deserialise (ValidPaths paths) =
-    Just (index, BS.empty) == (deserialise . serialise) index
+    Just (index, BS.empty) === (deserialise . serialise) index
   where
     index = construct paths
 
-prop_serialiseSize :: ValidPaths -> Bool
+prop_serialiseSize :: ValidPaths -> Property
 prop_serialiseSize (ValidPaths paths) =
     case (LBS.toChunks . serialiseLBS) index of
-      [c1] -> BS.length c1 == serialiseSize index
-      _    -> False
+      [c1] -> BS.length c1 === serialiseSize index
+      _    -> property False
   where
     index = construct paths
 
@@ -145,7 +144,7 @@ instance Arbitrary ValidPaths where
 -- Helper for bulk construction.
 construct :: [(FilePath, (Int64, TarEntryOffset))] -> TarIndex
 construct =
-    either (\_ -> undefined) id
+    either (const undefined) id
   . build
   . foldr (\(path, (size, _off)) es -> Next (testEntry path size) es) Done
 
@@ -261,9 +260,9 @@ instance Arbitrary SimpleIndexBuilder where
           go !builder  Done       = builder
           go !_       (Fail err)  = error (show err)
 
-prop_finalise_unfinalise :: SimpleIndexBuilder -> Bool
+prop_finalise_unfinalise :: SimpleIndexBuilder -> Property
 prop_finalise_unfinalise (SimpleIndexBuilder index) =
-    unfinalise (finalise index) == index
+    unfinalise (finalise index) === index
 
 #if !(MIN_VERSION_base(4,5,0))
 (<>) :: Monoid m => m -> m -> m

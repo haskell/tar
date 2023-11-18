@@ -125,7 +125,7 @@ example2''' = mktrie [ mknode 0 t3 ]
 
 -- We convert from the 'Paths' to the 'IntTrieBuilder' using 'inserts':
 --
-test1 = example2 == inserts example1 empty
+test1 = example2 === inserts example1 empty
 
 -- So the overall array form of the above trie is:
 --
@@ -145,7 +145,7 @@ example3 =
 
 -- We get the array form by using flattenTrie:
 
-test2 = example3 == flattenTrie example2
+test2 = example3 === flattenTrie example2
 
 example4 :: IntTrie Int Int
 example4 = IntTrie (mkArray example3)
@@ -157,25 +157,24 @@ test3 = case lookup example4 [1] of
           Just (Completions [(2,_),(3,_),(4,_)]) -> True
           _                          -> False
 
-test1, test2, test3 :: Bool
+test1 :: Property
 
 prop_lookup :: (Ord k, Enum k, Eq v, Enum v, Show k, Show v)
-            => [([k], v)] -> Bool
+            => [([k], v)] -> Property
 prop_lookup paths =
-  flip all paths $ \(key, value) ->
+  conjoin $ flip map paths $ \(key, value) ->
     case lookup trie key of
-      Just (Entry value') | value' == value -> True
-      Just (Entry value')   -> error $ "IntTrie: " ++ show (key, value, value')
+      Just (Entry value')   -> value' === value
       Nothing               -> error $ "IntTrie: didn't find " ++ show key
       Just (Completions xs) -> error $ "IntTrie: " ++ show xs
 
   where
     trie = construct paths
 
-prop_completions :: forall k v. (Ord k, Enum k, Eq v, Enum v) => [([k], v)] -> Bool
+prop_completions :: forall k v. (Ord k, Enum k, Eq v, Enum v) => [([k], v)] -> Property
 prop_completions paths =
     inserts paths empty
- == convertCompletions (completionsFrom (construct paths) 0)
+ === convertCompletions (completionsFrom (construct paths) 0)
   where
     convertCompletions :: Ord k => Completions k v -> IntTrieBuilder k v
     convertCompletions kls =
@@ -187,37 +186,37 @@ prop_completions paths =
           | (k, l) <- sortBy (compare `on` fst) kls ]
 
 
-prop_lookup_mono :: ValidPaths -> Bool
+prop_lookup_mono :: ValidPaths -> Property
 prop_lookup_mono (ValidPaths paths) = prop_lookup paths
 
-prop_completions_mono :: ValidPaths -> Bool
+prop_completions_mono :: ValidPaths -> Property
 prop_completions_mono (ValidPaths paths) = prop_completions paths
 
-prop_construct_toList :: ValidPaths -> Bool
+prop_construct_toList :: ValidPaths -> Property
 prop_construct_toList (ValidPaths paths) =
        sortBy (compare `on` fst) (toList (construct paths))
-    == sortBy (compare `on` fst) paths
+    === sortBy (compare `on` fst) paths
 
-prop_finalise_unfinalise :: ValidPaths -> Bool
+prop_finalise_unfinalise :: ValidPaths -> Property
 prop_finalise_unfinalise (ValidPaths paths) =
-    builder == unfinalise (finalise builder)
+    builder === unfinalise (finalise builder)
   where
     builder :: IntTrieBuilder Char Char
     builder = inserts paths empty
 
-prop_serialise_deserialise :: ValidPaths -> Bool
+prop_serialise_deserialise :: ValidPaths -> Property
 prop_serialise_deserialise (ValidPaths paths) =
-    Just (trie, BS.empty) == (deserialise
+    Just (trie, BS.empty) === (deserialise
                             . LBS.toStrict . BS.toLazyByteString
                             . serialise) trie
   where
     trie :: IntTrie Char Char
     trie = construct paths
 
-prop_serialiseSize :: ValidPaths -> Bool
+prop_serialiseSize :: ValidPaths -> Property
 prop_serialiseSize (ValidPaths paths) =
     (fromIntegral . LBS.length . BS.toLazyByteString . serialise) trie
- == serialiseSize trie
+ === serialiseSize trie
   where
     trie :: IntTrie Char Char
     trie = construct paths
