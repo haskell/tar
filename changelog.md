@@ -15,7 +15,7 @@ See also http://pvp.haskell.org/faq
   * Fix handling of hardlinks and symlinks
   * Add `packSymlinkEntry` and `symbolicLinkPermission`, export `checkEntrySecurity`
   * Ignore FAT32 errors when setting modification time
-
+  * Switch to trailer parsing mode only after a full block of `NUL`
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
