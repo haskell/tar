@@ -22,4 +22,4 @@ jobs:
       run: |
         source ~/.ghcup/env
         cabal update
-        cabal test
+        cabal test --test-show-details=direct

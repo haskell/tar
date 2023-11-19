@@ -34,7 +34,7 @@ jobs:
       run: |
         bld() { cabal build pkg:tar:tests; }
         bld || bld || bld
-        cabal test
+        cabal test --test-show-details=direct
     - name: Haddock
       run: cabal haddock
     - name: SDist
