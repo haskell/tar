@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards, DeriveDataTypeable #-}
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
 module Codec.Archive.Tar.Index.StringTable (
 
