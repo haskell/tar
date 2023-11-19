@@ -4,7 +4,7 @@ See also http://pvp.haskell.org/faq
 
   * Add offending path as new field to `TarBombError` constructor
   * Add `Traversable Entries` instance
-  * Speed up `fromTarPathToPosixPath`
+  * Speed up `fromTarPath`, `fromTarPathToPosixPath` and `fromTarPathToWindowsPath`
   * Set permissions on extracted files
   * Handle > 8 GB files
   * Prohibit non-ASCII file names instead of silent corruption

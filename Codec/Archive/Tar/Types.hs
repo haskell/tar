@@ -73,12 +73,12 @@ import Control.DeepSeq
 import Control.Exception (Exception)
 
 import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories, addTrailingPathSeparator )
+         ( joinPath, splitDirectories, addTrailingPathSeparator, pathSeparator )
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
-         , addTrailingPathSeparator )
+         , addTrailingPathSeparator, pathSeparator )
 import qualified System.FilePath.Windows as FilePath.Windows
-         ( joinPath, addTrailingPathSeparator )
+         ( joinPath, addTrailingPathSeparator, pathSeparator )
 import System.Posix.Types
          ( FileMode )
 
@@ -341,15 +341,7 @@ instance Show TarPath where
 --   responsibility to check for these conditions (eg using 'checkSecurity').
 --
 fromTarPath :: TarPath -> FilePath
-fromTarPath (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
-                          ++ FilePath.Posix.splitDirectories name
-  where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Native.addTrailingPathSeparator
-                    | otherwise = id
+fromTarPath = BS.Char8.unpack . fromTarPathInternal FilePath.Native.pathSeparator
 
 -- | Convert a 'TarPath' to a Unix\/Posix 'FilePath'.
 --
@@ -360,15 +352,7 @@ fromTarPath (TarPath namebs prefixbs) = adjustDirectory $
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
-                         ++ FilePath.Posix.splitDirectories name
-  where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Posix.addTrailingPathSeparator
-                    | otherwise = id
+fromTarPathToPosixPath = BS.Char8.unpack . fromTarPathInternal FilePath.Posix.pathSeparator
 
 -- | Convert a 'TarPath' to a Windows 'FilePath'.
 --
@@ -379,15 +363,17 @@ fromTarPathToPosixPath (TarPath namebs prefixbs) = adjustDirectory $
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToWindowsPath :: TarPath -> FilePath
-fromTarPathToWindowsPath (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
-                           ++ FilePath.Posix.splitDirectories name
+fromTarPathToWindowsPath = BS.Char8.unpack . fromTarPathInternal FilePath.Windows.pathSeparator
+
+fromTarPathInternal :: Char -> TarPath -> BS.ByteString
+fromTarPathInternal sep (TarPath name prefix)
+  | BS.null prefix = adjustSeps name
+  | BS.null name = adjustSeps prefix
+  | sep == FilePath.Posix.pathSeparator = prefix <> BS.Char8.cons sep name
+  | otherwise = adjustSeps prefix <> BS.Char8.cons sep (adjustSeps name)
   where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Windows.addTrailingPathSeparator
-                    | otherwise = id
+    adjustSeps = BS.Char8.map $ \c -> if c == FilePath.Posix.pathSeparator then sep else c
+{-# INLINE fromTarPathInternal #-}
 
 -- | Convert a native 'FilePath' to a 'TarPath'.
 --
