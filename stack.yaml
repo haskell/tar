@@ -1,0 +1,9 @@
+resolver: lts-21.21
+
+packages:
+- htar
+- tar
+
+extra-deps:
+- bzlib-0.5.1.0
+
