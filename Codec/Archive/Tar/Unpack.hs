@@ -22,6 +22,7 @@ import Codec.Archive.Tar.Check
 import Data.Bits
          ( testBit )
 import Data.List (partition, nub)
+import Data.Maybe ( fromMaybe )
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
@@ -32,6 +33,7 @@ import System.Directory
          ( createDirectoryIfMissing, copyFile, setPermissions, getDirectoryContents, doesDirectoryExist, createDirectoryLink, createFileLink )
 import Control.Exception
          ( Exception, throwIO, handle )
+import System.IO ( stderr, hPutStr )
 import System.IO.Error
          ( ioeGetErrorType )
 import GHC.IO (unsafeInterleaveIO)
@@ -73,7 +75,7 @@ import System.IO.Error
 --
 unpack :: Exception e => FilePath -> Entries e -> IO ()
 unpack baseDir entries = do
-  uEntries <- unpackEntries [] (checkSecurity entries)
+  uEntries <- unpackEntries Nothing Nothing [] (checkSecurity entries)
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
   -- handle hardlinks first, in case a symlink points to it
   handleHardLinks hardlinks
@@ -83,32 +85,52 @@ unpack baseDir entries = do
     -- We're relying here on 'checkSecurity' to make sure we're not scribbling
     -- files all over the place.
 
-    unpackEntries _     (Fail err)      = either throwIO throwIO err
-    unpackEntries links Done            = return links
-    unpackEntries links (Next entry es) = case entryContent entry of
-      NormalFile file _ -> do
-        extractFile (entryPermissions entry) (entryPath entry) file (entryTime entry)
-        unpackEntries links es
-      Directory         -> do
-        extractDir (entryPath entry) (entryTime entry)
-        unpackEntries links es
-      HardLink     link -> (unpackEntries $! saveLink True (entryPath entry) link links) es
-      SymbolicLink link -> (unpackEntries $! saveLink False (entryPath entry) link links) es
-      OtherEntryType 'L' (Char8.unpack . BS.toStrict -> fn) _ ->
-        case es of
-             (Next entry' es') -> case entryContent entry' of
-               NormalFile file _ -> do
-                extractFile (entryPermissions entry') fn file (entryTime entry')
-                unpackEntries links es'
-               Directory         -> extractDir fn (entryTime entry')
-                                 >> unpackEntries links es'
-               HardLink     link -> (unpackEntries $! saveLink True fn link links) es'
-               SymbolicLink link -> (unpackEntries $! saveLink False fn link links) es'
-               OtherEntryType 'L' _ _ -> throwIO $ userError "Two subsequent OtherEntryType 'L'"
-               _ -> unpackEntries links es'
-             (Fail err)      -> either throwIO throwIO err
-             Done            -> throwIO $ userError "././@LongLink without a subsequent entry"
-      _ -> unpackEntries links es --ignore other file types
+    unpackEntries :: Exception e
+                  => Maybe LinkTarget
+                  -> Maybe FilePath
+                  -> [(FilePath, FilePath, Bool)]     -- ^ links (path, link, isHardLink)
+                  -> Entries (Either e FileNameError) -- ^ entries
+                  -> IO [(FilePath, FilePath, Bool)]
+    unpackEntries _ _ _     (Fail err)      = either throwIO throwIO err
+    unpackEntries _ _ links Done            = return links
+    unpackEntries mLink mPath links (Next entry es) = do
+      let path = fromMaybe (entryPath entry) mPath
+      case entryContent entry of
+        NormalFile file _
+          | Just _ <- mLink -> throwIO $ userError "Expected SymbolicLink or HardLink after OtherEntryType K"
+          | otherwise -> do
+              extractFile (entryPermissions entry) path file (entryTime entry)
+              unpackEntries Nothing Nothing links es
+        Directory
+          | Just _ <- mLink -> throwIO $ userError "Expected SymbolicLink or HardLink after OtherEntryType K"
+          | otherwise -> do
+              extractDir path (entryTime entry)
+              unpackEntries Nothing Nothing links es
+        HardLink     link -> do
+          let linkTarget = fromMaybe link mLink
+          (unpackEntries Nothing Nothing $! saveLink True path linkTarget links) es
+        SymbolicLink link -> do
+          let linkTarget = fromMaybe link mLink
+          (unpackEntries Nothing Nothing $! saveLink False path linkTarget links) es
+        OtherEntryType 'L' fn _
+          | Just _ <- mPath -> throwIO $ userError "Two subsequent OtherEntryType L"
+          | otherwise -> unpackEntries mLink (Just . Char8.unpack . BS.toStrict $ fn) links es
+        OtherEntryType 'K' link _
+          | Just _ <- mLink -> throwIO $ userError "Two subsequent OtherEntryType K"
+          | otherwise -> unpackEntries (Just . LinkTarget . BS.toStrict $ link) mPath links es
+        ec -> do
+          hPutStr stderr $ "Warning: Unsupported typecode \"" <> printEntryContentType ec <> "\", skipping"
+          unpackEntries Nothing Nothing links es -- ignore other file types
+     where
+      printEntryContentType NormalFile{} = "normal file"
+      printEntryContentType Directory{} = "directory"
+      printEntryContentType SymbolicLink{} = "symlink"
+      printEntryContentType HardLink{} = "hardlink"
+      printEntryContentType CharacterDevice{} = "chardev"
+      printEntryContentType BlockDevice{} = "blockdev"
+      printEntryContentType NamedPipe{} = "namedpipe"
+      printEntryContentType (OtherEntryType t _ _) = "other entry " <> show t
+
 
     extractFile permissions path content mtime = do
       -- Note that tar archives do not make sure each directory is created
