@@ -23,7 +23,9 @@ description:     This library is for working with \"@.tar@\" archive files. It
                  content using an index.
 build-type:      Simple
 cabal-version:   2.0
-extra-source-files: test/data/long.tar
+extra-source-files:
+                 test/data/long-filepath.tar
+                 test/data/long-symlink.tar
 extra-doc-files: changelog.md
 tested-with:     GHC==9.8.1, GHC==9.6.3, GHC==9.4.8, GHC==9.2.8, GHC==9.0.2,
                  GHC==8.10.7, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4
