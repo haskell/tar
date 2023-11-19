@@ -48,6 +48,7 @@ module Codec.Archive.Tar.Entry (
   fileEntry,
   directoryEntry,
   longLinkEntry,
+  longSymLinkEntry,
 
   -- * Standard file permissions
   -- | For maximum portability when constructing archives use only these file

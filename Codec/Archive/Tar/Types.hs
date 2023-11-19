@@ -30,6 +30,7 @@ module Codec.Archive.Tar.Types (
 
   simpleEntry,
   longLinkEntry,
+  longSymLinkEntry,
   fileEntry,
   symlinkEntry,
   directoryEntry,
@@ -259,6 +260,23 @@ longLinkEntry :: FilePath -> Entry
 longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
     entryContent     = OtherEntryType 'L' (LBS.fromStrict $ packAscii tarpath) (fromIntegral $ length tarpath),
+    entryPermissions = ordinaryFilePermissions,
+    entryOwnership   = Ownership "" "" 0 0,
+    entryTime        = 0,
+    entryFormat      = GnuFormat
+  }
+
+-- | [GNU extension](https://www.gnu.org/software/tar/manual/html_node/Standard.html)
+-- to store a link target too long to fit into 'entryTarPath'
+-- as 'OtherEntryType' @\'K\'@ with the full filepath as 'entryContent'.
+-- The next entry must contain the actual
+-- data with truncated 'entryTarPath'.
+--
+-- @since 0.6.0.0
+longSymLinkEntry :: FilePath -> Entry
+longSymLinkEntry linkTarget = Entry {
+    entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ BS.Char8.pack linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,
