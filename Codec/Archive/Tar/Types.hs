@@ -276,7 +276,7 @@ longLinkEntry tarpath = Entry {
 longSymLinkEntry :: FilePath -> Entry
 longSymLinkEntry linkTarget = Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
-    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ BS.Char8.pack linkTarget) (fromIntegral $ length linkTarget),
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ packAscii linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,
