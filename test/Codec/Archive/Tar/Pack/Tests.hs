@@ -5,6 +5,7 @@
 
 module Codec.Archive.Tar.Pack.Tests
   ( prop_roundtrip
+  , unit_roundtrip_symlink
   , unit_roundtrip_long_symlink
   , unit_roundtrip_long_filepath
   ) where
@@ -74,6 +75,12 @@ maxPathLength :: Int
 maxPathLength = case System.Info.os of
   "mingw32" -> 255
   _ -> 1023 -- macOS does not like longer names
+
+unit_roundtrip_symlink :: Property
+unit_roundtrip_symlink =
+  let tar :: BL.ByteString = BL.fromStrict $(embedFile "test/data/symlink.tar")
+      entries = Tar.foldEntries (:) [] (const []) (Tar.read tar)
+  in Tar.write entries === tar
 
 unit_roundtrip_long_filepath :: Property
 unit_roundtrip_long_filepath =

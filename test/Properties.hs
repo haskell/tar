@@ -56,6 +56,7 @@ main =
 
     , testGroup "pack" [
       testProperty "roundtrip" Pack.prop_roundtrip,
+      testProperty "symlink" Pack.unit_roundtrip_symlink,
       testProperty "long filepath" Pack.unit_roundtrip_long_filepath,
       testProperty "long symlink" Pack.unit_roundtrip_long_symlink
       ]
