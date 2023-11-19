@@ -73,7 +73,16 @@ getEntry bs
   -- Tar files end with at least two blocks of all '0'. Checking this serves
   -- two purposes. It checks the format but also forces the tail of the data
   -- which is necessary to close the file if it came from a lazily read file.
-  | LBS.head bs == 0 = case LBS.splitAt 1024 bs of
+  --
+  -- It's tempting to fall into trailer parsing as soon as LBS.head bs == '\0',
+  -- because, if interpreted as an 'Entry', it means that 'entryTarPath' is an empty
+  -- string. Yet it's not a concern of this function: parse it as an 'Entry'
+  -- and let further pipeline such as 'checkEntrySecurity' deal with it. After all,
+  -- it might be a format extension with unknown semantics. Such somewhat malformed
+  -- archives do exist in the wild, see https://github.com/haskell/tar/issues/73.
+  --
+  -- Only if an entire block is null, we assume that we are parsing a trailer.
+  | LBS.all (== 0) (LBS.take 512 bs) = case LBS.splitAt 1024 bs of
       (end, trailing)
         | LBS.length end /= 1024        -> Left ShortTrailer
         | not (LBS.all (== 0) end)      -> Left BadTrailer
