@@ -7,6 +7,7 @@ import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable.Tests as StringTable
 import qualified Codec.Archive.Tar.Pack.Tests  as Pack
 import qualified Codec.Archive.Tar.Tests       as Tar
+import qualified Codec.Archive.Tar.Unpack.Tests as Unpack
 
 import Test.Tasty
 import Test.Tasty.QuickCheck
@@ -59,6 +60,10 @@ main =
       testProperty "symlink" Pack.unit_roundtrip_symlink,
       testProperty "long filepath" Pack.unit_roundtrip_long_filepath,
       testProperty "long symlink" Pack.unit_roundtrip_long_symlink
+      ]
+
+    , testGroup "unpack" [
+      testProperty "modtime 1970-01-01" Unpack.case_modtime_1970
       ]
     ]
 
