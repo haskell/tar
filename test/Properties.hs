@@ -7,6 +7,7 @@ import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie
 import qualified Codec.Archive.Tar.Index.StringTable.Tests as StringTable
 import qualified Codec.Archive.Tar.Pack.Tests  as Pack
 import qualified Codec.Archive.Tar.Tests       as Tar
+import qualified Codec.Archive.Tar.Types.Tests as Types
 import qualified Codec.Archive.Tar.Unpack.Tests as Unpack
 
 import Test.Tasty
@@ -17,7 +18,13 @@ main =
   defaultMain $
     testGroup "tar tests" [
 
-      testGroup "write/read" [
+      testGroup "fromTarPath" [
+        testProperty "fromTarPath" Types.prop_fromTarPath,
+        testProperty "fromTarPathToPosixPath" Types.prop_fromTarPathToPosixPath,
+        testProperty "fromTarPathToWindowsPath" Types.prop_fromTarPathToWindowsPath
+      ]
+
+    , testGroup "write/read" [
         testProperty "ustar format" Tar.prop_write_read_ustar,
         testProperty "gnu format"   Tar.prop_write_read_gnu,
         testProperty "v7 format"    Tar.prop_write_read_v7

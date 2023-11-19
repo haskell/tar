@@ -10,13 +10,17 @@
 -----------------------------------------------------------------------------
 {-# LANGUAGE RecordWildCards #-}
 
-module Codec.Archive.Tar.Types.Tests (
-  limitToV7FormatCompat
+module Codec.Archive.Tar.Types.Tests
+  ( limitToV7FormatCompat
+  , prop_fromTarPath
+  , prop_fromTarPathToPosixPath
+  , prop_fromTarPathToWindowsPath
   ) where
 
 import Codec.Archive.Tar.Types
 
 import qualified Data.ByteString       as BS
+import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
 
 import qualified System.FilePath as FilePath.Native
@@ -24,10 +28,54 @@ import qualified System.FilePath as FilePath.Native
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
          , addTrailingPathSeparator )
+import qualified System.FilePath.Windows as FilePath.Windows
+         ( joinPath, splitDirectories, addTrailingPathSeparator )
 
 import Test.QuickCheck
 import Control.Applicative ((<$>), (<*>), pure)
 import Data.Word (Word16)
+
+prop_fromTarPath :: TarPath -> Property
+prop_fromTarPath tp = fromTarPath tp === fromTarPathRef tp
+
+prop_fromTarPathToPosixPath :: TarPath -> Property
+prop_fromTarPathToPosixPath tp = fromTarPathToPosixPath tp === fromTarPathToPosixPathRef tp
+
+prop_fromTarPathToWindowsPath :: TarPath -> Property
+prop_fromTarPathToWindowsPath tp = fromTarPathToWindowsPath tp === fromTarPathToWindowsPathRef tp
+
+fromTarPathRef :: TarPath -> FilePath
+fromTarPathRef (TarPath namebs prefixbs) = adjustDirectory $
+  FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
+                          ++ FilePath.Posix.splitDirectories name
+  where
+    name   = BS.Char8.unpack namebs
+    prefix = BS.Char8.unpack prefixbs
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                    = FilePath.Native.addTrailingPathSeparator
+                    | otherwise = id
+
+fromTarPathToPosixPathRef :: TarPath -> FilePath
+fromTarPathToPosixPathRef (TarPath namebs prefixbs) = adjustDirectory $
+  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
+                         ++ FilePath.Posix.splitDirectories name
+  where
+    name   = BS.Char8.unpack namebs
+    prefix = BS.Char8.unpack prefixbs
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                    = FilePath.Posix.addTrailingPathSeparator
+                    | otherwise = id
+
+fromTarPathToWindowsPathRef :: TarPath -> FilePath
+fromTarPathToWindowsPathRef (TarPath namebs prefixbs) = adjustDirectory $
+  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
+                           ++ FilePath.Posix.splitDirectories name
+  where
+    name   = BS.Char8.unpack namebs
+    prefix = BS.Char8.unpack prefixbs
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
+                    = FilePath.Windows.addTrailingPathSeparator
+                    | otherwise = id
 
 instance Arbitrary Entry where
   arbitrary = do
