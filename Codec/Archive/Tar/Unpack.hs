@@ -255,8 +255,12 @@ copyDirectoryRecursive srcDir destDir = do
 setModTime :: FilePath -> EpochTime -> IO ()
 setModTime path t =
     setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
-      `Exception.catch` \e ->
-        if isPermissionError e then return () else throwIO e
+      `Exception.catch` \e -> case ioeGetErrorType e of
+        PermissionDenied -> return ()
+        -- On FAT32 file system setting time prior to DOS Epoch (1980-01-01)
+        -- throws InvalidArgument, https://github.com/haskell/tar/issues/37
+        InvalidArgument -> return ()
+        _ -> throwIO e
 
 setOwnerPermissions :: FilePath -> Permissions -> IO ()
 setOwnerPermissions path permissions =
