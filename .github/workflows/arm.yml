@@ -33,10 +33,10 @@ jobs:
         uses: docker://hasufell/arm32v7-ubuntu-haskell:focal
         name: Run build (arm32v7 linux)
         with:
-          args: sh -c "curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 BOOTSTRAP_HASKELL_GHC_VERSION=9.2.8 sh && cabal update && cabal test -w ~/.ghcup/bin/ghc"
+          args: sh -c "curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 BOOTSTRAP_HASKELL_GHC_VERSION=9.2.8 sh && cabal update && cabal test -w ~/.ghcup/bin/ghc" --test-show-details=direct
 
       - if: matrix.arch == 'arm64v8'
         uses: docker://hasufell/arm64v8-ubuntu-haskell:focal
         name: Run build (arm64v8 linux)
         with:
-          args: sh -c "curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 sh && cabal update && cabal test -w ~/.ghcup/bin/ghc"
+          args: sh -c "curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 sh && cabal update && cabal test -w ~/.ghcup/bin/ghc" --test-show-details=direct
