@@ -118,6 +118,13 @@ unpack baseDir entries = do
         OtherEntryType 'K' link _
           | Just _ <- mLink -> throwIO $ userError "Two subsequent OtherEntryType K"
           | otherwise -> unpackEntries (Just . LinkTarget . BS.toStrict $ link) mPath links es
+        OtherEntryType _ file _
+          | Just _ <- mLink -> throwIO $ userError "Unknown entry type following OtherEntryType K"
+          | Just _ <- mPath -> throwIO $ userError "Unknown entry type following OtherEntryType L"
+          | otherwise -> do
+              hPutStr stderr "Warning: Unknown tar typecode, attempting to extract as normal file"
+              extractFile (entryPermissions entry) path file (entryTime entry)
+              unpackEntries Nothing Nothing links es
         ec -> do
           hPutStr stderr $ "Warning: Unsupported typecode \"" <> printEntryContentType ec <> "\", skipping"
           unpackEntries Nothing Nothing links es -- ignore other file types
