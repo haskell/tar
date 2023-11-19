@@ -1,1 +1,2 @@
 installed: -directory
+haddock: >= 8.6
