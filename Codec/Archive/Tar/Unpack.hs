@@ -114,10 +114,10 @@ unpack baseDir entries = do
           (unpackEntries Nothing Nothing $! saveLink False path linkTarget links) es
         OtherEntryType 'L' fn _
           | Just _ <- mPath -> throwIO $ userError "Two subsequent OtherEntryType L"
-          | otherwise -> unpackEntries mLink (Just . Char8.unpack . BS.toStrict $ fn) links es
+          | otherwise -> unpackEntries mLink (Just . Char8.unpack . Char8.takeWhile (/= '\0') . BS.toStrict $ fn) links es
         OtherEntryType 'K' link _
           | Just _ <- mLink -> throwIO $ userError "Two subsequent OtherEntryType K"
-          | otherwise -> unpackEntries (Just . LinkTarget . BS.toStrict $ link) mPath links es
+          | otherwise -> unpackEntries (Just . LinkTarget . Char8.takeWhile (/= '\0') . BS.toStrict $ link) mPath links es
         OtherEntryType _ _ _
           | Just _ <- mLink -> throwIO $ userError "Unknown entry type following OtherEntryType K"
           | Just _ <- mPath -> throwIO $ userError "Unknown entry type following OtherEntryType L"
