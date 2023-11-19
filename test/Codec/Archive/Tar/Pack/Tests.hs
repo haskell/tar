@@ -1,9 +1,17 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Codec.Archive.Tar.Pack.Tests
   ( prop_roundtrip
+  , unit_roundtrip
   ) where
 
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
+import Data.FileEmbed
+import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Pack as Pack
 import Codec.Archive.Tar.Types (Entries(..))
 import qualified Codec.Archive.Tar.Unpack as Unpack
@@ -49,3 +57,10 @@ prop_roundtrip xss (ASCIIString cnt)
 mkFilePath :: ASCIIString -> FilePath
 mkFilePath (ASCIIString xs) = makeValid $
   filter (\c -> not $ isPathSeparator c || c == '.') xs
+
+unit_roundtrip :: Property
+unit_roundtrip =
+  let tar :: BL.ByteString = BL.fromStrict $(embedFile "test/data/long.tar")
+      entries = Tar.foldEntries (:) [] (const []) (Tar.read tar)
+  in Tar.write entries === tar
+
