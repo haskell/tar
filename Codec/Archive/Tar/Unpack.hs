@@ -118,25 +118,15 @@ unpack baseDir entries = do
         OtherEntryType 'K' link _
           | Just _ <- mLink -> throwIO $ userError "Two subsequent OtherEntryType K"
           | otherwise -> unpackEntries (Just . LinkTarget . BS.toStrict $ link) mPath links es
-        OtherEntryType _ file _
+        OtherEntryType _ _ _
           | Just _ <- mLink -> throwIO $ userError "Unknown entry type following OtherEntryType K"
           | Just _ <- mPath -> throwIO $ userError "Unknown entry type following OtherEntryType L"
           | otherwise -> do
-              hPutStr stderr "Warning: Unknown tar typecode, attempting to extract as normal file"
-              extractFile (entryPermissions entry) path file (entryTime entry)
+              -- the spec demands that we attempt to extract as normal file on unknown typecode,
+              -- but we just skip it
               unpackEntries Nothing Nothing links es
-        ec -> do
-          hPutStr stderr $ "Warning: Unsupported typecode \"" <> printEntryContentType ec <> "\", skipping"
+        _ -> do
           unpackEntries Nothing Nothing links es -- ignore other file types
-     where
-      printEntryContentType NormalFile{} = "normal file"
-      printEntryContentType Directory{} = "directory"
-      printEntryContentType SymbolicLink{} = "symlink"
-      printEntryContentType HardLink{} = "hardlink"
-      printEntryContentType CharacterDevice{} = "chardev"
-      printEntryContentType BlockDevice{} = "blockdev"
-      printEntryContentType NamedPipe{} = "namedpipe"
-      printEntryContentType (OtherEntryType t _ _) = "other entry " <> show t
 
 
     extractFile permissions path content mtime = do
