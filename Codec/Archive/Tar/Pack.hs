@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -23,6 +24,7 @@ module Codec.Archive.Tar.Pack (
 
 import Codec.Archive.Tar.Types
 import Control.Monad (join, when, forM)
+import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
          ( (</>) )
@@ -80,11 +82,24 @@ preparePaths baseDir paths =
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
   fmap concat $ interleave
-    [ do let tarpath = toTarPath' isDir relpath
+    [ do let tarpathRes = toTarPath' isDir relpath
          isSymlink <- pathIsSymbolicLink filepath
-         if | isSymlink -> withLongLinkEntry filepath tarpath packSymlinkEntry
-            | isDir -> withLongLinkEntry filepath tarpath packDirectoryEntry
-            | otherwise -> withLongLinkEntry filepath tarpath packFileEntry
+         case tarpathRes of
+           FileNameEmpty -> throwIO $ userError "File name empty"
+           FileNameOK tarpath
+             | isSymlink -> (:[]) <$> packSymlinkEntry filepath tarpath
+             | isDir     -> (:[]) <$> packDirectoryEntry filepath tarpath
+             | otherwise -> (:[]) <$> packFileEntry filepath tarpath
+           FileNameTooLong tarpath
+             | isSymlink -> do
+                 linkTarget <- getSymbolicLinkTarget filepath
+                 packSymlinkEntry' linkTarget tarpath >>= \case
+                   sym@(Entry { entryContent = SymbolicLink (LinkTarget bs) })
+                     | BSS.length bs > 100 -> do
+                        pure [longSymLinkEntry linkTarget, longLinkEntry filepath, sym]
+                   _ -> withLongLinkEntry filepath tarpath packSymlinkEntry
+             | isDir     -> withLongLinkEntry filepath tarpath packDirectoryEntry
+             | otherwise -> withLongLinkEntry filepath tarpath packFileEntry
     | relpath <- paths
     , let isDir    = FilePath.Native.hasTrailingPathSeparator filepath
           filepath = baseDir </> relpath ]
@@ -92,12 +107,10 @@ packPaths baseDir paths =
     -- prepend the long filepath entry if necessary
     withLongLinkEntry
       :: FilePath
-      -> ToTarPathResult
+      -> TarPath
       -> (FilePath -> TarPath -> IO Entry)
       -> IO [Entry]
-    withLongLinkEntry _ FileNameEmpty _ = throwIO $ userError "File name empty"
-    withLongLinkEntry filepath (FileNameOK tarpath) f = (:[]) <$> f filepath tarpath
-    withLongLinkEntry filepath (FileNameTooLong tarpath) f = do
+    withLongLinkEntry filepath tarpath f = do
       mainEntry <- f filepath tarpath
       pure [longLinkEntry filepath, mainEntry]
 
@@ -156,6 +169,12 @@ packSymlinkEntry :: FilePath -- ^ Full path to find the file on the local disk
                  -> IO Entry
 packSymlinkEntry filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
+  packSymlinkEntry' linkTarget tarpath
+
+packSymlinkEntry' :: String   -- ^ link target
+                  -> TarPath  -- ^ Path to use for the tar Entry in the archive
+                  -> IO Entry
+packSymlinkEntry' linkTarget tarpath = do
   let entry tp = symlinkEntry tp linkTarget
       safeReturn tp = maybe (pure tp) throwIO $ checkEntrySecurity tp
   safeReturn $ entry tarpath
