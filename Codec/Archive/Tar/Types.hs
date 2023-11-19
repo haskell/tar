@@ -537,10 +537,17 @@ fromLinkTargetToWindowsPath (LinkTarget pathbs) = adjustDirectory $
 -- The 'Monoid' instance lets you concatenate archives or append entries to an
 -- archive.
 --
-data Entries e = Next Entry (Entries e)
-               | Done
-               | Fail e
-  deriving (Eq, Show, Functor, Foldable, Traversable)
+data Entries e
+  = Next Entry (Entries e)
+  | Done
+  | Fail e
+  deriving
+    ( Eq
+    , Show
+    , Functor
+    , Foldable
+    , Traversable -- ^ @since 0.6.0.0
+    )
 
 infixr 5 `Next`
 

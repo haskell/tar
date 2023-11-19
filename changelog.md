@@ -11,9 +11,11 @@ See also http://pvp.haskell.org/faq
   * Fix tests on 32-bit architectures
   * Do not leak file handles in `packFileEntry`
   * Add support for over-long filepaths via GNU extension
-  * Add `toTarPath'`, `ToTarPathResult`, `longLinkEntry`
+  * Add `toTarPath'`, `ToTarPathResult`, `longLinkEntry`, `longSymLinkEntry`
   * Fix handling of hardlinks and symlinks
   * Add `packSymlinkEntry` and `symbolicLinkPermission`, export `checkEntrySecurity`
+  * Ignore FAT32 errors when setting modification time
+
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 

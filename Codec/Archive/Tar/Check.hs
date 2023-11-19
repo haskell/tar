@@ -138,8 +138,13 @@ checkEntryTarbomb expectedTopDir entry =
 
 -- | An error that occurs if a tar file is a \"tar bomb\" that would extract
 -- files outside of the intended directory.
-data TarBombError = TarBombError FilePath FilePath
-                  deriving (Typeable)
+data TarBombError
+  = TarBombError
+    FilePath -- ^ Path inside archive.
+             --
+             -- @since 0.6.0.0
+    FilePath -- ^ Expected top directory.
+  deriving (Typeable)
 
 instance Exception TarBombError
 
