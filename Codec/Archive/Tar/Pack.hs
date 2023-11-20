@@ -70,7 +70,8 @@ preparePaths baseDir = fmap concat . interleave . map go
     go relpath = do
       let abspath = baseDir </> relpath
       isDir  <- doesDirectoryExist abspath
-      if isDir then do
+      isSymlink <- pathIsSymbolicLink abspath
+      if isDir && not isSymlink then do
         entries <- getDirectoryContentsRecursive abspath
         let entries' = map (relpath </>) entries
         return $ if null relpath
@@ -215,7 +216,8 @@ recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
       let dirEntry  = dir </> entry
           dirEntry' = FilePath.Native.addTrailingPathSeparator dirEntry
       isDirectory <- doesDirectoryExist (base </> dirEntry)
-      if isDirectory
+      isSymlink <- pathIsSymbolicLink (base </> dirEntry)
+      if isDirectory && not isSymlink
         then collect files (dirEntry':dirs') entries
         else collect (dirEntry:files) dirs' entries
 
