@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 -----------------------------------------------------------------------------
 -- |
@@ -30,12 +31,12 @@ module Codec.Archive.Tar.Check.Internal (
   ) where
 
 import Codec.Archive.Tar.Types
-
+import Control.Applicative ((<|>))
+import qualified Data.ByteString.Lazy.Char8 as Char8
 import Data.Typeable (Typeable)
 import Control.Exception (Exception)
-import Control.Monad (MonadPlus(mplus))
 import qualified System.FilePath as FilePath.Native
-         ( splitDirectories, isAbsolute, isValid )
+         ( splitDirectories, isAbsolute, isValid, (</>), takeDirectory )
 
 import qualified System.FilePath.Windows as FilePath.Windows
 import qualified System.FilePath.Posix   as FilePath.Posix
@@ -50,7 +51,7 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 --
 -- * file paths are not absolute
 --
--- * file paths do not contain any path components that are \"@..@\"
+-- * file paths do not refer outside of the archive
 --
 -- * file names are valid
 --
@@ -65,12 +66,17 @@ checkSecurity = checkEntries checkEntrySecurity
 
 -- | @since 0.6.0.0
 checkEntrySecurity :: Entry -> Maybe FileNameError
-checkEntrySecurity entry = case entryContent entry of
-    HardLink     link -> check (entryPath entry)
-                 `mplus` check (fromLinkTarget link)
-    SymbolicLink link -> check (entryPath entry)
-                 `mplus` check (fromLinkTarget link)
-    _                 -> check (entryPath entry)
+checkEntrySecurity entry = check (entryPath entry) <|> case entryContent entry of
+    HardLink     link -> check (fromLinkTarget link)
+    SymbolicLink link -> check (FilePath.Native.takeDirectory (entryPath entry)
+                                FilePath.Native.</> fromLinkTarget link)
+    OtherEntryType 'K' longPath _
+                      -- We don't know yet whether it's a hard or a soft link.
+                      -- Let's err on the safe side and validate as a hard one.
+                      -> check (Char8.unpack $ Char8.takeWhile (/= '\0') longPath)
+    OtherEntryType 'L' longPath _
+                      -> check (Char8.unpack $ Char8.takeWhile (/= '\0') longPath)
+    _                 -> Nothing
 
   where
     check name
@@ -80,10 +86,20 @@ checkEntrySecurity entry = case entryContent entry of
       | not (FilePath.Native.isValid name)
       = Just $ InvalidFileName name
 
-      | any (=="..") (FilePath.Native.splitDirectories name)
+      | not (isInsideBaseDir name)
       = Just $ InvalidFileName name
 
       | otherwise = Nothing
+
+isInsideBaseDir :: FilePath -> Bool
+isInsideBaseDir = go 0 . FilePath.Native.splitDirectories
+  where
+    go :: Word -> [FilePath] -> Bool
+    go !_ [] = True
+    go 0 (".." : _) = False
+    go lvl (".." : xs) = go (lvl - 1) xs
+    go lvl ("." : xs) = go lvl xs
+    go lvl (_ : xs) = go (lvl + 1) xs
 
 -- | Errors arising from tar file names being in some way invalid or dangerous
 data FileNameError
