@@ -61,6 +61,7 @@ library tar-internal
     Codec.Archive.Tar
     Codec.Archive.Tar.Entry
     Codec.Archive.Tar.Check
+    Codec.Archive.Tar.Check.Internal
     Codec.Archive.Tar.Index
     Codec.Archive.Tar.Types
     Codec.Archive.Tar.Read

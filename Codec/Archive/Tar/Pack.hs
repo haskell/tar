@@ -42,7 +42,7 @@ import System.IO
          ( IOMode(ReadMode), withBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Control.Exception (throwIO)
-import Codec.Archive.Tar.Check (checkEntrySecurity)
+import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
 -- specified will have their contents included recursively. Paths in the

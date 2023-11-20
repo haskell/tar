@@ -13,7 +13,7 @@ See also http://pvp.haskell.org/faq
   * Add support for over-long filepaths via GNU extension
   * Add `toTarPath'`, `ToTarPathResult`, `longLinkEntry`, `longSymLinkEntry`
   * Fix handling of hardlinks and symlinks
-  * Add `packSymlinkEntry` and `symbolicLinkPermission`, export `checkEntrySecurity`
+  * Add `packSymlinkEntry` and `symbolicLinkPermission`
   * Ignore FAT32 errors when setting modification time
   * Switch to trailer parsing mode only after a full block of `NUL`
 
