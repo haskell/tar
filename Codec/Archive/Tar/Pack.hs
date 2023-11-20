@@ -23,7 +23,7 @@ module Codec.Archive.Tar.Pack (
   ) where
 
 import Codec.Archive.Tar.Types
-import Control.Monad (join, when, forM)
+import Control.Monad (join, when, forM, (>=>))
 import qualified Data.ByteString as BSS
 import qualified Data.ByteString.Lazy as BS
 import System.FilePath
@@ -62,21 +62,21 @@ import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 pack :: FilePath   -- ^ Base directory
      -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
      -> IO [Entry]
-pack baseDir paths0 = preparePaths baseDir paths0 >>= packPaths baseDir
+pack baseDir = preparePaths baseDir >=> packPaths baseDir
 
 preparePaths :: FilePath -> [FilePath] -> IO [FilePath]
-preparePaths baseDir paths =
-  concat <$> interleave
-    [ do isDir  <- doesDirectoryExist (baseDir </> path)
-         if isDir
-           then do entries <- getDirectoryContentsRecursive (baseDir </> path)
-                   let entries' = map (path </>) entries
-                       dir = FilePath.Native.addTrailingPathSeparator path
-                   if null path then return entries'
-                                else return (dir : entries')
-           else return [path]
-    | path <- paths ]
-
+preparePaths baseDir = fmap concat . interleave . map go
+  where
+    go relpath = do
+      let abspath = baseDir </> relpath
+      isDir  <- doesDirectoryExist abspath
+      if isDir then do
+        entries <- getDirectoryContentsRecursive abspath
+        let entries' = map (relpath </>) entries
+        return $ if null relpath
+          then entries'
+          else FilePath.Native.addTrailingPathSeparator relpath : entries'
+      else return [relpath]
 
 -- | Pack paths while accounting for overlong filepaths.
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
