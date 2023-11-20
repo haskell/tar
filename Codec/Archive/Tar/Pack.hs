@@ -66,7 +66,7 @@ pack baseDir paths0 = preparePaths baseDir paths0 >>= packPaths baseDir
 
 preparePaths :: FilePath -> [FilePath] -> IO [FilePath]
 preparePaths baseDir paths =
-  fmap concat $ interleave
+  concat <$> interleave
     [ do isDir  <- doesDirectoryExist (baseDir </> path)
          if isDir
            then do entries <- getDirectoryContentsRecursive (baseDir </> path)
@@ -81,28 +81,28 @@ preparePaths baseDir paths =
 -- | Pack paths while accounting for overlong filepaths.
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
-  fmap concat $ interleave
+  concat <$> interleave
     [ do let tarpathRes = toTarPath' isDir relpath
-         isSymlink <- pathIsSymbolicLink filepath
+         isSymlink <- pathIsSymbolicLink abspath
          case tarpathRes of
            FileNameEmpty -> throwIO $ userError "File name empty"
            FileNameOK tarpath
-             | isSymlink -> (:[]) <$> packSymlinkEntry filepath tarpath
-             | isDir     -> (:[]) <$> packDirectoryEntry filepath tarpath
-             | otherwise -> (:[]) <$> packFileEntry filepath tarpath
+             | isSymlink -> (:[]) <$> packSymlinkEntry abspath tarpath
+             | isDir     -> (:[]) <$> packDirectoryEntry abspath tarpath
+             | otherwise -> (:[]) <$> packFileEntry abspath tarpath
            FileNameTooLong tarpath
              | isSymlink -> do
-                 linkTarget <- getSymbolicLinkTarget filepath
+                 linkTarget <- getSymbolicLinkTarget abspath
                  packSymlinkEntry' linkTarget tarpath >>= \case
                    sym@(Entry { entryContent = SymbolicLink (LinkTarget bs) })
                      | BSS.length bs > 100 -> do
-                        pure [longSymLinkEntry linkTarget, longLinkEntry filepath, sym]
-                   _ -> withLongLinkEntry filepath tarpath packSymlinkEntry
-             | isDir     -> withLongLinkEntry filepath tarpath packDirectoryEntry
-             | otherwise -> withLongLinkEntry filepath tarpath packFileEntry
+                        pure [longSymLinkEntry linkTarget, longLinkEntry relpath, sym]
+                   _ -> withLongLinkEntry relpath tarpath packSymlinkEntry
+             | isDir     -> withLongLinkEntry relpath tarpath packDirectoryEntry
+             | otherwise -> withLongLinkEntry relpath tarpath packFileEntry
     | relpath <- paths
-    , let isDir    = FilePath.Native.hasTrailingPathSeparator filepath
-          filepath = baseDir </> relpath ]
+    , let isDir    = FilePath.Native.hasTrailingPathSeparator abspath
+          abspath = baseDir </> relpath ]
   where
     -- prepend the long filepath entry if necessary
     withLongLinkEntry
@@ -110,9 +110,9 @@ packPaths baseDir paths =
       -> TarPath
       -> (FilePath -> TarPath -> IO Entry)
       -> IO [Entry]
-    withLongLinkEntry filepath tarpath f = do
-      mainEntry <- f filepath tarpath
-      pure [longLinkEntry filepath, mainEntry]
+    withLongLinkEntry relpath tarpath f = do
+      mainEntry <- f (baseDir </> relpath) tarpath
+      pure [longLinkEntry relpath, mainEntry]
 
 interleave :: [IO a] -> IO [a]
 interleave = unsafeInterleaveIO . go
