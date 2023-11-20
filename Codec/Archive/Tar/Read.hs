@@ -219,17 +219,12 @@ getString off len = BS.copy . BS.Char8.takeWhile (/='\0') . getBytes off len
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int   #-}
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int64 #-}
 readOct :: Integral n => BS.ByteString -> Maybe n
-readOct bs0 = case go 0 0 bs0 of
-                -1 -> Nothing
-                n  -> Just n
+readOct = go 0 0
   where
-    go :: Integral n => Int -> n -> BS.ByteString -> n
-    go !i !n !bs
-      | BS.null bs = if i == 0 then -1 else n
-      | otherwise  =
-          case BS.unsafeHead bs of
-            w | w >= 0x30
-             && w <= 0x39 -> go (i+1)
-                                (n * 8 + (fromIntegral w - 0x30))
-                                (BS.unsafeTail bs)
-              | otherwise -> -1
+    go :: Integral n => Int -> n -> BS.ByteString -> Maybe n
+    go !i !n !bs = case BS.uncons bs of
+      Nothing -> if i == 0 then Nothing else Just n
+      Just (w, tl)
+        | w >= 0x30 && w <= 0x39 ->
+          go (i+1) (n * 8 + (fromIntegral w - 0x30)) tl
+        | otherwise -> Nothing
