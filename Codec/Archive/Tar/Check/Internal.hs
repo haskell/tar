@@ -66,10 +66,10 @@ checkSecurity = checkEntries checkEntrySecurity
 
 -- | @since 0.6.0.0
 checkEntrySecurity :: Entry -> Maybe FileNameError
-checkEntrySecurity entry = check (entryPath entry) <|> case entryContent entry of
-    HardLink     link -> check (fromLinkTarget link)
-    SymbolicLink link -> check (FilePath.Native.takeDirectory (entryPath entry)
-                                FilePath.Native.</> fromLinkTarget link)
+checkEntrySecurity entry = check (entryPathUnix entry) <|> case entryContent entry of
+    HardLink     link -> check (fromLinkTargetToUnix link)
+    SymbolicLink link -> check (FilePath.Posix.takeDirectory (entryPathUnix entry)
+                                FilePath.Posix.</> fromLinkTargetToUnix link)
     OtherEntryType 'K' longPath _
                       -- We don't know yet whether it's a hard or a soft link.
                       -- Let's err on the safe side and validate as a hard one.
@@ -79,11 +79,12 @@ checkEntrySecurity entry = check (entryPath entry) <|> case entryContent entry o
     _                 -> Nothing
 
   where
+    entryPathUnix = fromTarPathToPosixPath . entryTarPath
     check name
-      | FilePath.Native.isAbsolute name
+      | FilePath.Posix.isAbsolute name
       = Just $ AbsoluteFileName name
 
-      | not (FilePath.Native.isValid name)
+      | not (FilePath.Posix.isValid name)
       = Just $ InvalidFileName name
 
       | not (isInsideBaseDir name)
@@ -92,7 +93,7 @@ checkEntrySecurity entry = check (entryPath entry) <|> case entryContent entry o
       | otherwise = Nothing
 
 isInsideBaseDir :: FilePath -> Bool
-isInsideBaseDir = go 0 . FilePath.Native.splitDirectories
+isInsideBaseDir = go 0 . FilePath.Posix.splitDirectories
   where
     go :: Word -> [FilePath] -> Bool
     go !_ [] = True
@@ -105,6 +106,7 @@ isInsideBaseDir = go 0 . FilePath.Native.splitDirectories
 data FileNameError
   = InvalidFileName FilePath
   | AbsoluteFileName FilePath
+  | UnsafeLinkTarget FilePath
   deriving (Typeable)
 
 instance Show FileNameError where
@@ -116,6 +118,7 @@ showFileNameError :: Maybe PortabilityPlatform -> FileNameError -> String
 showFileNameError mb_plat err = case err of
     InvalidFileName  path -> "Invalid"  ++ plat ++ " file name in tar archive: " ++ show path
     AbsoluteFileName path -> "Absolute" ++ plat ++ " file name in tar archive: " ++ show path
+    UnsafeLinkTarget path -> "Unsafe"   ++ plat ++ " link target in tar archive: " ++ show path
   where plat = maybe "" (' ':) mb_plat
 
 

@@ -122,7 +122,7 @@ instance Arbitrary LinkTarget where
          . filter (not . null)
          . shrinkList shrinkNothing
          . FilePath.Posix.splitPath
-         . fromLinkTargetToPosixPath
+         . fromLinkTargetToUnix
 
 
 listOf1ToN :: Int -> Gen a -> Gen [a]
