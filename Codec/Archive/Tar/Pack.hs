@@ -97,7 +97,8 @@ packPaths baseDir paths =
                  packSymlinkEntry' linkTarget tarpath >>= \case
                    sym@(Entry { entryContent = SymbolicLink (LinkTarget bs) })
                      | BSS.length bs > 100 -> do
-                        pure [longSymLinkEntry linkTarget, longLinkEntry relpath, sym]
+                        longEntry <- longSymLinkEntry linkTarget
+                        pure [longEntry, longLinkEntry relpath, sym]
                    _ -> withLongLinkEntry relpath tarpath packSymlinkEntry
              | isDir     -> withLongLinkEntry relpath tarpath packDirectoryEntry
              | otherwise -> withLongLinkEntry relpath tarpath packFileEntry
@@ -176,9 +177,9 @@ packSymlinkEntry' :: String   -- ^ link target
                   -> TarPath  -- ^ Path to use for the tar Entry in the archive
                   -> IO Entry
 packSymlinkEntry' linkTarget tarpath = do
-  let entry tp = symlinkEntry tp linkTarget
-      safeReturn tp = maybe (pure tp) throwIO $ checkEntrySecurity tp
-  safeReturn $ entry tarpath
+  let safeReturn entry = maybe (pure entry) throwIO $ checkEntrySecurity entry
+  entry <- symlinkEntry tarpath linkTarget
+  safeReturn entry
 
 -- | This is a utility function, much like 'getDirectoryContents'. The
 -- difference is that it includes the contents of subdirectories.

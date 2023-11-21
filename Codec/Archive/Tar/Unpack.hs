@@ -150,7 +150,7 @@ unpack baseDir entries = do
     saveLink isHardLink path link links = seq (length path)
                                         $ seq (length link')
                                         $ (path, link', isHardLink):links
-      where link' = fromLinkTarget link
+      where link' = fromLinkTargetToNative link
 
 
     -- for hardlinks, we just copy

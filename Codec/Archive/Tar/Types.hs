@@ -50,9 +50,9 @@ module Codec.Archive.Tar.Types (
 
   LinkTarget(..),
   toLinkTarget,
-  fromLinkTarget,
-  fromLinkTargetToPosixPath,
-  fromLinkTargetToWindowsPath,
+  toLinkTarget',
+  fromLinkTargetToNative,
+  fromLinkTargetToUnix,
 
   Entries(..),
   mapEntries,
@@ -66,14 +66,16 @@ import Data.Int      (Int64)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid   (Monoid(..))
 import Data.Semigroup as Sem
+import Data.Typeable
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
 import Control.DeepSeq
-import Control.Exception (Exception)
+import Control.Exception (Exception, displayException)
+import Control.Monad.Catch (MonadThrow, throwM)
 
 import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories, addTrailingPathSeparator, pathSeparator )
+         ( joinPath, splitDirectories, addTrailingPathSeparator, pathSeparator, isAbsolute, hasTrailingPathSeparator )
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
          , addTrailingPathSeparator, pathSeparator )
@@ -243,9 +245,10 @@ fileEntry name fileContent =
 
 
 -- | A tar 'Entry' for a symbolic link.
-symlinkEntry :: TarPath -> FilePath -> Entry
-symlinkEntry name targetLink =
-  simpleEntry name (SymbolicLink . LinkTarget . packAscii $ targetLink)
+symlinkEntry :: MonadThrow m => TarPath -> FilePath -> m Entry
+symlinkEntry name targetLink = do
+  target <- toLinkTarget' targetLink
+  pure $ simpleEntry name (SymbolicLink . LinkTarget . packAscii $ target)
 
 -- | [GNU extension](https://www.gnu.org/software/tar/manual/html_node/Standard.html)
 -- to store a filepath too long to fit into 'entryTarPath'
@@ -273,10 +276,12 @@ longLinkEntry tarpath = Entry {
 -- data with truncated 'entryTarPath'.
 --
 -- @since 0.6.0.0
-longSymLinkEntry :: FilePath -> Entry
-longSymLinkEntry linkTarget = Entry {
+longSymLinkEntry :: MonadThrow m => FilePath -> m Entry
+longSymLinkEntry linkTarget = do
+  target <- toLinkTarget' linkTarget
+  pure $ Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
-    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ packAscii linkTarget) (fromIntegral $ length linkTarget),
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict . packAscii $ target) (fromIntegral $ length target),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,
@@ -462,18 +467,37 @@ newtype LinkTarget = LinkTarget BS.ByteString
 instance NFData LinkTarget where
     rnf (LinkTarget bs) = rnf bs
 
--- | Convert a native 'FilePath' to a tar 'LinkTarget'. This may fail if the
+-- | Convert a native 'FilePath' to a tar 'LinkTarget'.
 -- string is longer than 100 characters or if it contains non-portable
 -- characters.
---
-toLinkTarget   :: FilePath -> Maybe LinkTarget
-toLinkTarget path | length path <= 100 = Just $! LinkTarget (packAscii path)
-                  | otherwise          = Nothing
+toLinkTarget   :: MonadThrow m => FilePath -> m LinkTarget
+toLinkTarget path | length path <= 100 = do
+                                           target <- toLinkTarget' path
+                                           pure $! LinkTarget (packAscii target)
+                  | otherwise          = throwM (TooLong path)
+
+data LinkTargetException = IsAbsolute FilePath
+                         | TooLong FilePath
+  deriving (Show,Typeable)
+
+instance Exception LinkTargetException where
+  displayException (IsAbsolute fp) = "Link target \"" <> fp <> "\" is unexpectedly absolute"
+  displayException (TooLong _) = "The link target is too long"
+
+-- | Convert a native 'FilePath' to a unix filepath suitable for
+-- using as 'LinkTarget'. Does not error if longer than 100 characters.
+toLinkTarget' :: MonadThrow m => FilePath -> m FilePath
+toLinkTarget' path
+  | FilePath.Native.isAbsolute path = throwM (IsAbsolute path)
+  | otherwise = pure $ adjustDirectory $ FilePath.Posix.joinPath $ FilePath.Native.splitDirectories path
+  where
+    adjustDirectory | FilePath.Native.hasTrailingPathSeparator path
+                    = FilePath.Posix.addTrailingPathSeparator
+                    | otherwise = id
 
 -- | Convert a tar 'LinkTarget' to a native 'FilePath'.
---
-fromLinkTarget :: LinkTarget -> FilePath
-fromLinkTarget (LinkTarget pathbs) = adjustDirectory $
+fromLinkTargetToNative :: LinkTarget -> FilePath
+fromLinkTargetToNative (LinkTarget pathbs) = adjustDirectory $
   FilePath.Native.joinPath $ FilePath.Posix.splitDirectories path
   where
     path = BS.Char8.unpack pathbs
@@ -481,27 +505,10 @@ fromLinkTarget (LinkTarget pathbs) = adjustDirectory $
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
 
--- | Convert a tar 'LinkTarget' to a Unix/Posix 'FilePath'.
---
-fromLinkTargetToPosixPath :: LinkTarget -> FilePath
-fromLinkTargetToPosixPath (LinkTarget pathbs) = adjustDirectory $
-  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories path
-  where
-    path = BS.Char8.unpack pathbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
-                    = FilePath.Native.addTrailingPathSeparator
-                    | otherwise = id
+-- | Convert a tar 'LinkTarget' to a unix 'FilePath'.
+fromLinkTargetToUnix :: LinkTarget -> FilePath
+fromLinkTargetToUnix (LinkTarget pathbs) = BS.Char8.unpack pathbs
 
--- | Convert a tar 'LinkTarget' to a Windows 'FilePath'.
---
-fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
-fromLinkTargetToWindowsPath (LinkTarget pathbs) = adjustDirectory $
-  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories path
-  where
-    path = BS.Char8.unpack pathbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
-                    = FilePath.Windows.addTrailingPathSeparator
-                    | otherwise = id
 
 --
 -- * Entries type
