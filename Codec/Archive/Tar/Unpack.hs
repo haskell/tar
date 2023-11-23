@@ -135,7 +135,7 @@ unpack baseDir entries = do
           unpackEntries Nothing Nothing links es -- ignore other file types
 
 
-    extractFile permissions path content mtime = do
+    extractFile permissions (fromFilePathToNative -> path) content mtime = do
       -- Note that tar archives do not make sure each directory is created
       -- before files they contain, indeed we may have to create several
       -- levels of directory.
@@ -147,16 +147,16 @@ unpack baseDir entries = do
         absDir  = baseDir </> FilePath.Native.takeDirectory path
         absPath = baseDir </> path
 
-    extractDir path mtime = do
+    extractDir (fromFilePathToNative -> path) mtime = do
       createDirectoryIfMissing True absPath
       setModTime absPath mtime
       where
         absPath = baseDir </> path
 
-    saveLink isHardLink path link links = seq (length path)
-                                        $ seq (length link')
-                                        $ (path, link', isHardLink):links
-      where link' = fromLinkTargetToNative link
+    saveLink isHardLink (fromFilePathToNative -> path) (fromLinkTargetToNative -> link) links
+      = seq (length path)
+          $ seq (length link)
+          $ (path, link, isHardLink):links
 
 
     -- for hardlinks, we just copy
