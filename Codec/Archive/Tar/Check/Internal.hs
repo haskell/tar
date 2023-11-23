@@ -41,7 +41,7 @@ import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import Control.Exception (Exception(..))
 import qualified System.FilePath as FilePath.Native
-         ( splitDirectories, isAbsolute, isValid, (</>), takeDirectory )
+         ( splitDirectories, isAbsolute, isValid, (</>), takeDirectory, hasDrive )
 
 import qualified System.FilePath.Windows as FilePath.Windows
 import qualified System.FilePath.Posix   as FilePath.Posix
@@ -89,7 +89,7 @@ checkSecurity = go Nothing Nothing
       | otherwise = Nothing
 
     checkNative (fromFilePathToNative -> name)
-      | FilePath.Native.isAbsolute name
+      | FilePath.Native.isAbsolute name || FilePath.Native.hasDrive name
       = Just $ AbsoluteFileName name
       | not (FilePath.Native.isValid name)
       = Just $ InvalidFileName name
