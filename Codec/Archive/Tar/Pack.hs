@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
 -----------------------------------------------------------------------------
 -- |
@@ -41,8 +42,8 @@ import Data.Time.Clock.POSIX
 import System.IO
          ( IOMode(ReadMode), withBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
-import Control.Exception (throwIO)
-import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
+import Control.Exception (throwIO, SomeException)
+import Codec.Archive.Tar.Check.Internal (checkSecurity)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
 -- specified will have their contents included recursively. Paths in the
@@ -94,10 +95,11 @@ packPaths baseDir paths =
            FileNameTooLong tarpath
              | isSymlink -> do
                  linkTarget <- getSymbolicLinkTarget abspath
-                 packSymlinkEntry' linkTarget tarpath >>= \case
+                 symlinkEntry tarpath linkTarget >>= \case
                    sym@(Entry { entryContent = SymbolicLink (LinkTarget bs) })
                      | BSS.length bs > 100 -> do
                         longEntry <- longSymLinkEntry linkTarget
+                        checkMultipleEntries (Next longEntry (Next (longLinkEntry relpath) (Next sym Done)))
                         pure [longEntry, longLinkEntry relpath, sym]
                    _ -> withLongLinkEntry relpath tarpath packSymlinkEntry
              | isDir     -> withLongLinkEntry relpath tarpath packDirectoryEntry
@@ -106,6 +108,11 @@ packPaths baseDir paths =
     , let isDir    = FilePath.Native.hasTrailingPathSeparator abspath
           abspath = baseDir </> relpath ]
   where
+    checkMultipleEntries es = either (either throwIO throwIO . fst)
+                                (\_ -> pure ())
+                                $ foldlEntries (\a _ -> a) ()
+                                $ checkSecurity @SomeException es
+
     -- prepend the long filepath entry if necessary
     withLongLinkEntry
       :: FilePath
@@ -114,6 +121,7 @@ packPaths baseDir paths =
       -> IO [Entry]
     withLongLinkEntry relpath tarpath f = do
       mainEntry <- f (baseDir </> relpath) tarpath
+      checkMultipleEntries (Next (longLinkEntry relpath) (Next (mainEntry) Done))
       pure [longLinkEntry relpath, mainEntry]
 
 interleave :: [IO a] -> IO [a]
@@ -171,15 +179,8 @@ packSymlinkEntry :: FilePath -- ^ Full path to find the file on the local disk
                  -> IO Entry
 packSymlinkEntry filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
-  packSymlinkEntry' linkTarget tarpath
+  symlinkEntry tarpath linkTarget
 
-packSymlinkEntry' :: String   -- ^ link target
-                  -> TarPath  -- ^ Path to use for the tar Entry in the archive
-                  -> IO Entry
-packSymlinkEntry' linkTarget tarpath = do
-  let safeReturn entry = maybe (pure entry) throwIO $ checkEntrySecurity entry
-  entry <- symlinkEntry tarpath linkTarget
-  safeReturn entry
 
 -- | This is a utility function, much like 'listDirectory'. The
 -- difference is that it includes the contents of subdirectories.

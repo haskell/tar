@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE ViewPatterns #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Check.Internal
@@ -17,7 +18,6 @@ module Codec.Archive.Tar.Check.Internal (
 
   -- * Security
   checkSecurity,
-  checkEntrySecurity,
   FileNameError(..),
 
   -- * Tarbombs
@@ -33,6 +33,7 @@ module Codec.Archive.Tar.Check.Internal (
 import Codec.Archive.Tar.Types
 import Control.Applicative ((<|>))
 import qualified Data.ByteString.Lazy.Char8 as Char8
+import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import Control.Exception (Exception)
 import qualified System.FilePath as FilePath.Native
@@ -62,38 +63,53 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- an error.
 --
 checkSecurity :: Entries e -> Entries (Either e FileNameError)
-checkSecurity = checkEntries checkEntrySecurity
-
--- | @since 0.6.0.0
-checkEntrySecurity :: Entry -> Maybe FileNameError
-checkEntrySecurity entry = check (entryPathUnix entry) <|> case entryContent entry of
-    HardLink     link -> check (fromLinkTargetToUnix link)
-    SymbolicLink link -> check (FilePath.Posix.takeDirectory (entryPathUnix entry)
-                                FilePath.Posix.</> fromLinkTargetToUnix link)
-    OtherEntryType 'K' longPath _
-                      -- We don't know yet whether it's a hard or a soft link.
-                      -- Let's err on the safe side and validate as a hard one.
-                      -> check (Char8.unpack $ Char8.takeWhile (/= '\0') longPath)
-    OtherEntryType 'L' longPath _
-                      -> check (Char8.unpack $ Char8.takeWhile (/= '\0') longPath)
-    _                 -> Nothing
-
+checkSecurity = go Nothing Nothing
   where
-    entryPathUnix = fromTarPathToPosixPath . entryTarPath
-    check name
+    convert mLink mPath es = maybe (go mLink mPath es) (Fail . Right)
+
+    checkPosix name
       | FilePath.Posix.isAbsolute name
       = Just $ AbsoluteFileName name
-
       | not (FilePath.Posix.isValid name)
       = Just $ InvalidFileName name
-
-      | not (isInsideBaseDir name)
-      = Just $ InvalidFileName name
-
+      | not (isInsideBaseDir (FilePath.Posix.splitDirectories name))
+      = Just $ UnsafeLinkTarget name
       | otherwise = Nothing
 
-isInsideBaseDir :: FilePath -> Bool
-isInsideBaseDir = go 0 . FilePath.Posix.splitDirectories
+    checkNative (fromFilePathToNative -> name)
+      | FilePath.Native.isAbsolute name
+      = Just $ AbsoluteFileName name
+      | not (FilePath.Native.isValid name)
+      = Just $ InvalidFileName name
+      | not (isInsideBaseDir (FilePath.Native.splitDirectories name))
+      = Just $ UnsafeLinkTarget name
+      | otherwise = Nothing
+
+    check name = checkPosix name <|> checkNative name
+
+    go :: Maybe LinkTarget -> Maybe FilePath -> Entries e -> Entries (Either e FileNameError)
+    go mLink mPath (Next e es)
+      | let path = fromMaybe (entryPath e) mPath
+      , Just err <- check path = Fail . Right $ err
+      | otherwise = case entryContent e of
+          HardLink     link ->
+            let linkTarget = fromMaybe link mLink
+            in Next e $ convert Nothing Nothing es $ check (fromLinkTargetToUnix linkTarget)
+          SymbolicLink link ->
+            let linkTarget = fromMaybe link mLink
+            in convert Nothing Nothing es $ check (FilePath.Posix.takeDirectory (fromTarPathToPosixPath . entryTarPath $ e)
+                                                                                FilePath.Posix.</> fromLinkTargetToUnix linkTarget)
+          OtherEntryType 'L' fn _ -> let longPath = Char8.unpack . Char8.takeWhile (/= '\0') $ fn
+                                     in Next e $ go Nothing (Just longPath) es
+          OtherEntryType 'K' link _ -> let longLink = Char8.toStrict . Char8.takeWhile (/= '\0') $ link
+                                       in Next e $ go (Just . LinkTarget $ longLink) Nothing es
+          _                 -> Next e $ go Nothing Nothing es
+    go _ _ Done       = Done
+    go _ _ (Fail err) = Fail (Left err)
+
+
+isInsideBaseDir :: [FilePath] -> Bool
+isInsideBaseDir = go 0
   where
     go :: Word -> [FilePath] -> Bool
     go !_ [] = True
