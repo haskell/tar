@@ -1,6 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Check.Internal
@@ -35,13 +39,21 @@ import Control.Applicative ((<|>))
 import qualified Data.ByteString.Lazy.Char8 as Char8
 import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
-import Control.Exception (Exception)
+import Control.Exception (Exception(..))
 import qualified System.FilePath as FilePath.Native
          ( splitDirectories, isAbsolute, isValid, (</>), takeDirectory )
 
 import qualified System.FilePath.Windows as FilePath.Windows
 import qualified System.FilePath.Posix   as FilePath.Posix
 
+instance forall e1 e2 . (Exception e1, Exception e2) => Exception (Either e1 e2) where
+  toException (Left e)  = toException e
+  toException (Right e) = toException e
+  fromException se = case fromException @e1 se of
+                       Nothing -> Right <$> fromException @e2 se
+                       Just e  -> Just (Left e)
+  displayException (Left e)  = displayException e
+  displayException (Right e) = displayException e
 
 --------------------------
 -- Security

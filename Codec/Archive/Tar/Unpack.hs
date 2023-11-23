@@ -14,6 +14,7 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Unpack (
   unpack,
+  unpackRaw,
   ) where
 
 import Codec.Archive.Tar.Types
@@ -80,8 +81,15 @@ import Control.Exception as Exception
 -- use 'checkSecurity' before 'checkTarbomb' or other checks.
 --
 unpack :: Exception e => FilePath -> Entries e -> IO ()
-unpack baseDir entries = do
-  uEntries <- unpackEntries Nothing Nothing [] (checkSecurity entries)
+unpack baseDir entries = unpackRaw baseDir (checkSecurity entries)
+
+-- | Like 'unpack', but does not perform any sanity/security checks on the tar entries.
+-- You can do so yourself, e.g.:
+--
+-- > unpackRaw dir (checkPortability . checkSecurity $ entries)
+unpackRaw :: Exception e => FilePath -> Entries e -> IO ()
+unpackRaw baseDir entries = do
+  uEntries <- unpackEntries Nothing Nothing [] entries
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
   -- handle hardlinks first, in case a symlink points to it
   handleHardLinks hardlinks
@@ -95,9 +103,9 @@ unpack baseDir entries = do
                   => Maybe LinkTarget
                   -> Maybe FilePath
                   -> [(FilePath, FilePath, Bool)]     -- ^ links (path, link, isHardLink)
-                  -> Entries (Either e FileNameError) -- ^ entries
+                  -> Entries e -- ^ entries
                   -> IO [(FilePath, FilePath, Bool)]
-    unpackEntries _ _ _     (Fail err)      = either throwIO throwIO err
+    unpackEntries _ _ _     (Fail err)      = throwIO err
     unpackEntries _ _ links Done            = return links
     unpackEntries mLink mPath links (Next entry es) = do
       let path = fromMaybe (entryPath entry) mPath
