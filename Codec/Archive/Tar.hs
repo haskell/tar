@@ -107,6 +107,7 @@ module Codec.Archive.Tar (
   -- device files.
   pack,
   unpack,
+  unpackRaw,
 
   -- * Types
   -- ** Tar entry type
