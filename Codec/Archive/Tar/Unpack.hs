@@ -22,7 +22,6 @@ module Codec.Archive.Tar.Unpack (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
 
-import Control.Monad.Catch (MonadThrow, throwM)
 import Data.Bits
          ( testBit )
 import Data.List (partition, nub)
@@ -53,8 +52,6 @@ import Control.Exception as Exception
 import System.IO.Error
          ( isPermissionError )
 
-
-type CheckSecurityCallback = forall m. MonadThrow m => Maybe LinkTarget -> Maybe FilePath -> Entry -> m ()
 
 
 -- | Create local files and directories based on the entries of a tar archive.

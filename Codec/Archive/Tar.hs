@@ -106,6 +106,7 @@ module Codec.Archive.Tar (
   -- and permissions or to archive special files like named pipes and Unix
   -- device files.
   pack,
+  packWith,
   unpack,
   unpackWith,
 
