@@ -99,7 +99,7 @@ packPaths baseDir paths =
                    sym@(Entry { entryContent = SymbolicLink (LinkTarget bs) })
                      | BSS.length bs > 100 -> do
                         longEntry <- longSymLinkEntry linkTarget
-                        checkMultipleEntries (Next longEntry (Next (longLinkEntry relpath) (Next sym Done)))
+                        checkSecurity (Just (LinkTarget bs)) (Just relpath) sym
                         pure [longEntry, longLinkEntry relpath, sym]
                    _ -> withLongLinkEntry relpath tarpath packSymlinkEntry
              | isDir     -> withLongLinkEntry relpath tarpath packDirectoryEntry
@@ -108,10 +108,6 @@ packPaths baseDir paths =
     , let isDir    = FilePath.Native.hasTrailingPathSeparator abspath
           abspath = baseDir </> relpath ]
   where
-    checkMultipleEntries es = either (either throwIO throwIO . fst)
-                                (\_ -> pure ())
-                                $ foldlEntries (\a _ -> a) ()
-                                $ checkSecurity @SomeException es
 
     -- prepend the long filepath entry if necessary
     withLongLinkEntry
@@ -121,7 +117,7 @@ packPaths baseDir paths =
       -> IO [Entry]
     withLongLinkEntry relpath tarpath f = do
       mainEntry <- f (baseDir </> relpath) tarpath
-      checkMultipleEntries (Next (longLinkEntry relpath) (Next (mainEntry) Done))
+      checkSecurity Nothing (Just relpath) mainEntry
       pure [longLinkEntry relpath, mainEntry]
 
 interleave :: [IO a] -> IO [a]
