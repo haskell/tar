@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, BangPatterns, DeriveTraversable #-}
+{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, BangPatterns, DeriveTraversable, ScopedTypeVariables, RankNTypes #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
@@ -27,6 +27,7 @@ module Codec.Archive.Tar.Types (
   DevMajor,
   DevMinor,
   Format(..),
+  CheckSecurityCallback,
 
   simpleEntry,
   longLinkEntry,
@@ -619,3 +620,5 @@ instance NFData e => NFData (Entries e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
+
+type CheckSecurityCallback = forall m. MonadThrow m => Maybe LinkTarget -> Maybe FilePath -> Entry -> m ()
