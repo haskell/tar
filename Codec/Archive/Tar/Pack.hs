@@ -98,9 +98,18 @@ packPaths secCB baseDir paths =
          case tarpathRes of
            FileNameEmpty -> throwIO $ userError "File name empty"
            FileNameOK tarpath
-             | isSymlink -> (:[]) <$> packSymlinkEntry abspath tarpath
-             | isDir     -> (:[]) <$> packDirectoryEntry abspath tarpath
-             | otherwise -> (:[]) <$> packFileEntry abspath tarpath
+             | isSymlink -> do
+                 e <- packSymlinkEntry abspath tarpath
+                 secCB Nothing Nothing e
+                 pure [e]
+             | isDir     -> do
+                 e <- packDirectoryEntry abspath tarpath
+                 secCB Nothing Nothing e
+                 pure [e]
+             | otherwise -> do
+                 e <- packFileEntry abspath tarpath
+                 secCB Nothing Nothing e
+                 pure [e]
            FileNameTooLong tarpath
              | isSymlink -> do
                  linkTarget <- getSymbolicLinkTarget abspath
