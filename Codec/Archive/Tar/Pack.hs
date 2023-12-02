@@ -1,6 +1,8 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -15,6 +17,7 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Pack (
     pack,
+    packWith,
     packFileEntry,
     packDirectoryEntry,
     packSymlinkEntry,
@@ -63,7 +66,13 @@ import Codec.Archive.Tar.Check.Internal (checkSecurity)
 pack :: FilePath   -- ^ Base directory
      -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
      -> IO [Entry]
-pack baseDir = preparePaths baseDir >=> packPaths baseDir
+pack = packWith checkSecurity
+
+packWith :: CheckSecurityCallback
+         -> FilePath   -- ^ Base directory
+         -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
+         -> IO [Entry]
+packWith secCB baseDir = preparePaths baseDir >=> packPaths secCB baseDir
 
 preparePaths :: FilePath -> [FilePath] -> IO [FilePath]
 preparePaths baseDir = fmap concat . interleave . map go
@@ -81,8 +90,8 @@ preparePaths baseDir = fmap concat . interleave . map go
       else return [relpath]
 
 -- | Pack paths while accounting for overlong filepaths.
-packPaths :: FilePath -> [FilePath] -> IO [Entry]
-packPaths baseDir paths =
+packPaths :: CheckSecurityCallback -> FilePath -> [FilePath] -> IO [Entry]
+packPaths secCB baseDir paths =
   concat <$> interleave
     [ do let tarpathRes = toTarPath' isDir relpath
          isSymlink <- pathIsSymbolicLink abspath
@@ -99,7 +108,7 @@ packPaths baseDir paths =
                    sym@(Entry { entryContent = SymbolicLink (LinkTarget bs) })
                      | BSS.length bs > 100 -> do
                         longEntry <- longSymLinkEntry linkTarget
-                        checkSecurity (Just (LinkTarget bs)) (Just relpath) sym
+                        secCB (Just (LinkTarget bs)) (Just relpath) sym
                         pure [longEntry, longLinkEntry relpath, sym]
                    _ -> withLongLinkEntry relpath tarpath packSymlinkEntry
              | isDir     -> withLongLinkEntry relpath tarpath packDirectoryEntry
@@ -117,7 +126,7 @@ packPaths baseDir paths =
       -> IO [Entry]
     withLongLinkEntry relpath tarpath f = do
       mainEntry <- f (baseDir </> relpath) tarpath
-      checkSecurity Nothing (Just relpath) mainEntry
+      secCB Nothing (Just relpath) mainEntry
       pure [longLinkEntry relpath, mainEntry]
 
 interleave :: [IO a] -> IO [a]
