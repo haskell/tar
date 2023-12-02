@@ -1,5 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -14,12 +16,13 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Unpack (
   unpack,
-  unpackRaw,
+  unpackWith,
   ) where
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
 
+import Control.Monad.Catch (MonadThrow, throwM)
 import Data.Bits
          ( testBit )
 import Data.List (partition, nub)
@@ -50,6 +53,10 @@ import Control.Exception as Exception
 import System.IO.Error
          ( isPermissionError )
 
+
+type CheckSecurityCallback = forall m. MonadThrow m => Maybe LinkTarget -> Maybe FilePath -> Entry -> m ()
+
+
 -- | Create local files and directories based on the entries of a tar archive.
 --
 -- This is a portable implementation of unpacking suitable for portable
@@ -75,14 +82,14 @@ import System.IO.Error
 -- use 'checkSecurity' before 'checkTarbomb' or other checks.
 --
 unpack :: Exception e => FilePath -> Entries e -> IO ()
-unpack baseDir entries = unpackRaw baseDir (checkSecurity entries)
+unpack = unpackWith checkSecurity
 
 -- | Like 'unpack', but does not perform any sanity/security checks on the tar entries.
 -- You can do so yourself, e.g.:
 --
 -- > unpackRaw dir (checkPortability . checkSecurity $ entries)
-unpackRaw :: Exception e => FilePath -> Entries e -> IO ()
-unpackRaw baseDir entries = do
+unpackWith :: Exception e => CheckSecurityCallback -> FilePath -> Entries e -> IO ()
+unpackWith secCB baseDir entries = do
   uEntries <- unpackEntries Nothing Nothing [] entries
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
   -- handle hardlinks first, in case a symlink points to it
@@ -102,6 +109,7 @@ unpackRaw baseDir entries = do
     unpackEntries _ _ _     (Fail err)      = throwIO err
     unpackEntries _ _ links Done            = return links
     unpackEntries mLink mPath links (Next entry es) = do
+      secCB mLink mPath entry
       let path = fromMaybe (entryPath entry) mPath
       case entryContent entry of
         NormalFile file _
