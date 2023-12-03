@@ -50,10 +50,6 @@ module Codec.Archive.Tar.Index.Internal (
     indexEndEntryOffset,
     indexNextEntryOffset,
 
-    -- * Deprecated aliases
-    emptyIndex,
-    finaliseIndex,
-
     toComponentIds,
     serialiseLBS,
     serialiseSize,
@@ -223,10 +219,6 @@ instance NFData IndexBuilder where
 empty :: IndexBuilder
 empty = IndexBuilder StringTable.empty IntTrie.empty 0
 
-emptyIndex :: IndexBuilder
-emptyIndex = empty
-{-# DEPRECATED emptyIndex "Use TarIndex.empty" #-}
-
 -- | Add the next 'Entry' into the 'IndexBuilder'.
 --
 addNextEntry :: Entry -> IndexBuilder -> IndexBuilder
@@ -254,10 +246,6 @@ finalise (IndexBuilder stbl itrie finalOffset) =
   where
     pathTable = StringTable.finalise stbl
     pathTrie  = IntTrie.finalise itrie
-
-finaliseIndex :: IndexBuilder -> TarIndex
-finaliseIndex = finalise
-{-# DEPRECATED finaliseIndex "Use TarIndex.finalise" #-}
 
 -- | This is the offset immediately following the entry most recently added
 -- to the 'IndexBuilder'. You might use this if you need to know the offsets

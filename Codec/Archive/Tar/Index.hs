@@ -66,10 +66,6 @@ module Codec.Archive.Tar.Index (
     nextEntryOffset,
     indexEndEntryOffset,
     indexNextEntryOffset,
-
-    -- * Deprecated aliases
-    emptyIndex,
-    finaliseIndex
   ) where
 
 import Prelude hiding (lookup)

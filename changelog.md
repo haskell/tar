@@ -16,6 +16,7 @@ See also http://pvp.haskell.org/faq
   * Add `packSymlinkEntry` and `symbolicLinkPermission`
   * Ignore FAT32 errors when setting modification time
   * Switch to trailer parsing mode only after a full block of `NUL`
+  * Drop deprecated `emptyIndex` and `finaliseIndex`
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
