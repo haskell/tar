@@ -54,7 +54,7 @@ module Codec.Archive.Tar.Types (
   toLinkTarget,
   toLinkTarget',
   fromLinkTarget,
-  fromLinkTargetToUnix,
+  fromLinkTargetToPosixPath,
 
   Entries(..),
   mapEntries,
@@ -505,9 +505,9 @@ toLinkTarget' path
 fromLinkTarget :: LinkTarget -> FilePath
 fromLinkTarget (LinkTarget pathbs) = fromFilePathToNative $ BS.Char8.unpack pathbs
 
--- | Convert a tar 'LinkTarget' to a unix 'FilePath'.
-fromLinkTargetToUnix :: LinkTarget -> FilePath
-fromLinkTargetToUnix (LinkTarget pathbs) = BS.Char8.unpack pathbs
+-- | Convert a tar 'LinkTarget' to a Unix\/POSIX 'FilePath' (@\'/\'@ path separators).
+fromLinkTargetToPosixPath :: LinkTarget -> FilePath
+fromLinkTargetToPosixPath (LinkTarget pathbs) = BS.Char8.unpack pathbs
 
 -- | Convert a unix FilePath to a native 'FilePath'.
 fromFilePathToNative :: FilePath -> FilePath

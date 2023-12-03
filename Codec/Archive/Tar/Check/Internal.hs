@@ -78,11 +78,11 @@ checkSecurity mLink mPath e = do
   case entryContent e of
     HardLink     link ->
       let linkTarget = fromMaybe link mLink
-      in check (fromLinkTargetToUnix linkTarget)
+      in check (fromLinkTargetToPosixPath linkTarget)
     SymbolicLink link ->
       let linkTarget = fromMaybe link mLink
       in check (FilePath.Posix.takeDirectory (fromTarPathToPosixPath . entryTarPath $ e)
-               FilePath.Posix.</> fromLinkTargetToUnix linkTarget)
+               FilePath.Posix.</> fromLinkTargetToPosixPath linkTarget)
     _                 -> pure ()
   where
     checkPosix name

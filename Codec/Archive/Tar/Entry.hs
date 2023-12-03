@@ -74,7 +74,7 @@ module Codec.Archive.Tar.Entry (
   LinkTarget,
   toLinkTarget,
   fromLinkTarget,
-  fromLinkTargetToUnix,
+  fromLinkTargetToPosixPath,
 
   ) where
 
