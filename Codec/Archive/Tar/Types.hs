@@ -531,7 +531,7 @@ data Entries e
     ( Eq
     , Show
     , Functor
-    , Foldable
+    , Foldable    -- ^ @since 0.6.0.0
     , Traversable -- ^ @since 0.6.0.0
     )
 
