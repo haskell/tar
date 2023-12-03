@@ -31,7 +31,7 @@ import System.FilePath
 import qualified System.FilePath as FilePath.Native
          ( addTrailingPathSeparator, hasTrailingPathSeparator, splitDirectories )
 import System.Directory
-         ( getDirectoryContents, doesDirectoryExist, getModificationTime
+         ( listDirectory, doesDirectoryExist, getModificationTime
          , pathIsSymbolicLink, getSymbolicLinkTarget
          , Permissions(..), getPermissions )
 import Data.Time.Clock
@@ -179,7 +179,7 @@ packSymlinkEntry' linkTarget tarpath = do
       safeReturn tp = maybe (pure tp) throwIO $ checkEntrySecurity tp
   safeReturn $ entry tarpath
 
--- | This is a utility function, much like 'getDirectoryContents'. The
+-- | This is a utility function, much like 'listDirectory'. The
 -- difference is that it includes the contents of subdirectories.
 --
 -- The paths returned are all relative to the top directory. Directory paths
@@ -194,6 +194,8 @@ packSymlinkEntry' linkTarget tarpath = do
 --
 -- * This function returns results lazily. Subdirectories are not scanned
 -- until the files entries in the parent directory have been consumed.
+-- If the source directory structure changes before the result is used,
+-- the behaviour is undefined.
 --
 getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
 getDirectoryContentsRecursive dir0 =
@@ -202,15 +204,13 @@ getDirectoryContentsRecursive dir0 =
 recurseDirectories :: FilePath -> [FilePath] -> IO [FilePath]
 recurseDirectories _    []         = return []
 recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
-  (files, dirs') <- collect [] [] =<< getDirectoryContents (base </> dir)
+  (files, dirs') <- collect [] [] =<< listDirectory (base </> dir)
 
   files' <- recurseDirectories base (dirs' ++ dirs)
   return (dir : files ++ files')
 
   where
     collect files dirs' []              = return (reverse files, reverse dirs')
-    collect files dirs' (entry:entries) | ignore entry
-                                        = collect files dirs' entries
     collect files dirs' (entry:entries) = do
       let dirEntry  = dir </> entry
           dirEntry' = FilePath.Native.addTrailingPathSeparator dirEntry
@@ -218,10 +218,6 @@ recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
       if isDirectory
         then collect files (dirEntry':dirs') entries
         else collect (dirEntry:files) dirs' entries
-
-    ignore ['.']      = True
-    ignore ['.', '.'] = True
-    ignore _          = False
 
 getModTime :: FilePath -> IO EpochTime
 getModTime path = do

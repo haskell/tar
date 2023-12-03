@@ -30,24 +30,30 @@ import System.FilePath
 import qualified System.FilePath as FilePath.Native
          ( takeDirectory )
 import System.Directory
-         ( createDirectoryIfMissing, copyFile, setPermissions, getDirectoryContents, doesDirectoryExist, createDirectoryLink, createFileLink )
+    ( createDirectoryIfMissing,
+      copyFile,
+      setPermissions,
+      listDirectory,
+      doesDirectoryExist,
+      createDirectoryLink,
+      createFileLink,
+      setModificationTime,
+      emptyPermissions,
+      setOwnerReadable,
+      setOwnerWritable,
+      setOwnerExecutable,
+      setOwnerSearchable )
 import Control.Exception
          ( Exception, throwIO, handle )
 import System.IO ( stderr, hPutStr )
-import System.IO.Error
-         ( ioeGetErrorType )
+import System.IO.Error ( ioeGetErrorType, isPermissionError )
 import GHC.IO (unsafeInterleaveIO)
 import Data.Foldable (traverse_)
 import GHC.IO.Exception (IOErrorType(InappropriateType, IllegalOperation, PermissionDenied, InvalidArgument))
-import System.Directory
-         ( setModificationTime, emptyPermissions, setOwnerReadable, setOwnerWritable
-         , setOwnerExecutable, setOwnerSearchable )
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
 import Control.Exception as Exception
          ( catch )
-import System.IO.Error
-         ( isPermissionError )
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -232,25 +238,19 @@ copyDirectoryRecursive srcDir destDir = do
         recurseDirectories :: [FilePath] -> IO [FilePath]
         recurseDirectories []         = return []
         recurseDirectories (dir:dirs) = unsafeInterleaveIO $ do
-          (files, dirs') <- collect [] [] =<< getDirectoryContents (topdir </> dir)
+          (files, dirs') <- collect [] [] =<< listDirectory (topdir </> dir)
           files' <- recurseDirectories (dirs' ++ dirs)
           return (files ++ files')
 
           where
             collect files dirs' []              = return (reverse files
                                                          ,reverse dirs')
-            collect files dirs' (entry:entries) | ignore entry
-                                                = collect files dirs' entries
             collect files dirs' (entry:entries) = do
               let dirEntry = dir </> entry
               isDirectory <- doesDirectoryExist (topdir </> dirEntry)
               if isDirectory
                 then collect files (dirEntry:dirs') entries
                 else collect (dirEntry:files) dirs' entries
-
-            ignore ['.']      = True
-            ignore ['.', '.'] = True
-            ignore _          = False
 
 setModTime :: FilePath -> EpochTime -> IO ()
 setModTime path t =
