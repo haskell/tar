@@ -68,6 +68,10 @@ pack :: FilePath   -- ^ Base directory
      -> IO [Entry]
 pack = packWith checkSecurity
 
+-- | Like 'pack', but does not perform any sanity/security checks on the input.
+-- You can do so yourself, e.g.: @packWith@ 'checkSecurity' @dir@ @files@.
+--
+-- @since 0.6.0.0
 packWith :: CheckSecurityCallback
          -> FilePath   -- ^ Base directory
          -> [FilePath] -- ^ Files and directories to pack, relative to the base dir

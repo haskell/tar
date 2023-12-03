@@ -635,4 +635,13 @@ instance NFData e => NFData (Entries e) where
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
 
-type CheckSecurityCallback = forall m. MonadThrow m => Maybe LinkTarget -> Maybe FilePath -> Entry -> m ()
+-- | @since 0.6.0.0
+type CheckSecurityCallback =
+  forall m.
+     MonadThrow m
+  => Maybe LinkTarget
+  -- ^ OtherEntryType 'K' discovered before the actual entry
+  -> Maybe FilePath
+  -- ^ OtherEntryType 'L' discovered before the actual entry
+  -> Entry
+  -> m ()
