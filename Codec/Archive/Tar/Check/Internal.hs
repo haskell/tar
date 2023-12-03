@@ -67,11 +67,7 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- link target. A failure in any entry terminates the sequence of entries with
 -- an error.
 --
-checkSecurity :: MonadThrow m
-              => Maybe LinkTarget  -- ^ OtherEntryType 'K' discovered before the actual entry
-              -> Maybe FilePath    -- ^ OtherEntryType 'L' discovered before the actual entry
-              -> Entry
-              -> m ()
+checkSecurity :: CheckSecurityCallback
 checkSecurity mLink mPath e = do
   let path = fromMaybe (entryPath e) mPath
   check path
@@ -120,6 +116,7 @@ data FileNameError
   = InvalidFileName FilePath
   | AbsoluteFileName FilePath
   | UnsafeLinkTarget FilePath
+  -- ^ @since 0.6.0.0
   deriving (Typeable)
 
 instance Show FileNameError where
@@ -150,12 +147,7 @@ showFileNameError mb_plat err = case err of
 -- Note: This check must be used in conjunction with 'checkSecurity'
 -- (or 'checkPortability').
 --
-checkTarbomb :: MonadThrow m
-             => FilePath
-             -> Maybe LinkTarget  -- ^ OtherEntryType 'K' discovered before the actual entry
-             -> Maybe FilePath    -- ^ OtherEntryType 'L' discovered before the actual entry
-             -> Entry
-             -> m ()
+checkTarbomb :: FilePath -> CheckSecurityCallback
 checkTarbomb expectedTopDir _mLink _mPath entry = do
   case entryContent entry of
     OtherEntryType 'g' _ _ -> pure () --PAX global header
@@ -205,11 +197,7 @@ instance Show TarBombError where
 --   includes characters that are valid in both systems and the \'/\' vs \'\\\'
 --   directory separator conventions.
 --
-checkPortability :: MonadThrow m
-                 => Maybe LinkTarget  -- ^ OtherEntryType 'K' discovered before the actual entry
-                 -> Maybe FilePath    -- ^ OtherEntryType 'L' discovered before the actual entry
-                 -> Entry
-                 -> m ()
+checkPortability :: CheckSecurityCallback
 checkPortability _mLink _mPath entry
   | entryFormat entry `elem` [V7Format, GnuFormat]
   = throwM $ NonPortableFormat (entryFormat entry)

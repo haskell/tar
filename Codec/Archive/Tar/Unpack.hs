@@ -76,21 +76,15 @@ import Control.Exception as Exception
 -- part-way.
 --
 -- On its own, this function only checks for security (using 'checkSecurity').
--- You can do other checks by applying checking functions to the 'Entries' that
--- you pass to this function. For example:
---
--- > unpack dir (checkTarbomb expectedDir entries)
---
--- If you care about the priority of the reported errors then you may want to
--- use 'checkSecurity' before 'checkTarbomb' or other checks.
+-- Use 'unpackWith' if you need more checks.
 --
 unpack :: Exception e => FilePath -> Entries e -> IO ()
 unpack = unpackWith checkSecurity
 
 -- | Like 'unpack', but does not perform any sanity/security checks on the tar entries.
--- You can do so yourself, e.g.:
+-- You can do so yourself, e.g.: @unpackRaw@ 'checkSecurity' @dir@ @entries@.
 --
--- > unpackRaw dir (checkPortability . checkSecurity $ entries)
+-- @since 0.6.0.0
 unpackWith :: Exception e => CheckSecurityCallback -> FilePath -> Entries e -> IO ()
 unpackWith secCB baseDir entries = do
   uEntries <- unpackEntries Nothing Nothing [] entries

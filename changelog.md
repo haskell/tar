@@ -17,6 +17,8 @@ See also http://pvp.haskell.org/faq
   * Ignore FAT32 errors when setting modification time
   * Switch to trailer parsing mode only after a full block of `NUL`
   * Drop deprecated `emptyIndex` and `finaliseIndex`
+  * Extend `FileNameError` with `UnsafeLinkTarget` constructor
+  * Add `CheckSecurityCallback`, `packWith`, `unpackWith`
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 
