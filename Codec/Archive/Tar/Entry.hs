@@ -75,7 +75,7 @@ module Codec.Archive.Tar.Entry (
   toLinkTarget,
   fromLinkTarget,
   fromLinkTargetToPosixPath,
-
+  fromLinkTargetToWindowsPath,
   ) where
 
 import Codec.Archive.Tar.Types

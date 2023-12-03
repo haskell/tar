@@ -55,6 +55,7 @@ module Codec.Archive.Tar.Types (
   toLinkTarget',
   fromLinkTarget,
   fromLinkTargetToPosixPath,
+  fromLinkTargetToWindowsPath,
 
   Entries(..),
   mapEntries,
@@ -509,6 +510,11 @@ fromLinkTarget (LinkTarget pathbs) = fromFilePathToNative $ BS.Char8.unpack path
 fromLinkTargetToPosixPath :: LinkTarget -> FilePath
 fromLinkTargetToPosixPath (LinkTarget pathbs) = BS.Char8.unpack pathbs
 
+-- | Convert a tar 'LinkTarget' to a Windows 'FilePath' (@\'\\\\\'@ path separators).
+fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
+fromLinkTargetToWindowsPath (LinkTarget pathbs) =
+  fromFilePathToWindowsPath $ BS.Char8.unpack pathbs
+
 -- | Convert a unix FilePath to a native 'FilePath'.
 fromFilePathToNative :: FilePath -> FilePath
 fromFilePathToNative path = adjustDirectory $
@@ -518,6 +524,14 @@ fromFilePathToNative path = adjustDirectory $
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
 
+-- | Convert a unix FilePath to a Windows 'FilePath'.
+fromFilePathToWindowsPath :: FilePath -> FilePath
+fromFilePathToWindowsPath path = adjustDirectory $
+  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories path
+  where
+    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
+                    = FilePath.Windows.addTrailingPathSeparator
+                    | otherwise = id
 
 --
 -- * Entries type
