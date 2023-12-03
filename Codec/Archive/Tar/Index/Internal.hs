@@ -30,7 +30,6 @@ module Codec.Archive.Tar.Index.Internal (
     -- * Index construction
     build,
     -- ** Incremental construction
-    -- $incremental-construction
     IndexBuilder,
     empty,
     addNextEntry,
@@ -207,25 +206,6 @@ build = go empty
     go !builder (Next e es) = go (addNextEntry e builder) es
     go !builder  Done       = Right $! finalise builder
     go !_       (Fail err)  = Left err
-
-
--- $incremental-construction
--- If you need more control than 'build' then you can construct the index
--- in an accumulator style using the 'IndexBuilder' and operations.
---
--- Start with 'empty' and use 'addNextEntry' (or 'skipNextEntry') for
--- each 'Entry' in the tar file in order. Every entry must added or skipped in
--- order, otherwise the resulting 'TarIndex' will report the wrong
--- 'TarEntryOffset's. At the end use 'finalise' to get the 'TarIndex'.
---
--- For example, 'build' is simply:
---
--- > build = go empty
--- >   where
--- >     go !builder (Next e es) = go (addNextEntry e builder) es
--- >     go !builder  Done       = Right $! finalise builder
--- >     go !_       (Fail err)  = Left err
-
 
 -- | The intermediate type used for incremental construction of a 'TarIndex'.
 --
