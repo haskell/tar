@@ -137,5 +137,6 @@ benchmark bench
                  array,
                  containers,
                  deepseq,
+                 temporary < 1.4,
                  time,
                  tasty-bench < 0.4
