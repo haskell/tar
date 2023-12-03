@@ -73,7 +73,7 @@ module Codec.Archive.Tar.Entry (
   -- * LinkTarget type
   LinkTarget,
   toLinkTarget,
-  fromLinkTargetToNative,
+  fromLinkTarget,
   fromLinkTargetToUnix,
 
   ) where

@@ -166,7 +166,7 @@ unpackWith secCB baseDir entries = do
       where
         absPath = baseDir </> path
 
-    saveLink isHardLink (fromFilePathToNative -> path) (fromLinkTargetToNative -> link) links
+    saveLink isHardLink (fromFilePathToNative -> path) (fromLinkTarget -> link) links
       = seq (length path)
           $ seq (length link)
           $ (path, link, isHardLink):links

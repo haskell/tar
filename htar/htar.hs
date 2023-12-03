@@ -113,8 +113,8 @@ detailedInfo entry =
     time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.entryTime entry)
     name = Tar.entryPath entry
     link = case Tar.entryContent entry of
-      Tar.HardLink     l -> " link to " ++ Tar.fromLinkTargetToNative l
-      Tar.SymbolicLink l -> " -> "      ++ Tar.fromLinkTargetToNative l
+      Tar.HardLink     l -> " link to " ++ Tar.fromLinkTarget l
+      Tar.SymbolicLink l -> " -> "      ++ Tar.fromLinkTarget l
       _                  -> ""
 
 justify :: Int -> String -> String -> String
