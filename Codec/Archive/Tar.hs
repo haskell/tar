@@ -118,7 +118,8 @@ module Codec.Archive.Tar (
   Entry,
   entryPath,
   entryContent,
-  EntryContent(..),
+  GenEntryContent(..),
+  EntryContent,
 
   -- ** Sequences of tar entries
   Entries(..),

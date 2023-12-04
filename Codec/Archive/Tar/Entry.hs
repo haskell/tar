@@ -25,14 +25,11 @@
 module Codec.Archive.Tar.Entry (
 
   -- * Tar entry and associated types
-  Entry(..),
-  --TODO: should be the following with the Entry constructor not exported,
-  --      but haddock cannot document that properly
-  --      see http://trac.haskell.org/haddock/ticket/3
-  --Entry(filePath, fileMode, ownerId, groupId, fileSize, modTime,
-  --      fileType, linkTarget, headerExt, fileContent),
+  GenEntry(..),
+  Entry,
   entryPath,
-  EntryContent(..),
+  GenEntryContent(..),
+  EntryContent,
   Ownership(..),
 
   FileSize,

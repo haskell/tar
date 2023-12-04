@@ -16,9 +16,11 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Types (
 
-  Entry(..),
+  GenEntry(..),
+  Entry,
   entryPath,
-  EntryContent(..),
+  GenEntryContent(..),
+  EntryContent,
   FileSize,
   Permissions,
   Ownership(..),
@@ -99,15 +101,16 @@ type Permissions = FileMode
 
 -- | Tar archive entry.
 --
-data Entry = Entry {
+-- @since 0.6.0.0
+data GenEntry tarPath linkTarget = Entry {
 
     -- | The path of the file or directory within the archive. This is in a
     -- tar-specific form. Use 'entryPath' to get a native 'FilePath'.
-    entryTarPath :: {-# UNPACK #-} !TarPath,
+    entryTarPath :: !tarPath,
 
     -- | The real content of the entry. For 'NormalFile' this includes the
     -- file data. An entry usually contains a 'NormalFile' or a 'Directory'.
-    entryContent :: !EntryContent,
+    entryContent :: !(GenEntryContent linkTarget),
 
     -- | File permissions (Unix style file mode).
     entryPermissions :: {-# UNPACK #-} !Permissions,
@@ -123,6 +126,8 @@ data Entry = Entry {
   }
   deriving (Eq, Show)
 
+type Entry = GenEntry TarPath LinkTarget
+
 -- | Native 'FilePath' of the file or directory within the archive.
 --
 entryPath :: Entry -> FilePath
@@ -132,18 +137,22 @@ entryPath = fromTarPath . entryTarPath
 --
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
-data EntryContent = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
-                  | Directory
-                  | SymbolicLink    !LinkTarget
-                  | HardLink        !LinkTarget
-                  | CharacterDevice {-# UNPACK #-} !DevMajor
-                                    {-# UNPACK #-} !DevMinor
-                  | BlockDevice     {-# UNPACK #-} !DevMajor
-                                    {-# UNPACK #-} !DevMinor
-                  | NamedPipe
-                  | OtherEntryType  {-# UNPACK #-} !TypeCode LBS.ByteString
-                                    {-# UNPACK #-} !FileSize
-    deriving (Eq, Ord, Show)
+-- @since 0.6.0.0
+data GenEntryContent linkTarget
+  = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
+  | Directory
+  | SymbolicLink    !linkTarget
+  | HardLink        !linkTarget
+  | CharacterDevice {-# UNPACK #-} !DevMajor
+                    {-# UNPACK #-} !DevMinor
+  | BlockDevice     {-# UNPACK #-} !DevMajor
+                    {-# UNPACK #-} !DevMinor
+  | NamedPipe
+  | OtherEntryType  {-# UNPACK #-} !TypeCode LBS.ByteString
+                    {-# UNPACK #-} !FileSize
+  deriving (Eq, Ord, Show)
+
+type EntryContent = GenEntryContent LinkTarget
 
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
@@ -183,10 +192,10 @@ data Format =
    | GnuFormat
   deriving (Eq, Ord, Show)
 
-instance NFData Entry where
+instance NFData (GenEntry a b) where
   rnf (Entry _ c _ _ _ _) = rnf c
 
-instance NFData EntryContent where
+instance NFData (GenEntryContent linkTarget) where
   rnf x = case x of
       NormalFile       c _  -> rnf c
       OtherEntryType _ c _  -> rnf c
