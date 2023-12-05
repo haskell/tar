@@ -115,6 +115,7 @@ module Codec.Archive.Tar (
   -- | This module provides only very simple and limited read-only access to
   -- the 'Entry' type. If you need access to the details or if you need to
   -- construct your own entries then also import "Codec.Archive.Tar.Entry".
+  GenEntry,
   Entry,
   entryPath,
   entryContent,
@@ -122,7 +123,8 @@ module Codec.Archive.Tar (
   EntryContent,
 
   -- ** Sequences of tar entries
-  Entries(..),
+  GenEntries(..),
+  Entries,
   mapEntries,
   mapEntriesNoFail,
   foldEntries,

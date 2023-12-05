@@ -19,7 +19,7 @@ See also http://pvp.haskell.org/faq
   * Drop deprecated `emptyIndex` and `finaliseIndex`
   * Extend `FileNameError` with `UnsafeLinkTarget` constructor
   * Add `CheckSecurityCallback`, `packWith`, `unpackWith`
-  * Generalize `Entry` and `EntryContent` to `GenEntry` and `GenEntryContent`
+  * Generalize `Entries`, `Entry` and `EntryContent` to `GenEntries`, `GenEntry` and `GenEntryContent`
 
 0.5.1.1 Herbert Valerio Riedel <hvr@gnu.org> August 2019
 

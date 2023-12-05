@@ -16,7 +16,7 @@ import qualified Data.ByteString.Lazy as BL
 import Data.FileEmbed
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Pack as Pack
-import Codec.Archive.Tar.Types (Entries(..))
+import Codec.Archive.Tar.Types (GenEntries(..), Entries)
 import qualified Codec.Archive.Tar.Unpack as Unpack
 import Control.Exception
 import Data.List.NonEmpty (NonEmpty(..))

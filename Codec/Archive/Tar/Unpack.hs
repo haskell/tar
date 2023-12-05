@@ -21,6 +21,7 @@ module Codec.Archive.Tar.Unpack (
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
+import Codec.Archive.Tar.LongNames
 
 import Data.Bits
          ( testBit )
@@ -87,60 +88,45 @@ unpack = unpackWith checkSecurity
 -- @since 0.6.0.0
 unpackWith :: Exception e => CheckSecurityCallback -> FilePath -> Entries e -> IO ()
 unpackWith secCB baseDir entries = do
-  uEntries <- unpackEntries Nothing Nothing [] entries
+  let resolvedEntries = decodeLongNames entries
+  uEntries <- unpackEntries [] resolvedEntries
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
   -- handle hardlinks first, in case a symlink points to it
   handleHardLinks hardlinks
   handleSymlinks symlinks
 
   where
-    -- We're relying here on 'checkSecurity' to make sure we're not scribbling
+    -- We're relying here on 'secCB' to make sure we're not scribbling
     -- files all over the place.
 
     unpackEntries :: Exception e
-                  => Maybe LinkTarget
-                  -> Maybe FilePath
-                  -> [(FilePath, FilePath, Bool)]     -- ^ links (path, link, isHardLink)
-                  -> Entries e -- ^ entries
+                  => [(FilePath, FilePath, Bool)]
+                  -- ^ links (path, link, isHardLink)
+                  -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+                  -- ^ entries
                   -> IO [(FilePath, FilePath, Bool)]
-    unpackEntries _ _ _     (Fail err)      = throwIO err
-    unpackEntries _ _ links Done            = return links
-    unpackEntries mLink mPath links (Next entry es) = do
-      secCB mLink mPath entry
-      let path = fromMaybe (entryPath entry) mPath
+    unpackEntries _     (Fail err)      = either throwIO throwIO err
+    unpackEntries links Done            = return links
+    unpackEntries links (Next entry es) = do
+      secCB entry
       case entryContent entry of
-        NormalFile file _
-          | Just _ <- mLink -> throwIO $ userError "Expected SymbolicLink or HardLink after OtherEntryType K"
-          | otherwise -> do
-              extractFile (entryPermissions entry) path file (entryTime entry)
-              unpackEntries Nothing Nothing links es
-        Directory
-          | Just _ <- mLink -> throwIO $ userError "Expected SymbolicLink or HardLink after OtherEntryType K"
-          | otherwise -> do
-              extractDir path (entryTime entry)
-              unpackEntries Nothing Nothing links es
-        HardLink     link -> do
-          let linkTarget = fromMaybe link mLink
-          (unpackEntries Nothing Nothing $! saveLink True path linkTarget links) es
+        NormalFile file _ -> do
+          extractFile (entryPermissions entry) (entryTarPath entry) file (entryTime entry)
+          unpackEntries links es
+        Directory -> do
+          extractDir (entryTarPath entry) (entryTime entry)
+          unpackEntries links es
+        HardLink link -> do
+          (unpackEntries $! saveLink True (entryTarPath entry) link links) es
         SymbolicLink link -> do
-          let linkTarget = fromMaybe link mLink
-          (unpackEntries Nothing Nothing $! saveLink False path linkTarget links) es
-        OtherEntryType 'L' fn _
-          | Just _ <- mPath -> throwIO $ userError "Two subsequent OtherEntryType L"
-          | otherwise -> unpackEntries mLink (Just . Char8.unpack . Char8.takeWhile (/= '\0') . BS.toStrict $ fn) links es
-        OtherEntryType 'K' link _
-          | Just _ <- mLink -> throwIO $ userError "Two subsequent OtherEntryType K"
-          | otherwise -> unpackEntries (Just . LinkTarget . Char8.takeWhile (/= '\0') . BS.toStrict $ link) mPath links es
-        OtherEntryType _ _ _
-          | Just _ <- mLink -> throwIO $ userError "Unknown entry type following OtherEntryType K"
-          | Just _ <- mPath -> throwIO $ userError "Unknown entry type following OtherEntryType L"
-          | otherwise -> do
-              -- the spec demands that we attempt to extract as normal file on unknown typecode,
-              -- but we just skip it
-              unpackEntries Nothing Nothing links es
-        _ -> do
-          unpackEntries Nothing Nothing links es -- ignore other file types
-
+          (unpackEntries $! saveLink False (entryTarPath entry) link links) es
+        OtherEntryType{} ->
+          -- the spec demands that we attempt to extract as normal file on unknown typecode,
+          -- but we just skip it
+          unpackEntries links es
+        CharacterDevice{} -> unpackEntries links es
+        BlockDevice{} -> unpackEntries links es
+        NamedPipe -> unpackEntries links es
 
     extractFile permissions (fromFilePathToNative -> path) content mtime = do
       -- Note that tar archives do not make sure each directory is created
@@ -160,7 +146,7 @@ unpackWith secCB baseDir entries = do
       where
         absPath = baseDir </> path
 
-    saveLink isHardLink (fromFilePathToNative -> path) (fromLinkTarget -> link) links
+    saveLink isHardLink (fromFilePathToNative -> path) (fromFilePathToNative -> link) links
       = seq (length path)
           $ seq (length link)
           $ (path, link, isHardLink):links

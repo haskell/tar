@@ -68,18 +68,14 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- an error.
 --
 checkSecurity :: CheckSecurityCallback
-checkSecurity mLink mPath e = do
-  let path = fromMaybe (entryPath e) mPath
-  check path
+checkSecurity e = do
+  check (entryTarPath e)
   case entryContent e of
     HardLink     link ->
-      let linkTarget = fromMaybe link mLink
-      in check (fromLinkTargetToPosixPath linkTarget)
+      check link
     SymbolicLink link ->
-      let linkTarget = fromMaybe link mLink
-      in check (FilePath.Posix.takeDirectory (fromTarPathToPosixPath . entryTarPath $ e)
-               FilePath.Posix.</> fromLinkTargetToPosixPath linkTarget)
-    _                 -> pure ()
+      check (FilePath.Posix.takeDirectory (entryTarPath e) FilePath.Posix.</> link)
+    _ -> pure ()
   where
     checkPosix name
       | FilePath.Posix.isAbsolute name
@@ -99,7 +95,7 @@ checkSecurity mLink mPath e = do
       = throwM $ UnsafeLinkTarget name
       | otherwise = pure ()
 
-    check name = checkPosix name >>= \_ -> checkNative name
+    check name = checkPosix name >>= \_ -> checkNative (fromFilePathToNative name)
 
 isInsideBaseDir :: [FilePath] -> Bool
 isInsideBaseDir = go 0
@@ -148,15 +144,14 @@ showFileNameError mb_plat err = case err of
 -- (or 'checkPortability').
 --
 checkTarbomb :: FilePath -> CheckSecurityCallback
-checkTarbomb expectedTopDir _mLink _mPath entry = do
+checkTarbomb expectedTopDir entry = do
   case entryContent entry of
     OtherEntryType 'g' _ _ -> pure () --PAX global header
     OtherEntryType 'x' _ _ -> pure () --PAX individual header
     _                      ->
-      case FilePath.Native.splitDirectories (entryPath entry) of
+      case FilePath.Posix.splitDirectories (entryTarPath entry) of
         (topDir:_) | topDir == expectedTopDir -> pure ()
-        _ -> throwM $ TarBombError expectedTopDir (entryPath entry)
-
+        _ -> throwM $ TarBombError expectedTopDir (entryTarPath entry)
 
 -- | An error that occurs if a tar file is a \"tar bomb\" that would extract
 -- files outside of the intended directory.
@@ -198,7 +193,7 @@ instance Show TarBombError where
 --   directory separator conventions.
 --
 checkPortability :: CheckSecurityCallback
-checkPortability _mLink _mPath entry
+checkPortability entry
   | entryFormat entry `elem` [V7Format, GnuFormat]
   = throwM $ NonPortableFormat (entryFormat entry)
 
@@ -226,9 +221,8 @@ checkPortability _mLink _mPath entry
   | otherwise = pure ()
 
   where
-    tarPath     = entryTarPath entry
-    posixPath   = fromTarPathToPosixPath   tarPath
-    windowsPath = fromTarPathToWindowsPath tarPath
+    posixPath   = entryTarPath entry
+    windowsPath = fromFilePathToWindowsPath posixPath
 
     portableFileType ftype = case ftype of
       NormalFile   {} -> True
@@ -262,5 +256,3 @@ instance Show PortabilityError where
     = "Non-portable character in archive entry name: " ++ show posixPath
   show (NonPortableFileName platform err)
     = showFileNameError (Just platform) err
-
-
