@@ -6,7 +6,7 @@ module Codec.Archive.Tar.Unpack.Tests
 
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Types as Tar
-import Codec.Archive.Tar.Types (Entries(..), Entry(..))
+import Codec.Archive.Tar.Types (GenEntries(..), Entries, GenEntry(..))
 import qualified Codec.Archive.Tar.Unpack as Unpack
 import Control.Exception
 import Data.Time.Clock

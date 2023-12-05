@@ -77,7 +77,7 @@ fromTarPathToWindowsPathRef (TarPath namebs prefixbs) = adjustDirectory $
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id
 
-instance Arbitrary Entry where
+instance (Arbitrary tarPath, Arbitrary linkTarget) => Arbitrary (GenEntry tarPath linkTarget) where
   arbitrary = do
     entryTarPath <- arbitrary
     entryContent <- arbitrary
@@ -135,7 +135,7 @@ listOf0ToN n g = sized $ \sz -> do
     n <- choose (0, min n sz)
     vectorOf n g
 
-instance Arbitrary EntryContent where
+instance Arbitrary linkTarget => Arbitrary (GenEntryContent linkTarget) where
   arbitrary =
     frequency
       [ (16, do bs <- arbitrary;

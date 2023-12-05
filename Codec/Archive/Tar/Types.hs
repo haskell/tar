@@ -58,8 +58,10 @@ module Codec.Archive.Tar.Types (
   fromLinkTarget,
   fromLinkTargetToPosixPath,
   fromLinkTargetToWindowsPath,
+  fromFilePathToWindowsPath,
 
-  Entries(..),
+  GenEntries(..),
+  Entries,
   mapEntries,
   mapEntriesNoFail,
   foldEntries,
@@ -229,7 +231,7 @@ directoryPermissions  = 0o0755
 --
 -- > (emptyEntry name HardLink) { linkTarget = target }
 --
-simpleEntry :: TarPath -> EntryContent -> Entry
+simpleEntry :: tarPath -> GenEntryContent linkTarget -> GenEntry tarPath linkTarget
 simpleEntry tarpath content = Entry {
     entryTarPath     = tarpath,
     entryContent     = content,
@@ -251,16 +253,14 @@ simpleEntry tarpath content = Entry {
 --
 -- > (fileEntry name content) { fileMode = executableFileMode }
 --
-fileEntry :: TarPath -> LBS.ByteString -> Entry
+fileEntry :: tarPath -> LBS.ByteString -> GenEntry tarPath linkTarget
 fileEntry name fileContent =
   simpleEntry name (NormalFile fileContent (LBS.length fileContent))
 
-
 -- | A tar 'Entry' for a symbolic link.
-symlinkEntry :: MonadThrow m => TarPath -> FilePath -> m Entry
-symlinkEntry name targetLink = do
-  target <- toLinkTarget' targetLink
-  pure $ simpleEntry name (SymbolicLink . LinkTarget . packAscii $ target)
+symlinkEntry :: tarPath -> linkTarget -> GenEntry tarPath linkTarget
+symlinkEntry name targetLink =
+  simpleEntry name (SymbolicLink targetLink)
 
 -- | [GNU extension](https://www.gnu.org/software/tar/manual/html_node/Standard.html)
 -- to store a filepath too long to fit into 'entryTarPath'
@@ -271,7 +271,7 @@ symlinkEntry name targetLink = do
 -- See [What exactly is the GNU tar ././@LongLink "trick"?](https://stackoverflow.com/questions/2078778/what-exactly-is-the-gnu-tar-longlink-trick)
 --
 -- @since 0.6.0.0
-longLinkEntry :: FilePath -> Entry
+longLinkEntry :: FilePath -> GenEntry TarPath linkTarget
 longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
     entryContent     = OtherEntryType 'L' (LBS.fromStrict $ packAscii tarpath) (fromIntegral $ length tarpath),
@@ -288,12 +288,10 @@ longLinkEntry tarpath = Entry {
 -- data with truncated 'entryTarPath'.
 --
 -- @since 0.6.0.0
-longSymLinkEntry :: MonadThrow m => FilePath -> m Entry
-longSymLinkEntry linkTarget = do
-  target <- toLinkTarget' linkTarget
-  pure $ Entry {
+longSymLinkEntry :: FilePath -> GenEntry TarPath linkTarget
+longSymLinkEntry linkTarget = Entry {
     entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
-    entryContent     = OtherEntryType 'K' (LBS.fromStrict . packAscii $ target) (fromIntegral $ length target),
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict . packAscii $ linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,
@@ -304,7 +302,7 @@ longSymLinkEntry linkTarget = do
 --
 -- Entry fields such as file permissions and ownership have default values.
 --
-directoryEntry :: TarPath -> Entry
+directoryEntry :: tarPath -> GenEntry tarPath linkTarget
 directoryEntry name = simpleEntry name Directory
 
 --
@@ -562,8 +560,9 @@ fromFilePathToWindowsPath path = adjustDirectory $
 -- The 'Monoid' instance lets you concatenate archives or append entries to an
 -- archive.
 --
-data Entries e
-  = Next Entry (Entries e)
+-- @since 0.6.0.0
+data GenEntries tarPath linkTarget e
+  = Next (GenEntry tarPath linkTarget) (GenEntries tarPath linkTarget e)
   | Done
   | Fail e
   deriving
@@ -575,6 +574,8 @@ data Entries e
     )
 
 infixr 5 `Next`
+
+type Entries e = GenEntries TarPath LinkTarget e
 
 -- | This is like the standard 'unfoldr' function on lists, but for 'Entries'.
 -- It includes failure as an extra possibility that the stepper function may
@@ -598,7 +599,7 @@ unfoldEntries f = unfold
 -- This is used to consume a sequence of entries. For example it could be used
 -- to scan a tarball for problems or to collect an index of the contents.
 --
-foldEntries :: (Entry -> a -> a) -> a -> (e -> a) -> Entries e -> a
+foldEntries :: (GenEntry tarPath linkTarget -> a -> a) -> a -> (e -> a) -> GenEntries tarPath linkTarget e -> a
 foldEntries next done fail' = fold
   where
     fold (Next e es) = next e (fold es)
@@ -632,14 +633,14 @@ mapEntriesNoFail f =
   foldEntries (\entry -> Next (f entry)) Done Fail
 
 -- | @since 0.5.1.0
-instance Sem.Semigroup (Entries e) where
+instance Sem.Semigroup (GenEntries tarPath linkTarget e) where
   a <> b = foldEntries Next b Fail a
 
-instance Monoid (Entries e) where
+instance Monoid (GenEntries tarPath linkTarget e) where
   mempty  = Done
   mappend = (Sem.<>)
 
-instance NFData e => NFData (Entries e) where
+instance NFData e => NFData (GenEntries tarPath linkTarget e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
@@ -648,9 +649,5 @@ instance NFData e => NFData (Entries e) where
 type CheckSecurityCallback =
   forall m.
      MonadThrow m
-  => Maybe LinkTarget
-  -- ^ OtherEntryType 'K' discovered before the actual entry
-  -> Maybe FilePath
-  -- ^ OtherEntryType 'L' discovered before the actual entry
-  -> Entry
+  => GenEntry FilePath FilePath
   -> m ()

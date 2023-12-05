@@ -22,7 +22,7 @@ module Codec.Archive.Tar.Index.Tests (
     prop_finalise_unfinalise,
   ) where
 
-import Codec.Archive.Tar (Entries(..), Entry(..), EntryContent(..))
+import Codec.Archive.Tar (GenEntries(..), Entries, GenEntry, Entry, GenEntryContent(..))
 import Codec.Archive.Tar.Index.Internal (TarIndexEntry(..), TarIndex(..), IndexBuilder, TarEntryOffset(..))
 import qualified Codec.Archive.Tar.Index.Internal as Tar
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
