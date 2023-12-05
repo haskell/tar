@@ -73,7 +73,7 @@ import Control.DeepSeq
 import Control.Exception (Exception)
 
 import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories, addTrailingPathSeparator, pathSeparator )
+         ( joinPath, splitDirectories, addTrailingPathSeparator, hasTrailingPathSeparator, pathSeparator )
 import qualified System.FilePath.Posix as FilePath.Posix
          ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
          , addTrailingPathSeparator, pathSeparator )
@@ -383,25 +383,29 @@ toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
           -> FilePath
           -> Either String TarPath
-toTarPath isDir path = case toTarPath' isDir path of
+toTarPath isDir path = case toTarPath' path' of
   FileNameEmpty      -> Left "File name empty"
   FileNameOK tarPath -> Right tarPath
   FileNameTooLong{}  -> Left "File name too long"
+  where
+    path' = if isDir && not (FilePath.Native.hasTrailingPathSeparator path)
+            then path <> [FilePath.Native.pathSeparator]
+            else path
 
 -- | Convert a native 'FilePath' to a 'TarPath'.
+-- Directory paths must always have a trailing @\/@, this is not checked.
 --
 -- @since 0.6.0.0
-toTarPath' :: Bool -- ^ Is the path for a directory? This is needed because for
-                  -- directories a 'TarPath' must always use a trailing @\/@.
-          -> FilePath
-          -> ToTarPathResult
-toTarPath' isDir = splitLongPath
-                . addTrailingSep
-                . FilePath.Posix.joinPath
-                . FilePath.Native.splitDirectories
+toTarPath'
+  :: FilePath
+  -> ToTarPathResult
+toTarPath'
+  = splitLongPath
+  . (if nativeSep == posixSep then id else adjustSeps)
   where
-    addTrailingSep | isDir     = FilePath.Posix.addTrailingPathSeparator
-                   | otherwise = id
+    nativeSep = FilePath.Native.pathSeparator
+    posixSep = FilePath.Posix.pathSeparator
+    adjustSeps = map $ \c -> if c == nativeSep then posixSep else c
 
 -- | Return type of 'toTarPath''.
 --

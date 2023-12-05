@@ -82,7 +82,7 @@ preparePaths baseDir paths =
 packPaths :: FilePath -> [FilePath] -> IO [Entry]
 packPaths baseDir paths =
   fmap concat $ interleave
-    [ do let tarpathRes = toTarPath' isDir relpath
+    [ do let tarpathRes = toTarPath' relpath
          isSymlink <- pathIsSymbolicLink filepath
          case tarpathRes of
            FileNameEmpty -> throwIO $ userError "File name empty"
