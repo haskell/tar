@@ -44,7 +44,7 @@ import Data.Time.Clock
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
 import System.IO
-         ( IOMode(ReadMode), withBinaryFile, hFileSize )
+         ( IOMode(ReadMode), openBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Control.Exception (throwIO, SomeException)
 import Codec.Archive.Tar.Check.Internal (checkSecurity)
@@ -132,8 +132,9 @@ packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
-  content <- BS.readFile filepath
-  let size = BS.length content
+  file    <- openBinaryFile filepath ReadMode
+  size    <- hFileSize file
+  content <- BS.hGetContents file
   return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
          entryPermissions = if executable perms then executableFilePermissions
                                                 else ordinaryFilePermissions,
