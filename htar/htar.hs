@@ -48,8 +48,11 @@ main' (Options { optFile        = file,
     input  = if file == "-" then BS.getContents else BS.readFile  file
     output = if file == "-" then BS.putStr      else BS.writeFile file
 
+    printEntries :: Tar.Entries Tar.FormatError -> IO ()
     printEntries = Tar.foldEntries (\entry rest -> printEntry entry >> rest)
-                                   (return ()) throwIO
+                                   (return ()) (either throwIO throwIO)
+                 . Tar.decodeLongNames
+
     printEntry = putStrLn . entryInfo verbosity
 
 data Compression = None | GZip | BZip
@@ -70,11 +73,11 @@ data Verbosity = Verbose | Concise
 ------------------------
 -- List archive contents
 
-entryInfo :: Verbosity -> Tar.Entry -> String
+entryInfo :: Verbosity -> Tar.GenEntry FilePath FilePath -> String
 entryInfo Verbose = detailedInfo
-entryInfo Concise = Tar.entryPath
+entryInfo Concise = Tar.entryTarPath
 
-detailedInfo :: Tar.Entry -> String
+detailedInfo :: Tar.GenEntry FilePath FilePath -> String
 detailedInfo entry =
   unwords [ typeCode : permissions
           , justify 19 (owner ++ '/' : group) size
@@ -111,10 +114,10 @@ detailedInfo entry =
              _                         -> "0"
 
     time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.entryTime entry)
-    name = Tar.entryPath entry
+    name = Tar.entryTarPath entry
     link = case Tar.entryContent entry of
-      Tar.HardLink     l -> " link to " ++ Tar.fromLinkTarget l
-      Tar.SymbolicLink l -> " -> "      ++ Tar.fromLinkTarget l
+      Tar.HardLink     l -> " link to " ++ l
+      Tar.SymbolicLink l -> " -> "      ++ l
       _                  -> ""
 
 justify :: Int -> String -> String -> String

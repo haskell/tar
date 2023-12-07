@@ -131,6 +131,11 @@ module Codec.Archive.Tar (
   foldlEntries,
   unfoldEntries,
 
+  -- ** Long file names
+  encodeLongNames,
+  decodeLongNames,
+  DecodeLongNamesError(..),
+
   -- * Error handling
   -- | Reading tar files can fail if the data does not match the tar file
   -- format correctly.
@@ -146,6 +151,7 @@ module Codec.Archive.Tar (
   FormatError(..),
   ) where
 
+import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.Types
 
 import Codec.Archive.Tar.Read

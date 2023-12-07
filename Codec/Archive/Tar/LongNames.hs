@@ -3,7 +3,7 @@
 module Codec.Archive.Tar.LongNames
   ( encodeLongNames
   , decodeLongNames
-  , DecodeLongNamesError
+  , DecodeLongNamesError(..)
   ) where
 
 import Codec.Archive.Tar.Types
