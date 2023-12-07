@@ -38,7 +38,7 @@ import qualified System.FilePath as FilePath.Native
 import System.Directory
          ( listDirectory, doesDirectoryExist, getModificationTime
          , pathIsSymbolicLink, getSymbolicLinkTarget
-         , Permissions(..), getPermissions )
+         , Permissions(..), getPermissions, getFileSize )
 import Data.Time.Clock
          ( UTCTime )
 import Data.Time.Clock.POSIX
@@ -141,14 +141,33 @@ packFileEntry
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
-  file    <- openBinaryFile filepath ReadMode
-  size    <- hFileSize file
-  content <- BL.hGetContents file
-  return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
-         entryPermissions = if executable perms then executableFilePermissions
-                                                else ordinaryFilePermissions,
-         entryTime = mtime
-         }
+  -- Get file size without opening it.
+  approxSize <- getFileSize filepath
+
+  (content, size) <- if approxSize < 131072
+    -- If file is short enough, just read it strictly
+    -- so that no file handle dangles around indefinitely.
+    then do
+      cnt <- B.readFile filepath
+      pure (BL.fromStrict cnt, fromIntegral $ B.length cnt)
+    else do
+      hndl <- openBinaryFile filepath ReadMode
+      -- File size could have changed between measuring approxSize
+      -- and here. Measuring again.
+      sz <- hFileSize hndl
+      -- Lazy I/O at its best: once cnt is forced in full,
+      -- BL.hGetContents will close the handle.
+      cnt <- BL.hGetContents hndl
+      -- It would be wrong to return (cnt, BL.length sz):
+      -- NormalFile constructor below forces size which in turn
+      -- allocates entire cnt in memory at once.
+      pure (cnt, fromInteger sz)
+
+  pure (simpleEntry tarpath (NormalFile content size))
+    { entryPermissions =
+      if executable perms then executableFilePermissions else ordinaryFilePermissions
+    , entryTime = mtime
+    }
 
 -- | Construct a tar 'Entry' based on a local directory (but not its contents).
 --
