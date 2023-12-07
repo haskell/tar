@@ -29,8 +29,8 @@ module Codec.Archive.Tar.Pack (
 import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.Types
 import Control.Monad (join, when, forM, (>=>))
-import qualified Data.ByteString as BSS
-import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import System.FilePath
          ( (</>) )
 import qualified System.FilePath as FilePath.Native
@@ -64,19 +64,21 @@ import Codec.Archive.Tar.Check.Internal (checkSecurity)
 -- * This function returns results lazily. Subdirectories are scanned
 -- and files are read one by one as the list of entries is consumed.
 --
-pack :: FilePath   -- ^ Base directory
-     -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
-     -> IO [Entry]
+pack
+  :: FilePath   -- ^ Base directory
+  -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
+  -> IO [Entry]
 pack = packWith checkSecurity
 
 -- | Like 'pack', but does not perform any sanity/security checks on the input.
 -- You can do so yourself, e.g.: @packWith@ 'checkSecurity' @dir@ @files@.
 --
 -- @since 0.6.0.0
-packWith :: CheckSecurityCallback
-         -> FilePath   -- ^ Base directory
-         -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
-         -> IO [Entry]
+packWith
+  :: CheckSecurityCallback
+  -> FilePath   -- ^ Base directory
+  -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
+  -> IO [Entry]
 packWith secCB baseDir =
   preparePaths baseDir >=>
   packPaths secCB baseDir >=>
@@ -98,13 +100,19 @@ preparePaths baseDir = fmap concat . interleave . map go
       else return [relpath]
 
 -- | Pack paths while accounting for overlong filepaths.
-packPaths :: CheckSecurityCallback -> FilePath -> [FilePath] -> IO [GenEntry FilePath FilePath]
+packPaths
+  :: CheckSecurityCallback
+  -> FilePath
+  -> [FilePath]
+  -> IO [GenEntry FilePath FilePath]
 packPaths secCB baseDir paths = interleave $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
   isSymlink <- pathIsSymbolicLink abspath
-  let mkEntry = if isSymlink then packSymlinkEntry else
-        (if isDir then packDirectoryEntry else packFileEntry)
+  let mkEntry
+        | isSymlink = packSymlinkEntry
+        | isDir = packDirectoryEntry
+        | otherwise = packFileEntry
   e <- mkEntry abspath relpath
   secCB e
   pure e
@@ -126,15 +134,16 @@ interleave = unsafeInterleaveIO . go
 --
 -- * The file contents is read lazily.
 --
-packFileEntry :: FilePath -- ^ Full path to find the file on the local disk
-              -> tarPath -- ^ Path to use for the tar Entry in the archive
-              -> IO (GenEntry tarPath linkTarget)
+packFileEntry
+  :: FilePath -- ^ Full path to find the file on the local disk
+  -> tarPath  -- ^ Path to use for the tar 'Entry' in the archive
+  -> IO (GenEntry tarPath linkTarget)
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
   file    <- openBinaryFile filepath ReadMode
   size    <- hFileSize file
-  content <- BS.hGetContents file
+  content <- BL.hGetContents file
   return (simpleEntry tarpath (NormalFile content (fromIntegral size))) {
          entryPermissions = if executable perms then executableFilePermissions
                                                 else ordinaryFilePermissions,
@@ -146,9 +155,10 @@ packFileEntry filepath tarpath = do
 -- The only attribute of the directory that is used is its modification time.
 -- Directory ownership and detailed permissions are not preserved.
 --
-packDirectoryEntry :: FilePath -- ^ Full path to find the file on the local disk
-                   -> tarPath  -- ^ Path to use for the tar Entry in the archive
-                   -> IO (GenEntry tarPath linkTarget)
+packDirectoryEntry
+  :: FilePath -- ^ Full path to find the file on the local disk
+  -> tarPath  -- ^ Path to use for the tar 'Entry' in the archive
+  -> IO (GenEntry tarPath linkTarget)
 packDirectoryEntry filepath tarpath = do
   mtime   <- getModTime filepath
   return (directoryEntry tarpath) {
@@ -160,9 +170,10 @@ packDirectoryEntry filepath tarpath = do
 -- This automatically checks symlink safety via 'checkEntrySecurity'.
 --
 -- @since 0.6.0.0
-packSymlinkEntry :: FilePath -- ^ Full path to find the file on the local disk
-                 -> tarPath  -- ^ Path to use for the tar Entry in the archive
-                 -> IO (GenEntry tarPath FilePath)
+packSymlinkEntry
+  :: FilePath -- ^ Full path to find the file on the local disk
+  -> tarPath  -- ^ Path to use for the tar 'Entry' in the archive
+  -> IO (GenEntry tarPath FilePath)
 packSymlinkEntry filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
   pure $ symlinkEntry tarpath linkTarget
