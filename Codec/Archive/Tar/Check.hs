@@ -15,14 +15,17 @@ module Codec.Archive.Tar.Check (
 
   -- * Security
   checkSecurity,
+  checkEntrySecurity,
   FileNameError(..),
 
   -- * Tarbombs
   checkTarbomb,
+  checkEntryTarbomb,
   TarBombError(..),
 
   -- * Portability
   checkPortability,
+  checkEntryPortability,
   PortabilityError(..),
   PortabilityPlatform,
   ) where

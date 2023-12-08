@@ -2,6 +2,10 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use for_" #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -16,7 +20,7 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Unpack (
   unpack,
-  unpackWith,
+  unpackAndCheck,
   ) where
 
 import Codec.Archive.Tar.Types
@@ -57,9 +61,7 @@ import GHC.IO.Exception (IOErrorType(InappropriateType, IllegalOperation, Permis
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
 import Control.Exception as Exception
-         ( catch )
-
-
+         ( catch, SomeException(..) )
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -76,18 +78,23 @@ import Control.Exception as Exception
 -- into an empty directory so that you can easily clean up if unpacking fails
 -- part-way.
 --
--- On its own, this function only checks for security (using 'checkSecurity').
--- Use 'unpackWith' if you need more checks.
+-- On its own, this function only checks for security (using 'checkEntrySecurity').
+-- Use 'unpackAndCheck' if you need more checks.
 --
 unpack :: Exception e => FilePath -> Entries e -> IO ()
-unpack = unpackWith checkSecurity
+unpack = unpackAndCheck (fmap SomeException . checkEntrySecurity)
 
 -- | Like 'unpack', but does not perform any sanity/security checks on the tar entries.
--- You can do so yourself, e.g.: @unpackRaw@ 'checkSecurity' @dir@ @entries@.
+-- You can do so yourself, e.g.: @unpackRaw@ 'checkEntrySecurity' @dir@ @entries@.
 --
 -- @since 0.6.0.0
-unpackWith :: Exception e => CheckSecurityCallback -> FilePath -> Entries e -> IO ()
-unpackWith secCB baseDir entries = do
+unpackAndCheck
+  :: Exception e
+  => (GenEntry FilePath FilePath -> Maybe SomeException)
+  -> FilePath
+  -> Entries e
+  -> IO ()
+unpackAndCheck secCB baseDir entries = do
   let resolvedEntries = decodeLongNames entries
   uEntries <- unpackEntries [] resolvedEntries
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
@@ -108,7 +115,10 @@ unpackWith secCB baseDir entries = do
     unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = do
-      secCB entry
+      case secCB entry of
+        Nothing -> pure ()
+        Just e -> throwIO e
+
       case entryContent entry of
         NormalFile file _ -> do
           extractFile (entryPermissions entry) (entryTarPath entry) file (entryTime entry)

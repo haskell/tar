@@ -22,18 +22,22 @@ module Codec.Archive.Tar.Check.Internal (
 
   -- * Security
   checkSecurity,
+  checkEntrySecurity,
   FileNameError(..),
 
   -- * Tarbombs
   checkTarbomb,
+  checkEntryTarbomb,
   TarBombError(..),
 
   -- * Portability
   checkPortability,
+  checkEntryPortability,
   PortabilityError(..),
   PortabilityPlatform,
   ) where
 
+import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.Types
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadThrow(throwM))
@@ -67,35 +71,42 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- link target. A failure in any entry terminates the sequence of entries with
 -- an error.
 --
-checkSecurity :: CheckSecurityCallback
-checkSecurity e = do
-  check (entryTarPath e)
+checkSecurity
+  :: Entries e
+  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
+checkSecurity = checkEntries checkEntrySecurity . decodeLongNames
+
+-- |
+-- @since 0.6.0.0
+checkEntrySecurity :: GenEntry FilePath FilePath -> Maybe FileNameError
+checkEntrySecurity e =
+  check (entryTarPath e) <|>
   case entryContent e of
     HardLink     link ->
       check link
     SymbolicLink link ->
       check (FilePath.Posix.takeDirectory (entryTarPath e) FilePath.Posix.</> link)
-    _ -> pure ()
+    _ -> Nothing
   where
     checkPosix name
       | FilePath.Posix.isAbsolute name
-      = throwM $ AbsoluteFileName name
+      = Just $ AbsoluteFileName name
       | not (FilePath.Posix.isValid name)
-      = throwM $ InvalidFileName name
+      = Just $ InvalidFileName name
       | not (isInsideBaseDir (FilePath.Posix.splitDirectories name))
-      = throwM $ UnsafeLinkTarget name
-      | otherwise = pure ()
+      = Just $ UnsafeLinkTarget name
+      | otherwise = Nothing
 
     checkNative (fromFilePathToNative -> name)
       | FilePath.Native.isAbsolute name || FilePath.Native.hasDrive name
-      = throwM $ AbsoluteFileName name
+      = Just $ AbsoluteFileName name
       | not (FilePath.Native.isValid name)
-      = throwM $ InvalidFileName name
+      = Just $ InvalidFileName name
       | not (isInsideBaseDir (FilePath.Native.splitDirectories name))
-      = throwM $ UnsafeLinkTarget name
-      | otherwise = pure ()
+      = Just $ UnsafeLinkTarget name
+      | otherwise = Nothing
 
-    check name = checkPosix name >>= \_ -> checkNative (fromFilePathToNative name)
+    check name = checkPosix name <|> checkNative (fromFilePathToNative name)
 
 isInsideBaseDir :: [FilePath] -> Bool
 isInsideBaseDir = go 0
@@ -143,18 +154,28 @@ showFileNameError mb_plat err = case err of
 -- Note: This check must be used in conjunction with 'checkSecurity'
 -- (or 'checkPortability').
 --
-checkTarbomb :: FilePath -> CheckSecurityCallback
-checkTarbomb expectedTopDir entry = do
+checkTarbomb
+  :: FilePath
+  -> Entries e
+  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) TarBombError)
+checkTarbomb expectedTopDir
+  = checkEntries (checkEntryTarbomb expectedTopDir)
+  . decodeLongNames
+
+-- |
+-- @since 0.6.0.0
+checkEntryTarbomb :: FilePath -> GenEntry FilePath linkTarget -> Maybe TarBombError
+checkEntryTarbomb expectedTopDir entry = do
   case entryContent entry of
     -- Global extended header aka XGLTYPE aka pax_global_header
     -- https://pubs.opengroup.org/onlinepubs/9699919799/utilities/pax.html#tag_20_92_13_02
-    OtherEntryType 'g' _ _ -> pure ()
+    OtherEntryType 'g' _ _ -> Nothing
     -- Extended header referring to the next file in the archive aka XHDTYPE
-    OtherEntryType 'x' _ _ -> pure ()
+    OtherEntryType 'x' _ _ -> Nothing
     _                      ->
       case FilePath.Posix.splitDirectories (entryTarPath entry) of
-        (topDir:_) | topDir == expectedTopDir -> pure ()
-        _ -> throwM $ TarBombError expectedTopDir (entryTarPath entry)
+        (topDir:_) | topDir == expectedTopDir -> Nothing
+        _ -> Just $ TarBombError expectedTopDir (entryTarPath entry)
 
 -- | An error that occurs if a tar file is a \"tar bomb\" that would extract
 -- files outside of the intended directory.
@@ -195,33 +216,40 @@ instance Show TarBombError where
 --   includes characters that are valid in both systems and the \'/\' vs \'\\\'
 --   directory separator conventions.
 --
-checkPortability :: CheckSecurityCallback
-checkPortability entry
+checkPortability
+  :: Entries e
+  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) PortabilityError)
+checkPortability = checkEntries checkEntryPortability . decodeLongNames
+
+-- |
+-- @since 0.6.0.0
+checkEntryPortability :: GenEntry FilePath linkTarget -> Maybe PortabilityError
+checkEntryPortability entry
   | entryFormat entry `elem` [V7Format, GnuFormat]
-  = throwM $ NonPortableFormat (entryFormat entry)
+  = Just $ NonPortableFormat (entryFormat entry)
 
   | not (portableFileType (entryContent entry))
-  = throwM NonPortableFileType
+  = Just NonPortableFileType
 
   | not (all portableChar posixPath)
-  = throwM $ NonPortableEntryNameChar posixPath
+  = Just $ NonPortableEntryNameChar posixPath
 
   | not (FilePath.Posix.isValid posixPath)
-  = throwM $ NonPortableFileName "unix"    (InvalidFileName posixPath)
+  = Just $ NonPortableFileName "unix"    (InvalidFileName posixPath)
   | not (FilePath.Windows.isValid windowsPath)
-  = throwM $ NonPortableFileName "windows" (InvalidFileName windowsPath)
+  = Just $ NonPortableFileName "windows" (InvalidFileName windowsPath)
 
   | FilePath.Posix.isAbsolute posixPath
-  = throwM $ NonPortableFileName "unix"    (AbsoluteFileName posixPath)
+  = Just $ NonPortableFileName "unix"    (AbsoluteFileName posixPath)
   | FilePath.Windows.isAbsolute windowsPath
-  = throwM $ NonPortableFileName "windows" (AbsoluteFileName windowsPath)
+  = Just $ NonPortableFileName "windows" (AbsoluteFileName windowsPath)
 
   | any (=="..") (FilePath.Posix.splitDirectories posixPath)
-  = throwM $ NonPortableFileName "unix"    (InvalidFileName posixPath)
+  = Just $ NonPortableFileName "unix"    (InvalidFileName posixPath)
   | any (=="..") (FilePath.Windows.splitDirectories windowsPath)
-  = throwM $ NonPortableFileName "windows" (InvalidFileName windowsPath)
+  = Just $ NonPortableFileName "windows" (InvalidFileName windowsPath)
 
-  | otherwise = pure ()
+  | otherwise = Nothing
 
   where
     posixPath   = entryTarPath entry
@@ -259,3 +287,10 @@ instance Show PortabilityError where
     = "Non-portable character in archive entry name: " ++ show posixPath
   show (NonPortableFileName platform err)
     = showFileNameError (Just platform) err
+
+--------------------------
+-- Utils
+
+checkEntries :: (GenEntry a b -> Maybe e') -> GenEntries a b e -> GenEntries a b (Either e e')
+checkEntries checkEntry =
+  mapEntries (\entry -> maybe (Right entry) Left (checkEntry entry))

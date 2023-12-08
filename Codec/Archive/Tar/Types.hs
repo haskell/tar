@@ -29,7 +29,6 @@ module Codec.Archive.Tar.Types (
   DevMajor,
   DevMinor,
   Format(..),
-  CheckSecurityCallback,
 
   simpleEntry,
   longLinkEntry,
@@ -353,7 +352,7 @@ instance Show TarPath where
 --
 -- * The tar path may be an absolute path or may contain @\"..\"@ components.
 --   For security reasons this should not usually be allowed, but it is your
---   responsibility to check for these conditions (eg using 'checkSecurity').
+--   responsibility to check for these conditions (eg using 'checkEntrySecurity').
 --
 fromTarPath :: TarPath -> FilePath
 fromTarPath = BS.Char8.unpack . fromTarPathInternal FilePath.Native.pathSeparator
@@ -611,7 +610,7 @@ foldEntries next done fail' = fold
 -- value.
 --
 foldlEntries :: (a -> Entry -> a) -> a -> Entries e -> Either (e, a) a
-foldlEntries f z = go z
+foldlEntries f = go
   where
     go !acc (Next e es) = go (f acc e) es
     go !acc  Done       = Right acc
@@ -622,15 +621,18 @@ foldlEntries f z = go z
 --
 -- If your mapping function cannot fail it may be more convenient to use
 -- 'mapEntriesNoFail'
-mapEntries :: (Entry -> Either e' Entry) -> Entries e -> Entries (Either e e')
+mapEntries
+  :: (GenEntry tarPath linkTarget -> Either e' (GenEntry tarPath linkTarget))
+  -> GenEntries tarPath linkTarget e
+  -> GenEntries tarPath linkTarget (Either e e')
 mapEntries f =
-  foldEntries (\entry rest -> either (Fail . Right) (flip Next rest) (f entry)) Done (Fail . Left)
+  foldEntries (\entry rest -> either (Fail . Right) (`Next` rest) (f entry)) Done (Fail . Left)
 
 -- | Like 'mapEntries' but the mapping function itself cannot fail.
 --
 mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
 mapEntriesNoFail f =
-  foldEntries (\entry -> Next (f entry)) Done Fail
+  foldEntries (Next . f) Done Fail
 
 -- | @since 0.5.1.0
 instance Sem.Semigroup (GenEntries tarPath linkTarget e) where
@@ -644,10 +646,3 @@ instance NFData e => NFData (GenEntries tarPath linkTarget e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
-
--- | @since 0.6.0.0
-type CheckSecurityCallback =
-  forall m.
-     MonadThrow m
-  => GenEntry FilePath FilePath
-  -> m ()

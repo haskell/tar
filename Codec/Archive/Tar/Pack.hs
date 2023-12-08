@@ -48,7 +48,7 @@ import System.IO
          ( IOMode(ReadMode), openBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Control.Exception (throwIO, SomeException)
-import Codec.Archive.Tar.Check.Internal (checkSecurity)
+import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
 -- specified will have their contents included recursively. Paths in the
@@ -69,21 +69,21 @@ pack
   :: FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
-pack = packAndCheck (const $ pure ())
+pack = packAndCheck (const Nothing)
 
 -- | Like 'pack', but allows to specify any sanity/security checks on the input
 -- filenames.
 --
 -- @since 0.6.0.0
 packAndCheck
-  :: CheckSecurityCallback
+  :: (GenEntry FilePath FilePath -> Maybe SomeException)
   -> FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
 packAndCheck secCB baseDir relpaths = do
   paths <- preparePaths baseDir relpaths
   entries <- packPaths baseDir paths
-  traverse_ secCB entries
+  traverse_ (maybe (pure ()) throwIO . secCB) entries
   pure $ concatMap encodeLongNames entries
 
 preparePaths :: FilePath -> [FilePath] -> IO [FilePath]

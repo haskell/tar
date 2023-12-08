@@ -108,7 +108,7 @@ module Codec.Archive.Tar (
   pack,
   packAndCheck,
   unpack,
-  unpackWith,
+  unpackAndCheck,
 
   -- * Types
   -- ** Tar entry type
