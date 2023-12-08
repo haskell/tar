@@ -291,6 +291,9 @@ instance Show PortabilityError where
 --------------------------
 -- Utils
 
-checkEntries :: (GenEntry a b -> Maybe e') -> GenEntries a b e -> GenEntries a b (Either e e')
+checkEntries
+  :: (GenEntry tarPath linkTarget -> Maybe e')
+  -> GenEntries tarPath linkTarget e
+  -> GenEntries tarPath linkTarget (Either e e')
 checkEntries checkEntry =
   mapEntries (\entry -> maybe (Right entry) Left (checkEntry entry))
