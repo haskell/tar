@@ -16,9 +16,8 @@ import System.Console.GetOpt (OptDescr(..), ArgDescr(..), ArgOrder(..),
 import System.Environment    (getArgs)
 import System.Exit           (exitFailure)
 import System.IO             (hPutStrLn, stderr)
-import Data.Time             (formatTime)
+import Data.Time             (formatTime, defaultTimeLocale)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
-import Data.Time             (defaultTimeLocale)
 
 main :: IO ()
 main = do
@@ -206,12 +205,12 @@ parseOptions :: [String] -> IO (Options, [FilePath])
 parseOptions args =
   let (fs, files, nonopts, errors) = getOpt' Permute optDescr args
   in case (nonopts, errors) of
-       ([], [])    -> return $ (foldl (flip ($)) defaultOptions fs, files)
-       (_ , (_:_)) -> die errors
-       (_ ,  _)    -> die (map (("unrecognized option "++).show) nonopts)
+       ([], [])    -> return (foldl (flip ($)) defaultOptions fs, files)
+       (_ , _ : _) -> die errors
+       (_ , _)     -> die (map (("unrecognized option "++).show) nonopts)
 
 die :: [String] -> IO a
 die errs = do
-  mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) $ errs
+  mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) errs
   hPutStrLn stderr "Try `htar --help' for more information."
   exitFailure

@@ -146,8 +146,11 @@ showFileNameError mb_plat err = case err of
 checkTarbomb :: FilePath -> CheckSecurityCallback
 checkTarbomb expectedTopDir entry = do
   case entryContent entry of
-    OtherEntryType 'g' _ _ -> pure () --PAX global header
-    OtherEntryType 'x' _ _ -> pure () --PAX individual header
+    -- Global extended header aka XGLTYPE aka pax_global_header
+    -- https://pubs.opengroup.org/onlinepubs/9699919799/utilities/pax.html#tag_20_92_13_02
+    OtherEntryType 'g' _ _ -> pure ()
+    -- Extended header referring to the next file in the archive aka XHDTYPE
+    OtherEntryType 'x' _ _ -> pure ()
     _                      ->
       case FilePath.Posix.splitDirectories (entryTarPath entry) of
         (topDir:_) | topDir == expectedTopDir -> pure ()
