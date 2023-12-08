@@ -17,7 +17,7 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Pack (
     pack,
-    packWith,
+    packAndCheck,
     packFileEntry,
     packDirectoryEntry,
     packSymlinkEntry,
@@ -31,6 +31,7 @@ import Codec.Archive.Tar.Types
 import Control.Monad (join, when, forM, (>=>))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import Data.Foldable
 import System.FilePath
          ( (</>) )
 import qualified System.FilePath as FilePath.Native
@@ -68,21 +69,22 @@ pack
   :: FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
-pack = packWith checkSecurity
+pack = packAndCheck (const $ pure ())
 
--- | Like 'pack', but does not perform any sanity/security checks on the input.
--- You can do so yourself, e.g.: @packWith@ 'checkSecurity' @dir@ @files@.
+-- | Like 'pack', but allows to specify any sanity/security checks on the input
+-- filenames.
 --
 -- @since 0.6.0.0
-packWith
+packAndCheck
   :: CheckSecurityCallback
   -> FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
-packWith secCB baseDir =
-  preparePaths baseDir >=>
-  packPaths secCB baseDir >=>
-  (pure . concatMap encodeLongNames)
+packAndCheck secCB baseDir relpaths = do
+  paths <- preparePaths baseDir relpaths
+  entries <- packPaths baseDir paths
+  traverse_ secCB entries
+  pure $ concatMap encodeLongNames entries
 
 preparePaths :: FilePath -> [FilePath] -> IO [FilePath]
 preparePaths baseDir = fmap concat . interleave . map go
@@ -101,11 +103,10 @@ preparePaths baseDir = fmap concat . interleave . map go
 
 -- | Pack paths while accounting for overlong filepaths.
 packPaths
-  :: CheckSecurityCallback
-  -> FilePath
+  :: FilePath
   -> [FilePath]
   -> IO [GenEntry FilePath FilePath]
-packPaths secCB baseDir paths = interleave $ flip map paths $ \relpath -> do
+packPaths baseDir paths = interleave $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
   isSymlink <- pathIsSymbolicLink abspath
@@ -113,9 +114,7 @@ packPaths secCB baseDir paths = interleave $ flip map paths $ \relpath -> do
         | isSymlink = packSymlinkEntry
         | isDir = packDirectoryEntry
         | otherwise = packFileEntry
-  e <- mkEntry abspath relpath
-  secCB e
-  pure e
+  mkEntry abspath relpath
 
 interleave :: [IO a] -> IO [a]
 interleave = unsafeInterleaveIO . go
