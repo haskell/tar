@@ -37,7 +37,13 @@ write es = LBS.concat $ map putEntry es ++ [LBS.replicate (512*2) 0]
 
 putEntry :: Entry -> LBS.ByteString
 putEntry entry = case entryContent entry of
-  NormalFile       content size -> LBS.concat [ header, content, padding size ]
+  NormalFile       content size
+    -- size field is 12 bytes long, so in octal format (see 'putOct')
+    -- it can hold numbers up to 8Gb
+    | size >= 1 `shiftL` (3 * (12 -1))
+    , entryFormat entry == V7Format
+    -> error "putEntry: support for files over 8Gb is a Ustar extension"
+    | otherwise -> LBS.concat [ header, content, padding size ]
   OtherEntryType 'K' _ _
     | entryFormat entry /= GnuFormat -> error "putEntry: long symlink support is a GNU extension"
   OtherEntryType 'L' _ _
@@ -102,10 +108,12 @@ putHeaderNoChkSum Entry {
     , replicate   12 '\NUL'
     ]
   where
-    numField :: (Integral a, Bits a, Show a) => FieldWidth -> a -> String
-    numField = case format of
-      V7Format -> putOct
-      _other -> putLarge
+    numField :: FieldWidth -> Int64 -> String
+    numField w n
+      | n >= 0 && n < 1 `shiftL` (3 * (w - 1))
+      = putOct w n
+      | otherwise
+      = putLarge w n
 
     (typeCode, contentSize, linkTarget,
      deviceMajor, deviceMinor) = case content of
