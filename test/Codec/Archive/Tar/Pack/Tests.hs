@@ -16,8 +16,9 @@ import qualified Data.ByteString.Lazy as BL
 import Data.FileEmbed
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Pack as Pack
-import Codec.Archive.Tar.Types (GenEntries(..), Entries)
+import Codec.Archive.Tar.Types (GenEntries(..), Entries, simpleEntry, toTarPath)
 import qualified Codec.Archive.Tar.Unpack as Unpack
+import qualified Codec.Archive.Tar.Write as Write
 import Control.Exception
 import Data.List.NonEmpty (NonEmpty(..))
 import System.Directory

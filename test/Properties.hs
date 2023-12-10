@@ -27,7 +27,8 @@ main =
     , testGroup "write/read" [
         testProperty "ustar format" Tar.prop_write_read_ustar,
         testProperty "gnu format"   Tar.prop_write_read_gnu,
-        testProperty "v7 format"    Tar.prop_write_read_v7
+        testProperty "v7 format"    Tar.prop_write_read_v7,
+        testProperty "large filesize" Tar.prop_large_filesize
       ]
 
     , testGroup "string table" [
@@ -73,4 +74,3 @@ main =
       testProperty "modtime 1970-01-01" Unpack.case_modtime_1970
       ]
     ]
-
