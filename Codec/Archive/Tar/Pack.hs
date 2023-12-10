@@ -71,8 +71,10 @@ pack
   -> IO [Entry]
 pack = packAndCheck (const Nothing)
 
--- | Like 'pack', but allows to specify any sanity/security checks on the input
--- filenames.
+-- | Like 'pack', but allows to specify additional sanity/security
+-- checks on the input filenames. This is useful if you know which
+-- check will be used on client side
+-- in 'Codec.Tar.Check.unpack' / 'Codec.Tar.Check.unpackAndCheck'.
 --
 -- @since 0.6.0.0
 packAndCheck

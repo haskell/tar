@@ -76,7 +76,7 @@ import Codec.Archive.Tar.Index.Internal
 -- in an accumulator style using the 'IndexBuilder' and operations.
 --
 -- Start with 'empty' and use 'addNextEntry' (or 'skipNextEntry') for
--- each 'Entry' in the tar file in order. Every entry must added or skipped in
+-- each 'Codec.Archive.Tar.Entry.Entry' in the tar file in order. Every entry must added or skipped in
 -- order, otherwise the resulting 'TarIndex' will report the wrong
 -- 'TarEntryOffset's. At the end use 'finalise' to get the 'TarIndex'.
 --

@@ -11,14 +11,23 @@ import Control.Exception
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 
+-- | Errors raised by 'decodeLongNames'.
 data DecodeLongNamesError
   = TwoTypeKEntries
+  -- ^ Two adjacent 'OtherEntryType' @\'K\'@ nodes.
   | TwoTypeLEntries
+  -- ^ Two adjacent 'OtherEntryType' @\'L\'@ nodes.
   | NoLinkEntryAfterTypeKEntry
+  -- ^ 'OtherEntryType' @\'K\'@ node is not followed by a 'SymbolicLink' / 'HardLink'.
   deriving (Eq, Ord, Show)
 
 instance Exception DecodeLongNamesError
 
+-- | Translate high-level entries with POSIX 'FilePath's for files and symlinks
+-- into entries suitable for serialization by emitting additional
+-- 'OtherEntryType' @\'K\'@ and 'OtherEntryType' @\'L\'@ nodes.
+--
+-- Input 'FilePath's must be POSIX file names, not native ones.
 encodeLongNames
   :: GenEntry FilePath FilePath
   -> [Entry]
@@ -63,7 +72,12 @@ encodeLinkPath lnk = case toTarPath' lnk of
   FileNameTooLong (TarPath name _) ->
     (Just $ longSymLinkEntry lnk, LinkTarget name)
 
--- | Resolved 'FilePath's are still POSIX file names, not native ones.
+-- | Translate low-level entries (usually freshly deserialized) into
+-- high-level entries with POSIX 'FilePath's for files and symlinks
+-- by parsing and eliminating
+-- 'OtherEntryType' @\'K\'@ and 'OtherEntryType' @\'L\'@ nodes.
+--
+-- Resolved 'FilePath's are still POSIX file names, not native ones.
 decodeLongNames
   :: Entries e
   -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)

@@ -81,18 +81,30 @@ import Control.Exception as Exception
 -- On its own, this function only checks for security (using 'checkEntrySecurity').
 -- Use 'unpackAndCheck' if you need more checks.
 --
-unpack :: Exception e => FilePath -> Entries e -> IO ()
+unpack
+  :: Exception e
+  => FilePath
+  -- ^ Base directory
+  -> Entries e
+  -- ^ Entries to upack
+  -> IO ()
 unpack = unpackAndCheck (fmap SomeException . checkEntrySecurity)
 
--- | Like 'unpack', but does not perform any sanity/security checks on the tar entries.
--- You can do so yourself, e.g.: @unpackRaw@ 'checkEntrySecurity' @dir@ @entries@.
+-- | Like 'unpack', but run custom sanity/security checks instead of 'checkEntrySecurity'.
+-- For example,
+--
+-- > unpackAndCheck (\x -> SomeException <$> checkEntryPortability x
+-- >                   <|> SomeException <$> checkEntrySecurity x) dir entries
 --
 -- @since 0.6.0.0
 unpackAndCheck
   :: Exception e
   => (GenEntry FilePath FilePath -> Maybe SomeException)
+  -- ^ Checks to run on each entry before unpacking
   -> FilePath
+  -- ^ Base directory
   -> Entries e
+  -- ^ Entries to upack
   -> IO ()
 unpackAndCheck secCB baseDir entries = do
   let resolvedEntries = decodeLongNames entries

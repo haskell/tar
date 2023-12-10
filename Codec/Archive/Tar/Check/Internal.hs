@@ -76,7 +76,8 @@ checkSecurity
   -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
 checkSecurity = checkEntries checkEntrySecurity . decodeLongNames
 
--- |
+-- | Worker of 'checkSecurity'.
+--
 -- @since 0.6.0.0
 checkEntrySecurity :: GenEntry FilePath FilePath -> Maybe FileNameError
 checkEntrySecurity e =
@@ -162,7 +163,8 @@ checkTarbomb expectedTopDir
   = checkEntries (checkEntryTarbomb expectedTopDir)
   . decodeLongNames
 
--- |
+-- | Worker of 'checkTarbomb'.
+--
 -- @since 0.6.0.0
 checkEntryTarbomb :: FilePath -> GenEntry FilePath linkTarget -> Maybe TarBombError
 checkEntryTarbomb expectedTopDir entry = do
@@ -221,7 +223,8 @@ checkPortability
   -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) PortabilityError)
 checkPortability = checkEntries checkEntryPortability . decodeLongNames
 
--- |
+-- | Worker of 'checkPortability'.
+--
 -- @since 0.6.0.0
 checkEntryPortability :: GenEntry FilePath linkTarget -> Maybe PortabilityError
 checkEntryPortability entry

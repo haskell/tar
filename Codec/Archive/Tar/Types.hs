@@ -100,13 +100,14 @@ type DevMinor  = Int
 type TypeCode  = Char
 type Permissions = FileMode
 
--- | Tar archive entry.
+-- | Polymorphic tar archive entry. High-level interfaces
+-- commonly work with 'GenEntry' 'FilePath' 'FilePath',
+-- while low level uses 'GenEntry' 'TarPath' 'LinkTarget'.
 --
 -- @since 0.6.0.0
 data GenEntry tarPath linkTarget = Entry {
 
-    -- | The path of the file or directory within the archive. This is in a
-    -- tar-specific form. Use 'entryPath' to get a native 'FilePath'.
+    -- | The path of the file or directory within the archive.
     entryTarPath :: !tarPath,
 
     -- | The real content of the entry. For 'NormalFile' this includes the
@@ -127,14 +128,18 @@ data GenEntry tarPath linkTarget = Entry {
   }
   deriving (Eq, Show)
 
+-- | Monomorphic tar archive entry, ready for serialization / deserialization.
+--
 type Entry = GenEntry TarPath LinkTarget
 
 -- | Native 'FilePath' of the file or directory within the archive.
 --
-entryPath :: Entry -> FilePath
+entryPath :: GenEntry TarPath linkTarget -> FilePath
 entryPath = fromTarPath . entryTarPath
 
--- | The content of a tar archive entry, which depends on the type of entry.
+-- | Polymorphic content of a tar archive entry. High-level interfaces
+-- commonly work with 'GenEntryContent' 'FilePath',
+-- while low level uses 'GenEntryContent' 'LinkTarget'.
 --
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
@@ -153,6 +158,8 @@ data GenEntryContent linkTarget
                     {-# UNPACK #-} !FileSize
   deriving (Eq, Ord, Show)
 
+-- | Monomorphic content of a tar archive entry,
+-- ready for serialization / deserialization.
 type EntryContent = GenEntryContent LinkTarget
 
 data Ownership = Ownership {
@@ -183,17 +190,15 @@ data Format =
      -- | The \"USTAR\" format is an extension of the classic V7 format. It was
      -- later standardised by POSIX. It has some restrictions but is the most
      -- portable format.
-     --
    | UstarFormat
 
      -- | The GNU tar implementation also extends the classic V7 format, though
-     -- in a slightly different way from the USTAR format. In general for new
-     -- archives the standard USTAR/POSIX should be used.
-     --
+     -- in a slightly different way from the USTAR format. This is the only format
+     -- supporting long file names.
    | GnuFormat
   deriving (Eq, Ord, Show)
 
-instance NFData (GenEntry a b) where
+instance NFData (GenEntry tarPath linkTarget) where
   rnf (Entry _ c _ _ _ _) = rnf c
 
 instance NFData (GenEntryContent linkTarget) where
@@ -224,7 +229,7 @@ directoryPermissions :: Permissions
 directoryPermissions  = 0o0755
 
 -- | An 'Entry' with all default values except for the file name and type. It
--- uses the portable USTAR/POSIX format (see 'UstarHeader').
+-- uses the portable USTAR/POSIX format (see 'UstarFormat').
 --
 -- You can use this as a basis and override specific fields, eg:
 --
@@ -352,7 +357,8 @@ instance Show TarPath where
 --
 -- * The tar path may be an absolute path or may contain @\"..\"@ components.
 --   For security reasons this should not usually be allowed, but it is your
---   responsibility to check for these conditions (eg using 'checkEntrySecurity').
+--   responsibility to check for these conditions
+--   (e.g., using 'Codec.Archive.Tar.Check.checkEntrySecurity').
 --
 fromTarPath :: TarPath -> FilePath
 fromTarPath = BS.Char8.unpack . fromTarPathInternal FilePath.Native.pathSeparator
@@ -543,14 +549,14 @@ fromFilePathToWindowsPath path = adjustDirectory $
 -- * Entries type
 --
 
--- | A tar archive is a sequence of entries.
+-- | Polymorphic sequence of archive entries.
+-- High-level interfaces
+-- commonly work with 'GenEntries' 'FilePath' 'FilePath',
+-- while low level uses 'GenEntries' 'TarPath' 'LinkTarget'.
 --
 -- The point of this type as opposed to just using a list is that it makes the
 -- failure case explicit. We need this because the sequence of entries we get
 -- from reading a tarball can include errors.
---
--- It is a concrete data type so you can manipulate it directly but it is often
--- clearer to use the provided functions for mapping, folding and unfolding.
 --
 -- Converting from a list can be done with just @foldr Next Done@. Converting
 -- back into a list can be done with 'foldEntries' however in that case you
@@ -574,16 +580,21 @@ data GenEntries tarPath linkTarget e
 
 infixr 5 `Next`
 
+-- | Monomorphic sequence of archive entries,
+-- ready for serialization / deserialization.
 type Entries e = GenEntries TarPath LinkTarget e
 
--- | This is like the standard 'unfoldr' function on lists, but for 'Entries'.
+-- | This is like the standard 'Data.List.unfoldr' function on lists, but for 'Entries'.
 -- It includes failure as an extra possibility that the stepper function may
 -- return.
 --
 -- It can be used to generate 'Entries' from some other type. For example it is
 -- used internally to lazily unfold entries from a 'LBS.ByteString'.
 --
-unfoldEntries :: (a -> Either e (Maybe (Entry, a))) -> a -> Entries e
+unfoldEntries
+  :: (a -> Either e (Maybe (GenEntry tarPath linkTarget, a)))
+  -> a
+  -> GenEntries tarPath linkTarget e
 unfoldEntries f = unfold
   where
     unfold x = case f x of
@@ -598,7 +609,11 @@ unfoldEntries f = unfold
 -- This is used to consume a sequence of entries. For example it could be used
 -- to scan a tarball for problems or to collect an index of the contents.
 --
-foldEntries :: (GenEntry tarPath linkTarget -> a -> a) -> a -> (e -> a) -> GenEntries tarPath linkTarget e -> a
+foldEntries
+  :: (GenEntry tarPath linkTarget -> a -> a)
+  -> a
+  -> (e -> a)
+  -> GenEntries tarPath linkTarget e -> a
 foldEntries next done fail' = fold
   where
     fold (Next e es) = next e (fold es)
@@ -609,7 +624,11 @@ foldEntries next done fail' = fold
 -- accumulator result, or the failure along with the intermediate accumulator
 -- value.
 --
-foldlEntries :: (a -> Entry -> a) -> a -> Entries e -> Either (e, a) a
+foldlEntries
+  :: (a -> GenEntry tarPath linkTarget -> a)
+  -> a
+  -> GenEntries tarPath linkTarget e
+  -> Either (e, a) a
 foldlEntries f = go
   where
     go !acc (Next e es) = go (f acc e) es
@@ -623,14 +642,19 @@ foldlEntries f = go
 -- 'mapEntriesNoFail'
 mapEntries
   :: (GenEntry tarPath linkTarget -> Either e' (GenEntry tarPath linkTarget))
+  -- ^ Function to apply to each entry
   -> GenEntries tarPath linkTarget e
+  -- ^ Input sequence
   -> GenEntries tarPath linkTarget (Either e e')
 mapEntries f =
   foldEntries (\entry rest -> either (Fail . Right) (`Next` rest) (f entry)) Done (Fail . Left)
 
 -- | Like 'mapEntries' but the mapping function itself cannot fail.
 --
-mapEntriesNoFail :: (Entry -> Entry) -> Entries e -> Entries e
+mapEntriesNoFail
+  :: (GenEntry tarPath linkTarget -> GenEntry tarPath linkTarget)
+  -> GenEntries tarPath linkTarget e
+  -> GenEntries tarPath linkTarget e
 mapEntriesNoFail f =
   foldEntries (Next . f) Done Fail
 
