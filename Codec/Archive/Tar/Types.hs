@@ -53,7 +53,6 @@ module Codec.Archive.Tar.Types (
 
   LinkTarget(..),
   toLinkTarget,
-  toLinkTarget',
   fromLinkTarget,
   fromLinkTargetToPosixPath,
   fromLinkTargetToWindowsPath,
@@ -78,7 +77,6 @@ import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
 import Control.DeepSeq
 import Control.Exception (Exception, displayException)
-import Control.Monad.Catch (MonadThrow, throwM)
 
 import qualified System.FilePath as FilePath.Native
          ( joinPath, splitDirectories, addTrailingPathSeparator, hasTrailingPathSeparator, pathSeparator, isAbsolute, hasTrailingPathSeparator )
@@ -489,11 +487,12 @@ instance NFData LinkTarget where
 -- | Convert a native 'FilePath' to a tar 'LinkTarget'.
 -- string is longer than 100 characters or if it contains non-portable
 -- characters.
-toLinkTarget   :: MonadThrow m => FilePath -> m LinkTarget
-toLinkTarget path | length path <= 100 = do
-                                           target <- toLinkTarget' path
-                                           pure $! LinkTarget (packAscii target)
-                  | otherwise          = throwM (TooLong path)
+toLinkTarget :: FilePath -> Maybe LinkTarget
+toLinkTarget path
+  | length path <= 100 = do
+    target <- toLinkTarget' path
+    Just $! LinkTarget (packAscii target)
+  | otherwise = Nothing
 
 data LinkTargetException = IsAbsolute FilePath
                          | TooLong FilePath
@@ -505,10 +504,10 @@ instance Exception LinkTargetException where
 
 -- | Convert a native 'FilePath' to a unix filepath suitable for
 -- using as 'LinkTarget'. Does not error if longer than 100 characters.
-toLinkTarget' :: MonadThrow m => FilePath -> m FilePath
+toLinkTarget' :: FilePath -> Maybe FilePath
 toLinkTarget' path
-  | FilePath.Native.isAbsolute path = throwM (IsAbsolute path)
-  | otherwise = pure $ adjustDirectory $ FilePath.Posix.joinPath $ FilePath.Native.splitDirectories path
+  | FilePath.Native.isAbsolute path = Nothing
+  | otherwise = Just $ adjustDirectory $ FilePath.Posix.joinPath $ FilePath.Native.splitDirectories path
   where
     adjustDirectory | FilePath.Native.hasTrailingPathSeparator path
                     = FilePath.Posix.addTrailingPathSeparator

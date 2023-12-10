@@ -40,7 +40,6 @@ module Codec.Archive.Tar.Check.Internal (
 import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.Types
 import Control.Applicative ((<|>))
-import Control.Monad.Catch (MonadThrow(throwM))
 import qualified Data.ByteString.Lazy.Char8 as Char8
 import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
