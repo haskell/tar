@@ -38,6 +38,8 @@ write es = LBS.concat $ map putEntry es ++ [LBS.replicate (512*2) 0]
 putEntry :: Entry -> LBS.ByteString
 putEntry entry = case entryContent entry of
   NormalFile       content size -> LBS.concat [ header, content, padding size ]
+  OtherEntryType 'K' _ _
+    | entryFormat entry /= GnuFormat -> error "putEntry: long symlink support is a GNU extension"
   OtherEntryType 'L' _ _
     | entryFormat entry /= GnuFormat -> error "putEntry: long filename support is a GNU extension"
   OtherEntryType _ content size -> LBS.concat [ header, content, padding size ]

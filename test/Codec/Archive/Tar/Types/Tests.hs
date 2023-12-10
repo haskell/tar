@@ -85,6 +85,7 @@ instance (Arbitrary tarPath, Arbitrary linkTarget) => Arbitrary (GenEntry tarPat
     entryOwnership <- arbitrary
     entryTime <- arbitraryOctal 11
     entryFormat <- case entryContent of
+      OtherEntryType 'K' _ _ -> pure GnuFormat
       OtherEntryType 'L' _ _ -> pure GnuFormat
       _ -> arbitrary
     pure Entry{..}
