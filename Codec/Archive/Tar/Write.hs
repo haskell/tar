@@ -53,8 +53,6 @@ putHeader entry =
    $ take 148 block
   ++ putOct 7 checksum
   ++ ' ' : drop 156 block
---  ++ putOct 8 checksum
---  ++ drop 156 block
   where
     block    = putHeaderNoChkSum entry
     checksum = foldl' (\x y -> x + ord y) 0 block
@@ -70,36 +68,36 @@ putHeaderNoChkSum Entry {
   } =
 
   concat
-    [ putBString 100 $ name
-    , putOct       8 $ permissions
+    [ putBString 100 name
+    , putOct       8 permissions
     , putOct       8 $ ownerId ownership
     , putOct       8 $ groupId ownership
-    , numField    12 $ contentSize
-    , putOct      12 $ modTime
-    , fill         8 $ ' ' -- dummy checksum
-    , putChar8       $ typeCode
-    , putBString 100 $ linkTarget
+    , numField    12 contentSize
+    , putOct      12 modTime
+    , replicate    8 ' ' -- dummy checksum
+    , putChar8       typeCode
+    , putBString 100 linkTarget
     ] ++
   case format of
   V7Format    ->
-      fill 255 '\NUL'
+      replicate 255 '\NUL'
   UstarFormat -> concat
-    [ putBString   8 $ ustarMagic
+    [ putBString   8 ustarMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
-    , putOct       8 $ deviceMajor
-    , putOct       8 $ deviceMinor
-    , putBString 155 $ prefix
-    , fill        12 $ '\NUL'
+    , putOct       8 deviceMajor
+    , putOct       8 deviceMinor
+    , putBString 155 prefix
+    , replicate   12 '\NUL'
     ]
   GnuFormat -> concat
-    [ putBString   8 $ gnuMagic
+    [ putBString   8 gnuMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
-    , putGnuDev    8 $ deviceMajor
-    , putGnuDev    8 $ deviceMinor
-    , putBString 155 $ prefix
-    , fill        12 $ '\NUL'
+    , putGnuDev    8 deviceMajor
+    , putGnuDev    8 deviceMinor
+    , putBString 155 prefix
+    , replicate   12 '\NUL'
     ]
   where
     numField :: (Integral a, Bits a, Show a) => FieldWidth -> a -> String
@@ -132,10 +130,10 @@ gnuMagic   = BS.Char8.pack "ustar  \NUL"
 type FieldWidth = Int
 
 putBString :: FieldWidth -> BS.ByteString -> String
-putBString n s = BS.Char8.unpack (BS.take n s) ++ fill (n - BS.length s) '\NUL'
+putBString n s = BS.Char8.unpack (BS.take n s) ++ replicate (n - BS.length s) '\NUL'
 
 putString :: FieldWidth -> String -> String
-putString n s = take n s ++ fill (n - length s) '\NUL'
+putString n s = take n s ++ replicate (n - length s) '\NUL'
 
 {-# SPECIALISE putLarge :: FieldWidth -> Int64 -> String #-}
 putLarge :: (Bits a, Integral a) => FieldWidth -> a -> String
@@ -146,12 +144,9 @@ putLarge n0 x0 = '\x80' : reverse (go (n0-1) x0)
 putOct :: (Integral a, Show a) => FieldWidth -> a -> String
 putOct n x =
   let octStr = take (n-1) $ showOct x ""
-   in fill (n - length octStr - 1) '0'
+   in replicate (n - length octStr - 1) '0'
    ++ octStr
    ++ putChar8 '\NUL'
 
 putChar8 :: Char -> String
 putChar8 c = [c]
-
-fill :: FieldWidth -> Char -> String
-fill n c = replicate n c
