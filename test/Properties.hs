@@ -67,6 +67,7 @@ main =
       adjustOption (\(QuickCheckMaxRatio n) -> QuickCheckMaxRatio (max n 100)) $
       testProperty "roundtrip" Pack.prop_roundtrip,
       testProperty "symlink" Pack.unit_roundtrip_symlink,
+      testProperty "unicode" Pack.unit_roundtrip_unicode,
       testProperty "long filepath" Pack.unit_roundtrip_long_filepath,
       testProperty "long symlink" Pack.unit_roundtrip_long_symlink
       ]

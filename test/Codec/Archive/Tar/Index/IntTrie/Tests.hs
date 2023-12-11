@@ -19,9 +19,8 @@ import Prelude hiding (lookup)
 import Codec.Archive.Tar.Index.IntTrie
 
 import qualified Data.Array.Unboxed as A
-import Data.Char
 import Data.Function (on)
-import Data.List hiding (lookup, insert)
+import qualified Data.List as L
 import Data.Word (Word32)
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
@@ -32,15 +31,11 @@ import Data.ByteString.Lazy.Builder     as BS
 #endif
 #if MIN_VERSION_containers(0,5,0)
 import qualified Data.IntMap.Strict     as IntMap
-import Data.IntMap.Strict (IntMap)
 #else
 import qualified Data.IntMap            as IntMap
-import Data.IntMap (IntMap)
 #endif
 
 import Test.QuickCheck
-import Control.Applicative ((<$>), (<*>))
-import Data.Bits
 import Data.Int
 
 -- Example mapping:
@@ -183,7 +178,7 @@ prop_completions paths =
           [ case l of
               Entry v          -> mkleaf k v
               Completions kls' -> mknode k (convertCompletions kls')
-          | (k, l) <- sortBy (compare `on` fst) kls ]
+          | (k, l) <- L.sortBy (compare `on` fst) kls ]
 
 
 prop_lookup_mono :: ValidPaths -> Property
@@ -194,8 +189,8 @@ prop_completions_mono (ValidPaths paths) = prop_completions paths
 
 prop_construct_toList :: ValidPaths -> Property
 prop_construct_toList (ValidPaths paths) =
-       sortBy (compare `on` fst) (toList (construct paths))
-    === sortBy (compare `on` fst) paths
+       L.sortBy (compare `on` fst) (toList (construct paths))
+    === L.sortBy (compare `on` fst) paths
 
 prop_finalise_unfinalise :: ValidPaths -> Property
 prop_finalise_unfinalise (ValidPaths paths) =
@@ -249,4 +244,4 @@ instance Arbitrary ValidPaths where
       nonEmpty = all (not . null . fst)
 
 isPrefixOfOther :: [Key] -> [Key] -> Bool
-isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
+isPrefixOfOther a b = a `L.isPrefixOf` b || b `L.isPrefixOf` a

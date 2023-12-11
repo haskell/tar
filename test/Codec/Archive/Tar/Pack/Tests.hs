@@ -8,28 +8,35 @@ module Codec.Archive.Tar.Pack.Tests
   , unit_roundtrip_symlink
   , unit_roundtrip_long_symlink
   , unit_roundtrip_long_filepath
+  , unit_roundtrip_unicode
   ) where
 
+import Data.Maybe
 import Control.DeepSeq
-import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.ByteString.Lazy.Char8 as B8
 import Data.Char
 import Data.FileEmbed
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Pack as Pack
-import Codec.Archive.Tar.Types (GenEntries(..), Entries, simpleEntry, toTarPath, GenEntry (entryTarPath))
+import Codec.Archive.Tar.Types (GenEntries(..), Entries, GenEntry (entryTarPath), toFSPosixPath')
 import qualified Codec.Archive.Tar.Unpack as Unpack
-import qualified Codec.Archive.Tar.Write as Write
 import Control.Exception
-import Data.List.NonEmpty (NonEmpty(..))
 import GHC.IO.Encoding
-import System.Directory
+import System.Directory.OsPath
 import System.FilePath
-import qualified System.FilePath.Posix as Posix
 import qualified System.Info
 import System.IO.Temp
 import System.IO.Unsafe
 import Test.Tasty.QuickCheck
+
+import qualified System.OsString as OS
+
+import System.OsPath (OsPath)
+import qualified System.OsPath as OSP
+import qualified System.File.OsPath as OSP
+import qualified System.OsString.Posix as PS
+import qualified System.OsPath.Posix as PFP
 
 supportsUnicode :: Bool
 supportsUnicode = unsafePerformIO $ do
@@ -46,64 +53,67 @@ supportsUnicode = unsafePerformIO $ do
 -- pack and unpack; read back and compare results.
 prop_roundtrip :: [String] -> String -> Property
 prop_roundtrip xss cnt
-  | x : xs <- filter (not . null) $ map mkFilePath xss
-  = ioProperty $ withSystemTempDirectory "tar-test" $ \baseDir -> do
+  | x : xs <- filter (not . OS.null) $ map mkFilePath xss
+  = ioProperty $ withSystemTempDirectory "tar-test" $ \baseDir' -> do
+    baseDir <- OSP.encodeFS baseDir'
     file : dirs <- pure $ trimUpToMaxPathLength baseDir (x : xs)
 
-    let relDir = joinPath dirs
-        absDir = baseDir </> relDir
-        relFile = relDir </> file
-        absFile = absDir </> file
-        errMsg = "relDir  = " ++ relDir ++
-               "\nabsDir  = " ++ absDir ++
-               "\nrelFile = " ++ relFile ++
-               "\nabsFile = " ++ absFile
+    let relDir = OSP.joinPath dirs
+        absDir = baseDir OSP.</> relDir
+        relFile = relDir OSP.</> file
+        absFile = absDir OSP.</> file
+        errMsg = "relDir  = " ++ fromJust (OSP.decodeUtf relDir) ++
+               "\nabsDir  = " ++ fromJust (OSP.decodeUtf absDir) ++
+               "\nrelFile = " ++ fromJust (OSP.decodeUtf relFile) ++
+               "\nabsFile = " ++ fromJust (OSP.decodeUtf absFile)
 
     -- Not all filesystems allow paths to contain arbitrary Unicode.
     -- E. g., at the moment of writing Apple FS does not support characters
     -- introduced in Unicode 15.0.
     canCreateDirectory <- try (createDirectoryIfMissing True absDir)
     case canCreateDirectory of
-      Left (e :: IOException) -> discard
+      Left (_ :: IOException) -> discard
       Right () -> do
-        canWriteFile <- try (writeFile absFile cnt)
+        canWriteFile <- try (OSP.writeFile absFile $ B8.pack cnt)
         case canWriteFile of
-          Left (e :: IOException) -> discard
+          Left (_ :: IOException) -> discard
           Right () -> counterexample errMsg <$> do
 
             -- Forcing the result, otherwise lazy IO misbehaves.
             !entries <- Pack.pack baseDir [relFile] >>= evaluate . force
 
             let fileNames
-                  = map (map (\c -> if c == Posix.pathSeparator then pathSeparator else c))
+                  = map (PS.map (\c -> if c == PFP.pathSeparator then PFP.pathSeparator else c))
                   $ Tar.foldEntries ((:) . entryTarPath) [] undefined
                   -- decodeLongNames produces FilePath with POSIX path separators
                   $ Tar.decodeLongNames $ foldr Next Done entries
 
-            if [relFile] /= fileNames then pure ([relFile] === fileNames) else do
+            let relFile' = toFSPosixPath' relFile
+            if [relFile'] /= fileNames then pure ([relFile'] === fileNames) else do
 
               -- Try hard to clean up
               removeFile absFile
-              writeFile absFile "<should be overwritten>"
+              OSP.writeFile absFile "<should be overwritten>"
               case dirs of
                 [] -> pure ()
-                d : _ -> removeDirectoryRecursive (baseDir </> d)
+                d : _ -> removeDirectoryRecursive (baseDir OSP.</> d)
 
               -- Unpack back
               Unpack.unpack baseDir (foldr Next Done entries :: Entries IOException)
               exist <- doesFileExist absFile
               if exist then do
-                cnt' <- readFile absFile >>= evaluate . force
-                pure $ cnt === cnt'
+                cnt' <- OSP.readFile absFile >>= evaluate . force
+                pure $ B8.pack cnt === cnt'
               else do
                 -- Forcing the result, otherwise lazy IO misbehaves.
                 recFiles <- Pack.getDirectoryContentsRecursive baseDir >>= evaluate . force
-                pure $ counterexample ("File " ++ absFile ++ " does not exist; instead found\n" ++ unlines recFiles) False
+                pure $ counterexample ("File " ++ fromJust (OSP.decodeUtf absFile)
+                                      ++ " does not exist; instead found\n" ++ unlines (fmap (fromJust . OSP.decodeUtf) recFiles)) False
 
   | otherwise = discard
 
-mkFilePath :: String -> FilePath
-mkFilePath xs = makeValid $ filter isGood $
+mkFilePath :: String -> OsPath
+mkFilePath xs = fromJust $ OSP.encodeUtf $ makeValid $ filter isGood $
   map (if supportsUnicode then id else chr . (`mod` 128) . ord) xs
   where
     isGood c
@@ -112,24 +122,15 @@ mkFilePath xs = makeValid $ filter isGood $
       && generalCategory c /= Surrogate
       && (supportsUnicode || isAscii c)
 
-trimUpToMaxPathLength :: FilePath -> [FilePath] -> [FilePath]
-trimUpToMaxPathLength baseDir = go (maxPathLength - utf8Length baseDir - 1)
+trimUpToMaxPathLength :: OsPath -> [OsPath] -> [OsPath]
+trimUpToMaxPathLength baseDir = go (maxPathLength - OS.length baseDir - 1)
   where
-    go :: Int -> [FilePath] -> [FilePath]
-    go cnt [] = []
+    go :: Int -> [OsPath] -> [OsPath]
+    go _ [] = []
     go cnt (x : xs)
-      | cnt < 4 = []
-      | cnt <= utf8Length x = [take (cnt `quot` 4) x]
-      | otherwise = x : go (cnt - utf8Length x - 1) xs
-
-utf8Length :: String -> Int
-utf8Length = sum . map charLength
-  where
-    charLength c
-      | c < chr 0x80 = 1
-      | c < chr 0x800 = 2
-      | c < chr 0x10000 = 3
-      | otherwise = 4
+      | cnt <= 0 = []
+      | cnt <= OS.length x = [OS.take cnt x]
+      | otherwise = x : go (cnt - OS.length x - 1) xs
 
 maxPathLength :: Int
 maxPathLength = case System.Info.os of
@@ -153,3 +154,10 @@ unit_roundtrip_long_symlink =
   let tar :: BL.ByteString = BL.fromStrict $(embedFile "test/data/long-symlink.tar")
       entries = Tar.foldEntries (:) [] (const []) (Tar.read tar)
   in Tar.write entries === tar
+
+unit_roundtrip_unicode :: Property
+unit_roundtrip_unicode =
+  let tar :: BL.ByteString = BL.fromStrict $(embedFile "test/data/unicode.tar")
+      entries = Tar.foldEntries (:) [] (const []) (Tar.read tar)
+  in Tar.write entries === tar
+

@@ -9,6 +9,8 @@
 --
 -----------------------------------------------------------------------------
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE CPP #-}
 
 module Codec.Archive.Tar.Types.Tests
   ( limitToV7FormatCompat
@@ -17,24 +19,25 @@ module Codec.Archive.Tar.Types.Tests
   , prop_fromTarPathToWindowsPath
   ) where
 
-import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
 
+import GHC.Stack (HasCallStack)
+
+import Data.Maybe
 import qualified Data.ByteString       as BS
-import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
 
-import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories, addTrailingPathSeparator )
-import qualified System.FilePath.Posix as FilePath.Posix
-         ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
-         , addTrailingPathSeparator )
-import qualified System.FilePath.Windows as FilePath.Windows
-         ( joinPath, splitDirectories, addTrailingPathSeparator )
-
 import Test.QuickCheck
-import Control.Applicative ((<$>), (<*>), pure)
 import Data.Word (Word16)
+
+import System.OsString.Internal.Types (OsString(..))
+import qualified System.OsString.Posix as PS
+
+import System.OsPath         (OsPath)
+import System.OsPath.Windows (WindowsPath)
+import System.OsPath.Posix   (PosixPath)
+import qualified System.OsPath as OSP
+import qualified System.OsPath.Posix as PFP
 
 prop_fromTarPath :: TarPath -> Property
 prop_fromTarPath tp = fromTarPath tp === fromTarPathRef tp
@@ -45,38 +48,24 @@ prop_fromTarPathToPosixPath tp = fromTarPathToPosixPath tp === fromTarPathToPosi
 prop_fromTarPathToWindowsPath :: TarPath -> Property
 prop_fromTarPathToWindowsPath tp = fromTarPathToWindowsPath tp === fromTarPathToWindowsPathRef tp
 
-fromTarPathRef :: TarPath -> FilePath
-fromTarPathRef (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
-                          ++ FilePath.Posix.splitDirectories name
-  where
-    name   = BS.Char8.unpack $ posixToByteString namebs
-    prefix = BS.Char8.unpack $ posixToByteString prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Native.addTrailingPathSeparator
-                    | otherwise = id
+fromTarPathRef :: TarPath -> OsPath
+#if defined(mingw32_HOST_OS)
+fromTarPathRef = OsString . fromTarPathToWindowsPathRef
+#else
+fromTarPathRef = OsString . fromTarPathToPosixPathRef
+#endif
 
-fromTarPathToPosixPathRef :: TarPath -> FilePath
-fromTarPathToPosixPathRef (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
-                         ++ FilePath.Posix.splitDirectories name
-  where
-    name   = BS.Char8.unpack $ posixToByteString namebs
-    prefix = BS.Char8.unpack $ posixToByteString prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Posix.addTrailingPathSeparator
-                    | otherwise = id
+fromTarPathToWindowsPathRef :: HasCallStack => TarPath -> WindowsPath
+fromTarPathToWindowsPathRef tarPath =
+  let posix = fromTarPathToPosixPathRef tarPath
+  in toWindowsPath posix
 
-fromTarPathToWindowsPathRef :: TarPath -> FilePath
-fromTarPathToWindowsPathRef (TarPath namebs prefixbs) = adjustDirectory $
-  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
-                           ++ FilePath.Posix.splitDirectories name
-  where
-    name   = BS.Char8.unpack $ posixToByteString namebs
-    prefix = BS.Char8.unpack $ posixToByteString prefixbs
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
-                    = FilePath.Windows.addTrailingPathSeparator
-                    | otherwise = id
+fromTarPathToPosixPathRef :: TarPath -> PosixPath
+fromTarPathToPosixPathRef (TarPath name prefix)
+  | PS.null prefix = name
+  | PS.null name = prefix
+  | otherwise = prefix <> PS.cons PFP.pathSeparator name
+
 
 instance (Arbitrary tarPath, Arbitrary linkTarget) => Arbitrary (GenEntry tarPath linkTarget) where
   arbitrary = do
@@ -101,29 +90,33 @@ instance (Arbitrary tarPath, Arbitrary linkTarget) => Arbitrary (GenEntry tarPat
 instance Arbitrary TarPath where
   arbitrary = either error id
             . toTarPath False
-            . FilePath.Posix.joinPath
+            . OSP.joinPath
+            . fmap (fromJust . OSP.encodeUtf)
           <$> listOf1ToN (255 `div` 5)
                          (elements (map (replicate 4) "abcd"))
 
   shrink = map (either error id . toTarPath False)
-         . map FilePath.Posix.joinPath
+         . map OSP.joinPath
          . filter (not . null)
          . shrinkList shrinkNothing
-         . FilePath.Posix.splitPath
+         . OSP.splitPath
+         . fromPosixPath
          . fromTarPathToPosixPath
 
 instance Arbitrary LinkTarget where
-  arbitrary = maybe (error "link target too large") id
+  arbitrary = either (const $ error "link target too large") id
             . toLinkTarget
-            . FilePath.Native.joinPath
+            . OSP.joinPath
+            . fmap (fromJust . OSP.encodeUtf)
           <$> listOf1ToN (100 `div` 5)
                          (elements (map (replicate 4) "abcd"))
 
-  shrink = map (maybe (error "link target too large") id . toLinkTarget)
-         . map FilePath.Posix.joinPath
+  shrink = map (either (const $ error "link target too large") id . toLinkTarget)
+         . map OSP.joinPath
          . filter (not . null)
          . shrinkList shrinkNothing
-         . FilePath.Posix.splitPath
+         . OSP.splitPath
+         . fromPosixPath
          . fromLinkTargetToPosixPath
 
 
@@ -174,12 +167,20 @@ instance Arbitrary BS.ByteString where
   arbitrary = fmap BS.pack arbitrary
   shrink    = map BS.pack . shrink . BS.unpack
 
+instance Arbitrary PS.PosixString where
+  arbitrary = fmap PS.pack arbitrary
+  shrink    = map PS.pack . shrink . PS.unpack
+
+instance Arbitrary PS.PosixChar where
+  arbitrary = PS.unsafeFromChar <$> arbitrary
+  shrink    = map PS.unsafeFromChar . shrink . PS.toChar
+
 instance Arbitrary Ownership where
   arbitrary = Ownership <$> name <*> name
                         <*> idno <*> idno
     where
       -- restrict user/group to posix ^[a-z][-a-z0-9]{0,30}$
-      name = do
+      name = fromJust . PFP.encodeUtf <$> do
         first <- choose ('a', 'z')
         rest <- listOf0ToN 30 (oneof [choose ('a', 'z'), choose ('0', '9'), pure '-'])
         return $ first : rest
@@ -216,8 +217,8 @@ limitToV7FormatCompat entry@Entry { entryFormat = V7Format } =
         other               -> other,
 
       entryOwnership = (entryOwnership entry) {
-        groupName = "",
-        ownerName = ""
+        groupName = mempty,
+        ownerName = mempty
       },
 
       entryTarPath = let TarPath name _prefix = entryTarPath entry

@@ -19,17 +19,24 @@ import System.IO             (hPutStrLn, stderr)
 import Data.Time             (formatTime, defaultTimeLocale)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 
+import System.OsPath.Posix   (PosixPath)
+import qualified System.OsPath as OSP
+
+
 main :: IO ()
 main = do
   (opts, files) <- parseOptions =<< getArgs
   main' opts files
 
 main' :: Options -> [FilePath] -> IO ()
-main' (Options { optFile        = file,
-                 optDir         = dir,
+main' (Options { optFile        = file',
+                 optDir         = dir',
                  optAction      = action,
                  optCompression = compression,
-                 optVerbosity   = verbosity }) files =
+                 optVerbosity   = verbosity }) files' = do
+  file  <- OSP.encodeFS file'
+  dir   <- OSP.encodeFS dir'
+  files <- mapM OSP.encodeFS files'
   case action of
     NoAction -> die ["No action given. Specify one of -c, -t or -x."]
     Help     -> printUsage
@@ -39,13 +46,13 @@ main' (Options { optFile        = file,
     List     -> printEntries . Tar.read . decompress compression =<< input
     Append    | compression /= None
              -> die ["Append cannot be used together with compression."]
-              | file == "-"
+              | file' == "-"
              -> die ["Append must be used on a file, not stdin/stdout."]
               | otherwise
              -> Tar.append file dir files
   where
-    input  = if file == "-" then BS.getContents else BS.readFile  file
-    output = if file == "-" then BS.putStr      else BS.writeFile file
+    input  = if file' == "-" then BS.getContents else BS.readFile  file'
+    output = if file' == "-" then BS.putStr      else BS.writeFile file'
 
     printEntries :: Tar.Entries Tar.FormatError -> IO ()
     printEntries = Tar.foldEntries (\entry rest -> printEntry entry >> rest)
@@ -72,16 +79,16 @@ data Verbosity = Verbose | Concise
 ------------------------
 -- List archive contents
 
-entryInfo :: Verbosity -> Tar.GenEntry FilePath FilePath -> String
+entryInfo :: Verbosity -> Tar.GenEntry PosixPath PosixPath -> String
 entryInfo Verbose = detailedInfo
-entryInfo Concise = Tar.entryTarPath
+entryInfo Concise = show . Tar.entryTarPath
 
-detailedInfo :: Tar.GenEntry FilePath FilePath -> String
+detailedInfo :: Tar.GenEntry PosixPath PosixPath -> String
 detailedInfo entry =
   unwords [ typeCode : permissions
           , justify 19 (owner ++ '/' : group) size
           , time
-          , name ++ link ]
+          , show name ++ link ]
   where
     typeCode = case Tar.entryContent entry of
       Tar.HardLink        _   -> 'h'
@@ -107,7 +114,7 @@ detailedInfo entry =
     group = nameOrID groupName groupId
     (Tar.Ownership ownerName groupName ownerId groupId) =
       Tar.entryOwnership entry
-    nameOrID n i = if null n then show i else n
+    nameOrID n i = if n == mempty then show i else show n
     size = case Tar.entryContent entry of
              Tar.NormalFile _ fileSize -> show fileSize
              _                         -> "0"
@@ -115,8 +122,8 @@ detailedInfo entry =
     time = formatEpochTime "%Y-%m-%d %H:%M" (Tar.entryTime entry)
     name = Tar.entryTarPath entry
     link = case Tar.entryContent entry of
-      Tar.HardLink     l -> " link to " ++ l
-      Tar.SymbolicLink l -> " -> "      ++ l
+      Tar.HardLink     l -> " link to " ++ show l
+      Tar.SymbolicLink l -> " -> "      ++ show l
       _                  -> ""
 
 justify :: Int -> String -> String -> String
@@ -214,3 +221,4 @@ die errs = do
   mapM_ (\e -> hPutStrLn stderr $ "htar: " ++ e) errs
   hPutStrLn stderr "Try `htar --help' for more information."
   exitFailure
+

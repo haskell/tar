@@ -63,16 +63,6 @@ jobs:
             compilerVersion: 8.8.4
             setup-method: hvr-ppa
             allow-failure: false
-          - compiler: ghc-8.6.5
-            compilerKind: ghc
-            compilerVersion: 8.6.5
-            setup-method: hvr-ppa
-            allow-failure: false
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: hvr-ppa
-            allow-failure: false
       fail-fast: false
     steps:
       - name: apt
@@ -211,7 +201,7 @@ jobs:
           echo "    ghc-options: -Werror=missing-methods" >> cabal.project
           cat >> cabal.project <<EOF
           EOF
-          $HCPKG list --simple-output --names-only | perl -ne 'for (split /\s+/) { print "constraints: $_ installed\n" unless /^(bytestring|directory|htar|tar|unix)$/; }' >> cabal.project.local
+          $HCPKG list --simple-output --names-only | perl -ne 'for (split /\s+/) { print "constraints: $_ installed\n" unless /^(bytestring|directory|htar|tar|unix|filepath)$/; }' >> cabal.project.local
           cat cabal.project
           cat cabal.project.local
       - name: dump install plan

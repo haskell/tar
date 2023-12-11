@@ -3,6 +3,8 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 {-# OPTIONS_HADDOCK hide #-}
 -----------------------------------------------------------------------------
@@ -40,15 +42,19 @@ module Codec.Archive.Tar.Check.Internal (
 import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.Types
 import Control.Applicative ((<|>))
-import qualified Data.ByteString.Lazy.Char8 as Char8
-import Data.Maybe (fromMaybe)
 import Data.Typeable (Typeable)
 import Control.Exception (Exception(..))
-import qualified System.FilePath as FilePath.Native
-         ( splitDirectories, isAbsolute, isValid, (</>), takeDirectory, hasDrive )
 
-import qualified System.FilePath.Windows as FilePath.Windows
-import qualified System.FilePath.Posix   as FilePath.Posix
+import System.OsPath (OsPath)
+import System.OsPath.Posix   (PosixPath)
+import qualified System.OsPath as OSP
+import qualified System.OsPath.Posix as PFP
+import qualified System.OsPath.Windows as WFP
+
+import System.OsString.Posix (pstr)
+import System.OsString (osstr)
+import qualified System.OsString.Posix as PS
+import qualified System.OsString.Windows as WS
 
 
 --------------------------
@@ -78,57 +84,79 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- such as exhaustion of file handlers.
 checkSecurity
   :: Entries e
-  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
+  -> GenEntries PosixPath PosixPath (Either (Either e DecodeLongNamesError) FileNameError)
 checkSecurity = checkEntries checkEntrySecurity . decodeLongNames
 
 -- | Worker of 'Codec.Archive.Tar.Check.checkSecurity'.
 --
 -- @since 0.6.0.0
-checkEntrySecurity :: GenEntry FilePath FilePath -> Maybe FileNameError
+checkEntrySecurity :: GenEntry PosixPath PosixPath -> Maybe FileNameError
 checkEntrySecurity e =
   check (entryTarPath e) <|>
   case entryContent e of
     HardLink     link ->
       check link
     SymbolicLink link ->
-      check (FilePath.Posix.takeDirectory (entryTarPath e) FilePath.Posix.</> link)
+      check (PFP.takeDirectory (entryTarPath e) PFP.</> link)
     _ -> Nothing
   where
+    checkPosix :: PosixPath -> Maybe FileNameError
     checkPosix name
-      | FilePath.Posix.isAbsolute name
+      | PFP.isAbsolute name
       = Just $ AbsoluteFileName name
-      | not (FilePath.Posix.isValid name)
+      | not (PFP.isValid name)
       = Just $ InvalidFileName name
-      | not (isInsideBaseDir (FilePath.Posix.splitDirectories name))
+      | not (isInsideBaseDir (PFP.splitDirectories name))
       = Just $ UnsafeLinkTarget name
       | otherwise = Nothing
 
-    checkNative (fromFilePathToNative -> name)
-      | FilePath.Native.isAbsolute name || FilePath.Native.hasDrive name
-      = Just $ AbsoluteFileName name
-      | not (FilePath.Native.isValid name)
-      = Just $ InvalidFileName name
-      | not (isInsideBaseDir (FilePath.Native.splitDirectories name))
-      = Just $ UnsafeLinkTarget name
-      | otherwise = Nothing
+    checkNative :: PosixPath -> Maybe FileNameError
+    checkNative name'
+      | OSP.isAbsolute name || OSP.hasDrive name
+      = Just $ AbsoluteFileName name'
+      | not (OSP.isValid name)
+      = Just $ InvalidFileName name'
+      | not (isInsideBaseDir' (OSP.splitDirectories name))
+      = Just $ UnsafeLinkTarget name'
+      | otherwise
+      = Nothing
+     where
+      name = fromPosixPath name'
 
-    check name = checkPosix name <|> checkNative (fromFilePathToNative name)
+    check name = checkPosix name <|> checkNative name
 
-isInsideBaseDir :: [FilePath] -> Bool
+isInsideBaseDir :: [PosixPath] -> Bool
 isInsideBaseDir = go 0
   where
-    go :: Word -> [FilePath] -> Bool
+    go :: Word -> [PosixPath] -> Bool
     go !_ [] = True
-    go 0 (".." : _) = False
-    go lvl (".." : xs) = go (lvl - 1) xs
-    go lvl ("." : xs) = go lvl xs
+    go 0 (x : _)
+      | x == [pstr|..|] = False
+    go lvl (x : xs)
+      | x == [pstr|..|] = go (lvl - 1) xs
+    go lvl (x : xs)
+      | x == [pstr|.|] = go lvl xs
+    go lvl (_ : xs) = go (lvl + 1) xs
+
+isInsideBaseDir' :: [OsPath] -> Bool
+isInsideBaseDir' = go 0
+  where
+    go :: Word -> [OsPath] -> Bool
+    go !_ [] = True
+    go 0 (x : _)
+      | x == [osstr|..|] = False
+    go lvl (x : xs)
+      | x == [osstr|..|] = go (lvl - 1) xs
+    go lvl (x : xs)
+      | x == [osstr|.|] = go lvl xs
     go lvl (_ : xs) = go (lvl + 1) xs
 
 -- | Errors arising from tar file names being in some way invalid or dangerous
 data FileNameError
-  = InvalidFileName FilePath
-  | AbsoluteFileName FilePath
-  | UnsafeLinkTarget FilePath
+  = InvalidFileName PosixPath
+  | AbsoluteFileName PosixPath
+  | UnsafeLinkTarget PosixPath
+  | FileNameDecodingFailure PosixPath
   -- ^ @since 0.6.0.0
   deriving (Typeable)
 
@@ -142,6 +170,7 @@ showFileNameError mb_plat err = case err of
     InvalidFileName  path -> "Invalid"  ++ plat ++ " file name in tar archive: " ++ show path
     AbsoluteFileName path -> "Absolute" ++ plat ++ " file name in tar archive: " ++ show path
     UnsafeLinkTarget path -> "Unsafe"   ++ plat ++ " link target in tar archive: " ++ show path
+    FileNameDecodingFailure path -> "Decoding failure of path " ++ show path
   where plat = maybe "" (' ':) mb_plat
 
 
@@ -167,9 +196,9 @@ showFileNameError mb_plat err = case err of
 -- Not only it is faster, but also alleviates issues with lazy I/O
 -- such as exhaustion of file handlers.
 checkTarbomb
-  :: FilePath
+  :: PosixPath
   -> Entries e
-  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) TarBombError)
+  -> GenEntries PosixPath PosixPath (Either (Either e DecodeLongNamesError) TarBombError)
 checkTarbomb expectedTopDir
   = checkEntries (checkEntryTarbomb expectedTopDir)
   . decodeLongNames
@@ -177,7 +206,7 @@ checkTarbomb expectedTopDir
 -- | Worker of 'checkTarbomb'.
 --
 -- @since 0.6.0.0
-checkEntryTarbomb :: FilePath -> GenEntry FilePath linkTarget -> Maybe TarBombError
+checkEntryTarbomb :: PosixPath -> GenEntry PosixPath linkTarget -> Maybe TarBombError
 checkEntryTarbomb expectedTopDir entry = do
   case entryContent entry of
     -- Global extended header aka XGLTYPE aka pax_global_header
@@ -186,7 +215,7 @@ checkEntryTarbomb expectedTopDir entry = do
     -- Extended header referring to the next file in the archive aka XHDTYPE
     OtherEntryType 'x' _ _ -> Nothing
     _                      ->
-      case FilePath.Posix.splitDirectories (entryTarPath entry) of
+      case PFP.splitDirectories (entryTarPath entry) of
         (topDir:_) | topDir == expectedTopDir -> Nothing
         _ -> Just $ TarBombError expectedTopDir (entryTarPath entry)
 
@@ -194,10 +223,10 @@ checkEntryTarbomb expectedTopDir entry = do
 -- files outside of the intended directory.
 data TarBombError
   = TarBombError
-    FilePath -- ^ Path inside archive.
+    PosixPath -- ^ Path inside archive.
              --
              -- @since 0.6.0.0
-    FilePath -- ^ Expected top directory.
+    PosixPath -- ^ Expected top directory.
   deriving (Typeable)
 
 instance Exception TarBombError
@@ -236,13 +265,13 @@ instance Show TarBombError where
 -- such as exhaustion of file handlers.
 checkPortability
   :: Entries e
-  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) PortabilityError)
+  -> GenEntries PosixPath PosixPath (Either (Either e DecodeLongNamesError) PortabilityError)
 checkPortability = checkEntries checkEntryPortability . decodeLongNames
 
 -- | Worker of 'checkPortability'.
 --
 -- @since 0.6.0.0
-checkEntryPortability :: GenEntry FilePath linkTarget -> Maybe PortabilityError
+checkEntryPortability :: GenEntry PosixPath linkTarget -> Maybe PortabilityError
 checkEntryPortability entry
   | entryFormat entry `elem` [V7Format, GnuFormat]
   = Just $ NonPortableFormat (entryFormat entry)
@@ -250,29 +279,30 @@ checkEntryPortability entry
   | not (portableFileType (entryContent entry))
   = Just NonPortableFileType
 
-  | not (all portableChar posixPath)
+  | not (PS.all portableChar posixPath)
   = Just $ NonPortableEntryNameChar posixPath
 
-  | not (FilePath.Posix.isValid posixPath)
+  | not (PFP.isValid posixPath)
   = Just $ NonPortableFileName "unix"    (InvalidFileName posixPath)
-  | not (FilePath.Windows.isValid windowsPath)
-  = Just $ NonPortableFileName "windows" (InvalidFileName windowsPath)
+  | not (WFP.isValid windowsPath)
+  = Just $ NonPortableFileName "windows" (InvalidFileName posixPath)
 
-  | FilePath.Posix.isAbsolute posixPath
+  | PFP.isAbsolute posixPath
   = Just $ NonPortableFileName "unix"    (AbsoluteFileName posixPath)
-  | FilePath.Windows.isAbsolute windowsPath
-  = Just $ NonPortableFileName "windows" (AbsoluteFileName windowsPath)
+  | WFP.isAbsolute windowsPath
+  = Just $ NonPortableFileName "windows" (AbsoluteFileName posixPath)
 
-  | any (=="..") (FilePath.Posix.splitDirectories posixPath)
+  | any (== [PS.pstr|..|]) (PFP.splitDirectories posixPath)
   = Just $ NonPortableFileName "unix"    (InvalidFileName posixPath)
-  | any (=="..") (FilePath.Windows.splitDirectories windowsPath)
-  = Just $ NonPortableFileName "windows" (InvalidFileName windowsPath)
+  | any (== [WS.pstr|..|]) (WFP.splitDirectories windowsPath)
+  = Just $ NonPortableFileName "windows" (InvalidFileName posixPath)
 
-  | otherwise = Nothing
+  | otherwise
+  = Nothing
 
   where
-    posixPath   = entryTarPath entry
-    windowsPath = fromFilePathToWindowsPath posixPath
+    posixPath          = entryTarPath entry
+    windowsPath        = toWindowsPath posixPath
 
     portableFileType ftype = case ftype of
       NormalFile   {} -> True
@@ -281,14 +311,15 @@ checkEntryPortability entry
       Directory       -> True
       _               -> False
 
-    portableChar c = c <= '\127'
+    portableChar c = PS.toChar c <= '\127'
 
 -- | Portability problems in a tar archive
 data PortabilityError
   = NonPortableFormat Format
   | NonPortableFileType
-  | NonPortableEntryNameChar FilePath
+  | NonPortableEntryNameChar PosixPath
   | NonPortableFileName PortabilityPlatform FileNameError
+  | NonPortableDecodingFailure PosixPath
   deriving (Typeable)
 
 -- | The name of a platform that portability issues arise from
@@ -306,6 +337,8 @@ instance Show PortabilityError where
     = "Non-portable character in archive entry name: " ++ show posixPath
   show (NonPortableFileName platform err)
     = showFileNameError (Just platform) err
+  show (NonPortableDecodingFailure posixPath)
+    = "Decoding failure of path " ++ show posixPath
 
 --------------------------
 -- Utils

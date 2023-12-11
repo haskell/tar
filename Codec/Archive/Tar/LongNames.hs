@@ -13,8 +13,9 @@ import Codec.Archive.Tar.Types
 import Control.Exception
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
-import "os-string" System.OsString.Posix (PosixString, PosixChar)
 import qualified "os-string" System.OsString.Posix as PS
+
+import System.OsPath.Posix   (PosixPath)
 
 -- | Errors raised by 'decodeLongNames'.
 --
@@ -38,7 +39,7 @@ instance Exception DecodeLongNamesError
 --
 -- @since 0.6.0.0
 encodeLongNames
-  :: GenEntry FilePath FilePath
+  :: GenEntry PosixPath PosixPath
   -> [Entry]
 encodeLongNames e = maybe id (:) mEntry $ maybe id (:) mEntry' [e'']
   where
@@ -46,16 +47,16 @@ encodeLongNames e = maybe id (:) mEntry $ maybe id (:) mEntry' [e'']
     (mEntry', e'') = encodeTarPath e'
 
 encodeTarPath
-  :: GenEntry FilePath linkTarget
+  :: GenEntry PosixPath linkTarget
   -> (Maybe (GenEntry TarPath whatever), GenEntry TarPath linkTarget)
   -- ^ (LongLink entry, actual entry)
-encodeTarPath e = case toTarPath' (entryTarPath e) of
+encodeTarPath e = case splitLongPath (entryTarPath e) of
   FileNameEmpty -> (Nothing, e { entryTarPath = TarPath mempty mempty })
   FileNameOK tarPath -> (Nothing, e { entryTarPath = tarPath })
   FileNameTooLong tarPath -> (Just $ longLinkEntry $ entryTarPath e, e { entryTarPath = tarPath })
 
 encodeLinkTarget
-  :: GenEntry tarPath FilePath
+  :: GenEntry tarPath PosixPath
   -> (Maybe (GenEntry TarPath LinkTarget), GenEntry tarPath LinkTarget)
   -- ^ (LongLink symlink entry, actual entry)
 encodeLinkTarget e = case entryContent e of
@@ -71,9 +72,9 @@ encodeLinkTarget e = case entryContent e of
   OtherEntryType x y z -> (Nothing, e { entryContent = OtherEntryType x y z })
 
 encodeLinkPath
-  :: FilePath
+  :: PosixPath
   -> (Maybe (GenEntry TarPath LinkTarget), LinkTarget)
-encodeLinkPath lnk = case toTarPath' lnk of
+encodeLinkPath lnk = case splitLongPath lnk of
   FileNameEmpty -> (Nothing, LinkTarget mempty)
   FileNameOK (TarPath name prefix)
     | PS.null prefix -> (Nothing, LinkTarget name)
@@ -91,10 +92,10 @@ encodeLinkPath lnk = case toTarPath' lnk of
 -- @since 0.6.0.0
 decodeLongNames
   :: Entries e
-  -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+  -> GenEntries PosixPath PosixPath (Either e DecodeLongNamesError)
 decodeLongNames = go Nothing Nothing
   where
-    go :: Maybe FilePath -> Maybe FilePath -> Entries e -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+    go :: Maybe PosixPath -> Maybe PosixPath -> Entries e -> GenEntries PosixPath PosixPath (Either e DecodeLongNamesError)
     go _ _ (Fail err) = Fail (Left err)
     go _ _ Done = Done
 
@@ -137,17 +138,16 @@ decodeLongNames = go Nothing Nothing
       _ ->
         Fail $ Right NoLinkEntryAfterTypeKEntry
 
-otherEntryPayloadToFilePath :: BL.ByteString -> FilePath
-otherEntryPayloadToFilePath =
-  fromPosixString . byteToPosixString . B.takeWhile (/= '\0') . BL.toStrict
+otherEntryPayloadToFilePath :: BL.ByteString -> PosixPath
+otherEntryPayloadToFilePath = byteToPosixString . B.takeWhile (/= '\0') . BL.toStrict
 
-castEntry :: Entry -> GenEntry FilePath FilePath
+castEntry :: Entry -> GenEntry PosixPath PosixPath
 castEntry e = e
   { entryTarPath = fromTarPathToPosixPath (entryTarPath e)
   , entryContent = castEntryContent (entryContent e)
   }
 
-castEntryContent :: EntryContent -> GenEntryContent FilePath
+castEntryContent :: EntryContent -> GenEntryContent PosixPath
 castEntryContent = \case
   NormalFile x y -> NormalFile x y
   Directory -> Directory
