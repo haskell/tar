@@ -384,13 +384,15 @@ fromTarPathToWindowsPath :: TarPath -> FilePath
 fromTarPathToWindowsPath = BS.Char8.unpack . fromTarPathInternal FilePath.Windows.pathSeparator
 
 fromTarPathInternal :: Char -> TarPath -> BS.ByteString
-fromTarPathInternal sep (TarPath name prefix)
-  | BS.null prefix = adjustSeps name
-  | BS.null name = adjustSeps prefix
-  | sep == FilePath.Posix.pathSeparator = prefix <> BS.Char8.cons sep name
-  | otherwise = adjustSeps prefix <> BS.Char8.cons sep (adjustSeps name)
+fromTarPathInternal sep = go
   where
-    adjustSeps = BS.Char8.map $ \c -> if c == FilePath.Posix.pathSeparator then sep else c
+    posixSep = FilePath.Posix.pathSeparator
+    adjustSeps = if sep == posixSep then id else
+      BS.Char8.map $ \c -> if c == posixSep then sep else c
+    go (TarPath name prefix)
+     | BS.null prefix = adjustSeps name
+     | BS.null name = adjustSeps prefix
+     | otherwise = adjustSeps prefix <> BS.Char8.cons sep (adjustSeps name)
 {-# INLINE fromTarPathInternal #-}
 
 -- | Convert a native 'FilePath' to a 'TarPath'.
@@ -528,21 +530,20 @@ fromLinkTargetToWindowsPath (LinkTarget pathbs) =
 
 -- | Convert a unix FilePath to a native 'FilePath'.
 fromFilePathToNative :: FilePath -> FilePath
-fromFilePathToNative path = adjustDirectory $
-  FilePath.Native.joinPath $ FilePath.Posix.splitDirectories path
-  where
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
-                    = FilePath.Native.addTrailingPathSeparator
-                    | otherwise = id
+fromFilePathToNative =
+  fromFilePathInternal FilePath.Posix.pathSeparator FilePath.Native.pathSeparator
 
 -- | Convert a unix FilePath to a Windows 'FilePath'.
 fromFilePathToWindowsPath :: FilePath -> FilePath
-fromFilePathToWindowsPath path = adjustDirectory $
-  FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories path
+fromFilePathToWindowsPath =
+  fromFilePathInternal FilePath.Posix.pathSeparator FilePath.Windows.pathSeparator
+
+fromFilePathInternal :: Char -> Char -> FilePath -> FilePath
+fromFilePathInternal fromSep toSep = adjustSeps
   where
-    adjustDirectory | FilePath.Posix.hasTrailingPathSeparator path
-                    = FilePath.Windows.addTrailingPathSeparator
-                    | otherwise = id
+    adjustSeps = if fromSep == toSep then id else
+      map $ \c -> if c == fromSep then toSep else c
+{-# INLINE fromFilePathInternal #-}
 
 --
 -- * Entries type
