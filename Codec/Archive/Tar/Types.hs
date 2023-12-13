@@ -196,12 +196,14 @@ data Format =
    | GnuFormat
   deriving (Eq, Ord, Show)
 
-instance NFData (GenEntry tarPath linkTarget) where
-  rnf (Entry _ c _ _ _ _) = rnf c
+instance (NFData tarPath, NFData linkTarget) => NFData (GenEntry tarPath linkTarget) where
+  rnf (Entry p c _ _ _ _) = rnf p `seq` rnf c
 
-instance NFData (GenEntryContent linkTarget) where
+instance NFData linkTarget => NFData (GenEntryContent linkTarget) where
   rnf x = case x of
       NormalFile       c _  -> rnf c
+      SymbolicLink lnk      -> rnf lnk
+      HardLink lnk          -> rnf lnk
       OtherEntryType _ c _  -> rnf c
       _                     -> seq x ()
 
@@ -666,7 +668,7 @@ instance Monoid (GenEntries tarPath linkTarget e) where
   mempty  = Done
   mappend = (Sem.<>)
 
-instance NFData e => NFData (GenEntries tarPath linkTarget e) where
+instance (NFData tarPath, NFData linkTarget, NFData e) => NFData (GenEntries tarPath linkTarget e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e
