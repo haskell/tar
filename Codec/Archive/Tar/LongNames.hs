@@ -12,6 +12,8 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
 
 -- | Errors raised by 'decodeLongNames'.
+--
+-- @since 0.6.0.0
 data DecodeLongNamesError
   = TwoTypeKEntries
   -- ^ Two adjacent 'OtherEntryType' @\'K\'@ nodes.
@@ -28,6 +30,8 @@ instance Exception DecodeLongNamesError
 -- 'OtherEntryType' @\'K\'@ and 'OtherEntryType' @\'L\'@ nodes.
 --
 -- Input 'FilePath's must be POSIX file names, not native ones.
+--
+-- @since 0.6.0.0
 encodeLongNames
   :: GenEntry FilePath FilePath
   -> [Entry]
@@ -78,6 +82,8 @@ encodeLinkPath lnk = case toTarPath' lnk of
 -- 'OtherEntryType' @\'K\'@ and 'OtherEntryType' @\'L\'@ nodes.
 --
 -- Resolved 'FilePath's are still POSIX file names, not native ones.
+--
+-- @since 0.6.0.0
 decodeLongNames
   :: Entries e
   -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
