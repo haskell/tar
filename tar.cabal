@@ -4,7 +4,7 @@ license:         BSD3
 license-file:    LICENSE
 author:          Duncan Coutts <duncan@community.haskell.org>
                  Bjorn Bringert <bjorn@bringert.net>
-maintainer:      Duncan Coutts <duncan@community.haskell.org>
+maintainer:      Bodigrim <andrew.lelechenko@gmail.com>
 bug-reports:     https://github.com/haskell/tar/issues
 copyright:       2007 Bjorn Bringert <bjorn@bringert.net>
                  2008-2016 Duncan Coutts <duncan@community.haskell.org>
