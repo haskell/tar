@@ -65,6 +65,7 @@ module Codec.Archive.Tar.Types (
   foldEntries,
   foldlEntries,
   unfoldEntries,
+  unfoldEntriesM,
   ) where
 
 import Data.Int      (Int64)
@@ -603,6 +604,21 @@ unfoldEntries f = unfold
       Left err             -> Fail err
       Right Nothing        -> Done
       Right (Just (e, x')) -> Next e (unfold x')
+
+unfoldEntriesM
+  :: Monad m
+  => (forall a. m a -> m a)
+  -- ^ id or unsafeInterleaveIO
+  -> m (Either e (Maybe (GenEntry tarPath linkTarget)))
+  -> m (GenEntries tarPath linkTarget e)
+unfoldEntriesM interleave f = unfold
+  where
+    unfold = do
+      f' <- f
+      case f' of
+        Left err       -> pure $ Fail err
+        Right Nothing  -> pure Done
+        Right (Just e) -> Next e <$> interleave unfold
 
 -- | This is like the standard 'foldr' function on lists, but for 'Entries'.
 -- Compared to 'foldr' it takes an extra function to account for the
