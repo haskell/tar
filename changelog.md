@@ -10,7 +10,8 @@
     * Functions working on entries have been generalized to more polymorphic types,
       where possible.
     * Modules which used to `import Codec.Archive.Tar (Entry(..))` should now
-      `import Codec.Archive.Tar (GenEntry(..), Entry)` and similar for other `Gen`-types.
+      `import Codec.Archive.Tar (Entry, pattern Entry)` and similar for other `Gen`-types.
+      Another option is import the entire module qualified.
   * Redesign `Codec.Archive.Tar.Check`.
     * Change types of `checkSecurity`, `checkTarbomb`, `checkPortability`.
     * Add offending path as new field to `TarBombError` constructor.
