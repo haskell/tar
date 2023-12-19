@@ -495,7 +495,7 @@ splitLongPath path = case reverse (FilePath.Posix.splitPath path) of
 -- | The tar format allows just 100 ASCII characters for the 'SymbolicLink' and
 -- 'HardLink' entry types.
 --
-newtype LinkTarget = LinkTarget BS.ByteString
+newtype LinkTarget = LinkTarget PosixString
   deriving (Eq, Ord, Show)
 
 instance NFData LinkTarget where
@@ -508,7 +508,7 @@ toLinkTarget :: FilePath -> Maybe LinkTarget
 toLinkTarget path
   | length path <= 100 = do
     target <- toLinkTarget' path
-    Just $! LinkTarget (packAscii target)
+    Just $! LinkTarget (toPosixString target)
   | otherwise = Nothing
 
 data LinkTargetException = IsAbsolute FilePath
@@ -532,16 +532,16 @@ toLinkTarget' path
 
 -- | Convert a tar 'LinkTarget' to a native 'FilePath'.
 fromLinkTarget :: LinkTarget -> FilePath
-fromLinkTarget (LinkTarget pathbs) = fromFilePathToNative $ BS.Char8.unpack pathbs
+fromLinkTarget (LinkTarget pathbs) = fromFilePathToNative $ fromPosixString pathbs
 
 -- | Convert a tar 'LinkTarget' to a Unix\/POSIX 'FilePath' (@\'/\'@ path separators).
 fromLinkTargetToPosixPath :: LinkTarget -> FilePath
-fromLinkTargetToPosixPath (LinkTarget pathbs) = BS.Char8.unpack pathbs
+fromLinkTargetToPosixPath (LinkTarget pathbs) = fromPosixString pathbs
 
 -- | Convert a tar 'LinkTarget' to a Windows 'FilePath' (@\'\\\\\'@ path separators).
 fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
 fromLinkTargetToWindowsPath (LinkTarget pathbs) =
-  fromFilePathToWindowsPath $ BS.Char8.unpack pathbs
+  fromFilePathToWindowsPath $ fromPosixString pathbs
 
 -- | Convert a unix FilePath to a native 'FilePath'.
 fromFilePathToNative :: FilePath -> FilePath

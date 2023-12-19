@@ -133,8 +133,8 @@ getEntryStreaming getN getAll = do
             entryContent     = case typecode of
                  '\0' -> NormalFile      content size
                  '0'  -> NormalFile      content size
-                 '1'  -> HardLink        (LinkTarget linkname)
-                 '2'  -> SymbolicLink    (LinkTarget linkname)
+                 '1'  -> HardLink        (LinkTarget $ byteToPosixString linkname)
+                 '2'  -> SymbolicLink    (LinkTarget $ byteToPosixString linkname)
                  _ | format == V7Format
                       -> OtherEntryType  typecode content size
                  '3'  -> CharacterDevice devmajor devminor

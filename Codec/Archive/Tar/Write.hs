@@ -87,7 +87,7 @@ putHeaderNoChkSum Entry {
     , putOct      12 modTime
     , replicate    8 ' ' -- dummy checksum
     , putChar8       typeCode
-    , putBString 100 linkTarget
+    , putPosixString 100 linkTarget
     ] ++
   case format of
   V7Format    ->

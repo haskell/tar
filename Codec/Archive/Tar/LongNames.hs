@@ -75,10 +75,10 @@ encodeLinkPath
 encodeLinkPath lnk = case toTarPath' lnk of
   FileNameEmpty -> (Nothing, LinkTarget mempty)
   FileNameOK (TarPath name prefix)
-    | PS.null prefix -> (Nothing, LinkTarget $ posixToByteString name)
-    | otherwise -> (Just $ longSymLinkEntry lnk, LinkTarget $ posixToByteString name)
+    | PS.null prefix -> (Nothing, LinkTarget name)
+    | otherwise -> (Just $ longSymLinkEntry lnk, LinkTarget name)
   FileNameTooLong (TarPath name _) ->
-    (Just $ longSymLinkEntry lnk, LinkTarget $ posixToByteString name)
+    (Just $ longSymLinkEntry lnk, LinkTarget name)
 
 -- | Translate low-level entries (usually freshly deserialized) into
 -- high-level entries with POSIX 'FilePath's for files and symlinks
