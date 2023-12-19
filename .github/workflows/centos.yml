@@ -15,8 +15,8 @@ jobs:
     steps:
     - name: install deps
       run: |
-        yum install -y gcc gmp gmp-devel make ncurses ncurses-compat-libs ncurses-devel xz perl
-        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 BOOTSTRAP_HASKELL_GHC_VERSION=8.10.7 sh
+        yum install -y gcc gmp gmp-devel make ncurses ncurses-compat-libs ncurses-devel xz perl libstdc++-static
+        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 BOOTSTRAP_HASKELL_GHC_VERSION=9.2.8 sh
     - uses: actions/checkout@v3
     - name: Test
       run: |
