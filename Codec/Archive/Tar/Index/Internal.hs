@@ -285,7 +285,7 @@ type FilePathBS = BS.ByteString
 
 splitTarPath :: TarPath -> [FilePathBS]
 splitTarPath (TarPath name prefix) =
-    splitDirectories prefix ++ splitDirectories name
+    splitDirectories (posixToByteString prefix) ++ splitDirectories (posixToByteString name)
 
 splitDirectories :: FilePathBS -> [FilePathBS]
 splitDirectories bs =

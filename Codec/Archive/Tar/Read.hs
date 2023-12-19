@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE PackageImports #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Read
@@ -17,6 +18,7 @@ module Codec.Archive.Tar.Read
   , FormatError(..)
   ) where
 
+import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
 
 import Data.Char     (ord)
@@ -33,6 +35,9 @@ import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
 import qualified Data.ByteString.Unsafe as BS
 import qualified Data.ByteString.Lazy   as LBS
+import System.IO.Unsafe (unsafePerformIO)
+import "os-string" System.OsString.Posix (PosixString, PosixChar)
+import qualified "os-string" System.OsString.Posix as PS
 
 import Prelude hiding (read)
 
@@ -124,7 +129,7 @@ getEntryStreaming getN getAll = do
           let content = LBS.take size paddedContent
 
           pure $ Right $ Just $ Entry {
-            entryTarPath     = TarPath name prefix,
+            entryTarPath     = TarPath (byteToPosixString name) (byteToPosixString prefix),
             entryContent     = case typecode of
                  '\0' -> NormalFile      content size
                  '0'  -> NormalFile      content size

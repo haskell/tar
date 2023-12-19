@@ -1,3 +1,4 @@
+{-# LANGUAGE PackageImports #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Write
@@ -12,6 +13,7 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Write (write) where
 
+import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
 
 import Data.Bits
@@ -25,7 +27,8 @@ import qualified Data.ByteString             as BS
 import qualified Data.ByteString.Char8       as BS.Char8
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.ByteString.Lazy.Char8  as LBS.Char8
-
+import "os-string" System.OsString.Posix (PosixString)
+import qualified "os-string" System.OsString.Posix as PS
 
 -- | Create the external representation of a tar archive by serialising a list
 -- of tar entries.
@@ -76,7 +79,7 @@ putHeaderNoChkSum Entry {
   } =
 
   concat
-    [ putBString 100 name
+    [ putPosixString 100 name
     , putOct       8 permissions
     , putOct       8 $ ownerId ownership
     , putOct       8 $ groupId ownership
@@ -95,7 +98,7 @@ putHeaderNoChkSum Entry {
     , putString   32 $ groupName ownership
     , putOct       8 deviceMajor
     , putOct       8 deviceMinor
-    , putBString 155 prefix
+    , putPosixString 155 prefix
     , replicate   12 '\NUL'
     ]
   GnuFormat -> concat
@@ -104,7 +107,7 @@ putHeaderNoChkSum Entry {
     , putString   32 $ groupName ownership
     , putGnuDev    8 deviceMajor
     , putGnuDev    8 deviceMinor
-    , putBString 155 prefix
+    , putPosixString 155 prefix
     , replicate   12 '\NUL'
     ]
   where
@@ -141,6 +144,9 @@ type FieldWidth = Int
 
 putBString :: FieldWidth -> BS.ByteString -> String
 putBString n s = BS.Char8.unpack (BS.take n s) ++ replicate (n - BS.length s) '\NUL'
+
+putPosixString :: FieldWidth -> PosixString -> String
+putPosixString n s = fromPosixString (PS.take n s) ++ replicate (n - PS.length s) '\NUL'
 
 putString :: FieldWidth -> String -> String
 putString n s = take n s ++ replicate (n - length s) '\NUL'

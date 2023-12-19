@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE PackageImports #-}
 
 module Codec.Archive.Tar.LongNames
   ( encodeLongNames
@@ -6,10 +7,13 @@ module Codec.Archive.Tar.LongNames
   , DecodeLongNamesError(..)
   ) where
 
+import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
 import Control.Exception
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
+import "os-string" System.OsString.Posix (PosixString, PosixChar)
+import qualified "os-string" System.OsString.Posix as PS
 
 -- | Errors raised by 'decodeLongNames'.
 --
@@ -71,10 +75,10 @@ encodeLinkPath
 encodeLinkPath lnk = case toTarPath' lnk of
   FileNameEmpty -> (Nothing, LinkTarget mempty)
   FileNameOK (TarPath name prefix)
-    | B.null prefix -> (Nothing, LinkTarget name)
-    | otherwise -> (Just $ longSymLinkEntry lnk, LinkTarget name)
+    | PS.null prefix -> (Nothing, LinkTarget $ posixToByteString name)
+    | otherwise -> (Just $ longSymLinkEntry lnk, LinkTarget $ posixToByteString name)
   FileNameTooLong (TarPath name _) ->
-    (Just $ longSymLinkEntry lnk, LinkTarget name)
+    (Just $ longSymLinkEntry lnk, LinkTarget $ posixToByteString name)
 
 -- | Translate low-level entries (usually freshly deserialized) into
 -- high-level entries with POSIX 'FilePath's for files and symlinks

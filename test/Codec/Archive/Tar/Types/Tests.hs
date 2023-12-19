@@ -17,6 +17,7 @@ module Codec.Archive.Tar.Types.Tests
   , prop_fromTarPathToWindowsPath
   ) where
 
+import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
 
 import qualified Data.ByteString       as BS
@@ -49,8 +50,8 @@ fromTarPathRef (TarPath namebs prefixbs) = adjustDirectory $
   FilePath.Native.joinPath $ FilePath.Posix.splitDirectories prefix
                           ++ FilePath.Posix.splitDirectories name
   where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
+    name   = BS.Char8.unpack $ posixToByteString namebs
+    prefix = BS.Char8.unpack $ posixToByteString prefixbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
                     = FilePath.Native.addTrailingPathSeparator
                     | otherwise = id
@@ -60,8 +61,8 @@ fromTarPathToPosixPathRef (TarPath namebs prefixbs) = adjustDirectory $
   FilePath.Posix.joinPath $ FilePath.Posix.splitDirectories prefix
                          ++ FilePath.Posix.splitDirectories name
   where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
+    name   = BS.Char8.unpack $ posixToByteString namebs
+    prefix = BS.Char8.unpack $ posixToByteString prefixbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
                     = FilePath.Posix.addTrailingPathSeparator
                     | otherwise = id
@@ -71,8 +72,8 @@ fromTarPathToWindowsPathRef (TarPath namebs prefixbs) = adjustDirectory $
   FilePath.Windows.joinPath $ FilePath.Posix.splitDirectories prefix
                            ++ FilePath.Posix.splitDirectories name
   where
-    name   = BS.Char8.unpack namebs
-    prefix = BS.Char8.unpack prefixbs
+    name   = BS.Char8.unpack $ posixToByteString namebs
+    prefix = BS.Char8.unpack $ posixToByteString prefixbs
     adjustDirectory | FilePath.Posix.hasTrailingPathSeparator name
                     = FilePath.Windows.addTrailingPathSeparator
                     | otherwise = id
@@ -220,6 +221,6 @@ limitToV7FormatCompat entry@Entry { entryFormat = V7Format } =
       },
 
       entryTarPath = let TarPath name _prefix = entryTarPath entry
-                      in TarPath name BS.empty
+                      in TarPath name mempty
     }
 limitToV7FormatCompat entry = entry

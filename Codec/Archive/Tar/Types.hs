@@ -1,4 +1,11 @@
-{-# LANGUAGE CPP, GeneralizedNewtypeDeriving, BangPatterns, DeriveTraversable, ScopedTypeVariables, RankNTypes #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
@@ -88,6 +95,8 @@ import qualified System.FilePath.Windows as FilePath.Windows
          ( joinPath, addTrailingPathSeparator, pathSeparator )
 import System.Posix.Types
          ( FileMode )
+import "os-string" System.OsString.Posix (PosixString, PosixChar)
+import qualified "os-string" System.OsString.Posix as PS
 
 import Codec.Archive.Tar.PackAscii
 
@@ -278,7 +287,7 @@ symlinkEntry name targetLink =
 -- @since 0.6.0.0
 longLinkEntry :: FilePath -> GenEntry TarPath linkTarget
 longLinkEntry tarpath = Entry {
-    entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
+    entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
     entryContent     = OtherEntryType 'L' (LBS.fromStrict $ packAscii tarpath) (fromIntegral $ length tarpath),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
@@ -295,7 +304,7 @@ longLinkEntry tarpath = Entry {
 -- @since 0.6.0.0
 longSymLinkEntry :: FilePath -> GenEntry TarPath linkTarget
 longSymLinkEntry linkTarget = Entry {
-    entryTarPath     = TarPath (BS.Char8.pack "././@LongLink") BS.empty,
+    entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
     entryContent     = OtherEntryType 'K' (LBS.fromStrict . packAscii $ linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
@@ -338,8 +347,11 @@ directoryEntry name = simpleEntry name Directory
 --
 -- * The directory separator between the prefix and name is /not/ stored.
 --
-data TarPath = TarPath {-# UNPACK #-} !BS.ByteString -- path name, 100 characters max.
-                       {-# UNPACK #-} !BS.ByteString -- path prefix, 155 characters max.
+data TarPath = TarPath
+  {-# UNPACK #-} !PosixString
+  -- ^ path name, 100 characters max.
+  {-# UNPACK #-} !PosixString
+  -- ^ path prefix, 155 characters max.
   deriving (Eq, Ord)
 
 instance NFData TarPath where
@@ -362,7 +374,7 @@ instance Show TarPath where
 --   (e.g., using 'Codec.Archive.Tar.Check.checkEntrySecurity').
 --
 fromTarPath :: TarPath -> FilePath
-fromTarPath = BS.Char8.unpack . fromTarPathInternal FilePath.Native.pathSeparator
+fromTarPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Native.pathSeparator)
 
 -- | Convert a 'TarPath' to a Unix\/Posix 'FilePath'.
 --
@@ -373,7 +385,7 @@ fromTarPath = BS.Char8.unpack . fromTarPathInternal FilePath.Native.pathSeparato
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath = BS.Char8.unpack . fromTarPathInternal FilePath.Posix.pathSeparator
+fromTarPathToPosixPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Posix.pathSeparator)
 
 -- | Convert a 'TarPath' to a Windows 'FilePath'.
 --
@@ -384,18 +396,18 @@ fromTarPathToPosixPath = BS.Char8.unpack . fromTarPathInternal FilePath.Posix.pa
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToWindowsPath :: TarPath -> FilePath
-fromTarPathToWindowsPath = BS.Char8.unpack . fromTarPathInternal FilePath.Windows.pathSeparator
+fromTarPathToWindowsPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Windows.pathSeparator)
 
-fromTarPathInternal :: Char -> TarPath -> BS.ByteString
+fromTarPathInternal :: PosixChar -> TarPath -> PosixString
 fromTarPathInternal sep = go
   where
-    posixSep = FilePath.Posix.pathSeparator
+    posixSep = PS.unsafeFromChar FilePath.Posix.pathSeparator
     adjustSeps = if sep == posixSep then id else
-      BS.Char8.map $ \c -> if c == posixSep then sep else c
+      PS.map $ \c -> if c == posixSep then sep else c
     go (TarPath name prefix)
-     | BS.null prefix = adjustSeps name
-     | BS.null name = adjustSeps prefix
-     | otherwise = adjustSeps prefix <> BS.Char8.cons sep (adjustSeps name)
+     | PS.null prefix = adjustSeps name
+     | PS.null name = adjustSeps prefix
+     | otherwise = adjustSeps prefix <> PS.cons sep (adjustSeps name)
 {-# INLINE fromTarPathInternal #-}
 
 -- | Convert a native 'FilePath' to a 'TarPath'.
@@ -453,12 +465,12 @@ splitLongPath :: FilePath -> ToTarPathResult
 splitLongPath path = case reverse (FilePath.Posix.splitPath path) of
   [] -> FileNameEmpty
   c : cs -> case packName nameMax (c :| cs) of
-    Nothing                 -> FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
-    Just (name, [])         -> FileNameOK $! TarPath (packAscii name) BS.empty
+    Nothing                 -> FileNameTooLong $ TarPath (toPosixString $ take 100 path) mempty
+    Just (name, [])         -> FileNameOK $! TarPath (toPosixString name) mempty
     Just (name, first:rest) -> case packName prefixMax remainder of
-      Nothing               -> FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
-      Just (_     , _:_)    -> FileNameTooLong $ TarPath (packAscii $ take 100 path) BS.empty
-      Just (prefix, [])     -> FileNameOK $! TarPath (packAscii name) (packAscii prefix)
+      Nothing               -> FileNameTooLong $ TarPath (toPosixString $ take 100 path) mempty
+      Just (_     , _:_)    -> FileNameTooLong $ TarPath (toPosixString $ take 100 path) mempty
+      Just (prefix, [])     -> FileNameOK $! TarPath (toPosixString name) (toPosixString prefix)
       where
         -- drop the '/' between the name and prefix:
         remainder = init first :| rest
