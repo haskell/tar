@@ -218,7 +218,7 @@ packSymlinkEntry filepath tarpath = do
 --
 getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
 getDirectoryContentsRecursive dir0 =
-  fmap tail (recurseDirectories dir0 [""])
+  fmap (drop 1) (recurseDirectories dir0 [""])
 
 recurseDirectories :: FilePath -> [FilePath] -> IO [FilePath]
 recurseDirectories _    []         = return []
