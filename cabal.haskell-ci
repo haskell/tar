@@ -1,2 +1,2 @@
-installed: -directory
+installed: -directory -unix -bytestring
 haddock: >= 8.6
