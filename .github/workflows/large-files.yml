@@ -1,0 +1,27 @@
+name: large-files
+on:
+  - push
+  - pull_request
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: 'ubuntu-latest'
+    steps:
+    - uses: actions/checkout@v3
+    - uses: haskell-actions/setup@v2
+      id: setup-haskell-cabal
+      with:
+        ghc-version: 'latest'
+    - name: Update cabal package database
+      run: cabal update
+    - uses: actions/cache@v3
+      name: Cache cabal stuff
+      with:
+        path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
+        key: large-files
+    - name: Test
+      run: htar/test-large-files.sh
