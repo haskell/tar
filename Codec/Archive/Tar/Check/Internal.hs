@@ -70,6 +70,11 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- link target. A failure in any entry terminates the sequence of entries with
 -- an error.
 --
+-- Whenever possible, consider fusing 'checkSecurity' with packing / unpacking by using
+-- 'Codec.Archive.Tar.packAndCheck' / 'Codec.Archive.Tar.unpackAndCheck'
+-- with 'checkEntrySecurity'.
+-- Not only it is faster, but also alleviates issues with lazy I/O
+-- such as exhaustion of file handlers.
 checkSecurity
   :: Entries e
   -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
@@ -154,6 +159,11 @@ showFileNameError mb_plat err = case err of
 -- Note: This check must be used in conjunction with 'checkSecurity'
 -- (or 'checkPortability').
 --
+-- Whenever possible, consider fusing 'checkTarbomb' with packing / unpacking by using
+-- 'Codec.Archive.Tar.packAndCheck' / 'Codec.Archive.Tar.unpackAndCheck'
+-- with 'checkEntryTarbomb'.
+-- Not only it is faster, but also alleviates issues with lazy I/O
+-- such as exhaustion of file handlers.
 checkTarbomb
   :: FilePath
   -> Entries e
@@ -217,6 +227,11 @@ instance Show TarBombError where
 --   includes characters that are valid in both systems and the \'/\' vs \'\\\'
 --   directory separator conventions.
 --
+-- Whenever possible, consider fusing 'checkPortability' with packing / unpacking by using
+-- 'Codec.Archive.Tar.packAndCheck' / 'Codec.Archive.Tar.unpackAndCheck'
+-- with 'checkEntryPortability'.
+-- Not only it is faster, but also alleviates issues with lazy I/O
+-- such as exhaustion of file handlers.
 checkPortability
   :: Entries e
   -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) PortabilityError)
