@@ -288,7 +288,7 @@ symlinkEntry name targetLink =
 longLinkEntry :: FilePath -> GenEntry TarPath linkTarget
 longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
-    entryContent     = OtherEntryType 'L' (LBS.fromStrict $ packAscii tarpath) (fromIntegral $ length tarpath),
+    entryContent     = OtherEntryType 'L' (LBS.fromStrict $ posixToByteString $ toPosixString tarpath) (fromIntegral $ length tarpath),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,
@@ -305,7 +305,7 @@ longLinkEntry tarpath = Entry {
 longSymLinkEntry :: FilePath -> GenEntry TarPath linkTarget
 longSymLinkEntry linkTarget = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
-    entryContent     = OtherEntryType 'K' (LBS.fromStrict . packAscii $ linkTarget) (fromIntegral $ length linkTarget),
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ posixToByteString $ toPosixString $ linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = Ownership "" "" 0 0,
     entryTime        = 0,

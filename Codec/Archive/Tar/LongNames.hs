@@ -137,7 +137,8 @@ decodeLongNames = go Nothing Nothing
         Fail $ Right NoLinkEntryAfterTypeKEntry
 
 otherEntryPayloadToFilePath :: BL.ByteString -> FilePath
-otherEntryPayloadToFilePath = B.unpack . B.takeWhile (/= '\0') . BL.toStrict
+otherEntryPayloadToFilePath =
+  fromPosixString . byteToPosixString . B.takeWhile (/= '\0') . BL.toStrict
 
 castEntry :: Entry -> GenEntry FilePath FilePath
 castEntry e = e
