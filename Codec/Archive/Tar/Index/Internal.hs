@@ -171,7 +171,8 @@ toComponentIds table =
     lookupComponents []
   . filter (/= BS.Char8.singleton '.')
   . splitDirectories
-  . packAscii
+  . posixToByteString
+  . toPosixString
   where
     lookupComponents cs' []     = Just (reverse cs')
     lookupComponents cs' (c:cs) = case StringTable.lookup table c of
@@ -179,7 +180,7 @@ toComponentIds table =
       Just cid -> lookupComponents (cid:cs') cs
 
 fromComponentId :: StringTable PathComponentId -> PathComponentId -> FilePath
-fromComponentId table = BS.Char8.unpack . StringTable.index table
+fromComponentId table = fromPosixString . byteToPosixString . StringTable.index table
 
 -- | All the files in the index with their corresponding 'TarEntryOffset's.
 --
