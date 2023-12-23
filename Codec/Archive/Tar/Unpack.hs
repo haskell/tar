@@ -93,6 +93,9 @@ unpack = unpackAndCheck (fmap SomeException . checkEntrySecurity)
 -- | Like 'unpack', but run custom sanity/security checks instead of 'checkEntrySecurity'.
 -- For example,
 --
+-- > import Control.Exception (SomeException(..))
+-- > import Control.Applicative ((<|>))
+-- >
 -- > unpackAndCheck (\x -> SomeException <$> checkEntryPortability x
 -- >                   <|> SomeException <$> checkEntrySecurity x) dir entries
 --

@@ -51,29 +51,36 @@ module Codec.Archive.Tar (
 
   -- * Notes
   -- ** Compressed tar archives
-  -- | Tar files are commonly used in conjunction with gzip compression, as in
-  -- \"@.tar.gz@\" or \"@.tar.bz2@\" files. This module does not directly
+  -- | Tar files are commonly used in conjunction with compression, as in
+  -- @.tar.gz@ or @.tar.bz2@ files. This module does not directly
   -- handle compressed tar files however they can be handled easily by
   -- composing functions from this module and the modules
-  -- @Codec.Compression.GZip@ or @Codec.Compression.BZip@
-  -- (see @zlib@ or @bzlib@ packages).
+  -- [@Codec.Compression.GZip@](https://hackage.haskell.org/package/zlib/docs/Codec-Compression-Zlib.html)
+  -- or
+  -- [@Codec.Compression.BZip@](https://hackage.haskell.org/package/bzlib-0.5.0.5/docs/Codec-Compression-BZip.html).
   --
-  -- Creating a compressed \"@.tar.gz@\" file is just a minor variation on the
+  -- Creating a compressed @.tar.gz@ file is just a minor variation on the
   -- 'create' function, but where throw compression into the pipeline:
   --
-  -- > BS.writeFile tar . GZip.compress . Tar.write =<< Tar.pack base dir
+  -- > import qualified Data.ByteString.Lazy as BL
+  -- > import qualified Codec.Compression.GZip as GZip
+  -- >
+  -- > BL.writeFile tar . GZip.compress . Tar.write =<< Tar.pack base dir
   --
-  -- Similarly, extracting a compressed \"@.tar.gz@\" is just a minor variation
+  -- Similarly, extracting a compressed @.tar.gz@ is just a minor variation
   -- on the 'extract' function where we use decompression in the pipeline:
   --
-  -- > Tar.unpack dir . Tar.read . GZip.decompress =<< BS.readFile tar
+  -- > import qualified Data.ByteString.Lazy as BL
+  -- > import qualified Codec.Compression.Zlib as GZip
+  -- >
+  -- > Tar.unpack dir . Tar.read . GZip.decompress =<< BL.readFile tar
   --
 
   -- ** Security
   -- | This is pretty important. A maliciously constructed tar archives could
   -- contain entries that specify bad file names. It could specify absolute
-  -- file names like \"@\/etc\/passwd@\" or relative files outside of the
-  -- archive like \"..\/..\/..\/something\". This security problem is commonly
+  -- file names like @\/etc\/passwd@ or relative files outside of the
+  -- archive like @..\/..\/..\/something@. This security problem is commonly
   -- called a \"directory traversal vulnerability\". Historically, such
   -- vulnerabilities have been common in packages handling tar archives.
   --
@@ -87,8 +94,13 @@ module Codec.Archive.Tar (
   -- 'extract' function does not check for these however if you want to do
   -- that you can use the 'checkTarbomb' function like so:
   --
-  -- > Tar.unpack dir . Tar.checkTarbomb expectedDir
-  -- >                . Tar.read =<< BS.readFile tar
+  -- > import Control.Exception (SomeException(..))
+  -- > import Control.Applicative ((<|>))
+  -- > import qualified Data.ByteString.Lazy as BL
+  -- >
+  -- > Tar.unpackAndCheck (\x -> SomeException <$> checkEntryTarbomb expectedDir x
+  -- >                       <|> SomeException <$> checkEntrySecurity x) dir .
+  -- > Tar.read =<< BL.readFile tar
   --
   -- In this case extraction will fail if any file is outside of @expectedDir@.
 
@@ -163,8 +175,9 @@ import Codec.Archive.Tar.Index (hSeekEndEntryOffset)
 
 import Codec.Archive.Tar.Check
 
-import Control.Exception (Exception, throw, catch)
-import qualified Data.ByteString.Lazy as BS
+import Control.Applicative ((<|>))
+import Control.Exception (Exception, throw, catch, SomeException(..))
+import qualified Data.ByteString.Lazy as BL
 import System.IO (withFile, IOMode(..))
 import Prelude hiding (read)
 
@@ -181,7 +194,9 @@ import Prelude hiding (read)
 -- This is a high level \"all in one\" operation. Since you may need variations
 -- on this function it is instructive to see how it is written. It is just:
 --
--- > BS.writeFile tar . Tar.write =<< Tar.pack base paths
+-- > import qualified Data.ByteString.Lazy as BL
+-- >
+-- > BL.writeFile tar . Tar.write =<< Tar.pack base paths
 --
 -- Notes:
 --
@@ -203,7 +218,7 @@ create :: FilePath   -- ^ Path of the \".tar\" file to write.
        -> FilePath   -- ^ Base directory
        -> [FilePath] -- ^ Files and directories to archive, relative to base dir
        -> IO ()
-create tar base paths = BS.writeFile tar . write =<< pack base paths
+create tar base paths = BL.writeFile tar . write =<< pack base paths
 
 -- | Extract all the files contained in a @\".tar\"@ file.
 --
@@ -217,7 +232,9 @@ create tar base paths = BS.writeFile tar . write =<< pack base paths
 -- This is a high level \"all in one\" operation. Since you may need variations
 -- on this function it is instructive to see how it is written. It is just:
 --
--- > Tar.unpack dir . Tar.read =<< BS.readFile tar
+-- > import qualified Data.ByteString.Lazy as BL
+-- >
+-- > Tar.unpack dir . Tar.read =<< BL.readFile tar
 --
 -- Notes:
 --
@@ -236,7 +253,7 @@ create tar base paths = BS.writeFile tar . write =<< pack base paths
 extract :: FilePath -- ^ Destination directory
         -> FilePath -- ^ Tarball
         -> IO ()
-extract dir tar = unpack dir . read =<< BS.readFile tar
+extract dir tar = unpack dir . read =<< BL.readFile tar
 
 -- | Append new entries to a @\".tar\"@ file from a directory of files.
 --
@@ -251,4 +268,4 @@ append :: FilePath   -- ^ Path of the \".tar\" file to write.
 append tar base paths =
     withFile tar ReadWriteMode $ \hnd -> do
       _ <- hSeekEndEntryOffset hnd Nothing
-      BS.hPut hnd . write =<< pack base paths
+      BL.hPut hnd . write =<< pack base paths
