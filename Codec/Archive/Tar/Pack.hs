@@ -64,6 +64,7 @@ import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 --
 -- * This function returns results lazily. Subdirectories are scanned
 -- and files are read one by one as the list of entries is consumed.
+-- Do not change their contents before the output of 'pack' was consumed in full.
 --
 pack
   :: FilePath   -- ^ Base directory
@@ -213,7 +214,7 @@ packSymlinkEntry filepath tarpath = do
 --
 -- * This function returns results lazily. Subdirectories are not scanned
 -- until the files entries in the parent directory have been consumed.
--- If the source directory structure changes before the result is used,
+-- If the source directory structure changes before the result is used in full,
 -- the behaviour is undefined.
 --
 getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
