@@ -23,9 +23,19 @@
     * Extend `FileNameError` with `UnsafeLinkTarget` constructor.
   * Drop deprecated `emptyIndex` and `finaliseIndex`.
 
+  Examples of migration:
+
+  * [`hackage-security`](https://github.com/haskell/hackage-security/commit/24693ce115c9769fe3c6ec9ca1d137d14d0d27ff)
+  * [`archive-backpack`](https://github.com/vmchale/archive-backpack/commit/4b3d1bdff15fcf044d6171ca649a930c775d491b)
+  * [`keter`](https://github.com/snoyberg/keter/commit/20a33d9276d5781ca6993b857d8d097085983ede)
+  * [`libarchive`](https://github.com/vmchale/libarchive/commit/c0e101fede924a6e12f1d726587626c48444e65d)
+
   Bug fixes:
 
   * Add support for over-long filepaths via GNU extension.
+    * Now `entryPath` corresponds to an internal, low-level path, limited
+      to 255 characters. To list filenames properly use `decodeLongNames`,
+      followed by `entryTarPath`.
   * Fix handling of hardlinks and symlinks.
   * Handle > 8 GB files insted of silent corruption.
   * Prohibit non-ASCII file names instead of silent corruption.

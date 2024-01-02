@@ -140,7 +140,10 @@ data GenEntry tarPath linkTarget = Entry {
 --
 type Entry = GenEntry TarPath LinkTarget
 
--- | Native 'FilePath' of the file or directory within the archive.
+-- | Low-level function to get a native 'FilePath' of the file or directory
+-- within the archive, not accounting for long names. It's likely
+-- that you want to apply 'Codec.Archive.Tar.decodeLongNames'
+-- and use 'entryTarPath' afterwards instead of 'entryPath'.
 --
 entryPath :: GenEntry TarPath linkTarget -> FilePath
 entryPath = fromTarPath . entryTarPath
