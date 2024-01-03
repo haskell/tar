@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PackageImports #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 module Codec.Archive.Tar.LongNames
   ( encodeLongNames

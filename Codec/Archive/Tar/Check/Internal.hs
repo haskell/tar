@@ -1,10 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_HADDOCK hide #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Check.Internal
@@ -70,9 +70,10 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- link target. A failure in any entry terminates the sequence of entries with
 -- an error.
 --
--- Whenever possible, consider fusing 'checkSecurity' with packing / unpacking by using
+-- Whenever possible, consider fusing 'Codec.Archive.Tar.Check.checkSecurity'
+-- with packing / unpacking by using
 -- 'Codec.Archive.Tar.packAndCheck' / 'Codec.Archive.Tar.unpackAndCheck'
--- with 'checkEntrySecurity'.
+-- with 'Codec.Archive.Tar.Check.checkEntrySecurity'.
 -- Not only it is faster, but also alleviates issues with lazy I/O
 -- such as exhaustion of file handlers.
 checkSecurity
@@ -80,7 +81,7 @@ checkSecurity
   -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
 checkSecurity = checkEntries checkEntrySecurity . decodeLongNames
 
--- | Worker of 'checkSecurity'.
+-- | Worker of 'Codec.Archive.Tar.Check.checkSecurity'.
 --
 -- @since 0.6.0.0
 checkEntrySecurity :: GenEntry FilePath FilePath -> Maybe FileNameError
@@ -156,12 +157,13 @@ showFileNameError mb_plat err = case err of
 -- Given the expected subdirectory, this function checks all entries are within
 -- that subdirectroy.
 --
--- Note: This check must be used in conjunction with 'checkSecurity'
--- (or 'checkPortability').
+-- Note: This check must be used in conjunction with 'Codec.Archive.Tar.Check.checkSecurity'
+-- (or 'Codec.Archive.Tar.Check.checkPortability').
 --
--- Whenever possible, consider fusing 'checkTarbomb' with packing / unpacking by using
+-- Whenever possible, consider fusing 'Codec.Archive.Tar.Check.checkTarbomb'
+-- with packing / unpacking by using
 -- 'Codec.Archive.Tar.packAndCheck' / 'Codec.Archive.Tar.unpackAndCheck'
--- with 'checkEntryTarbomb'.
+-- with 'Codec.Archive.Tar.Check.checkEntryTarbomb'.
 -- Not only it is faster, but also alleviates issues with lazy I/O
 -- such as exhaustion of file handlers.
 checkTarbomb

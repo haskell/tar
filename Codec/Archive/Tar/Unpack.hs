@@ -4,6 +4,7 @@
 {-# LANGUAGE RankNTypes #-}
 
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# OPTIONS_HADDOCK hide #-}
 {-# HLINT ignore "Use for_" #-}
 
 -----------------------------------------------------------------------------

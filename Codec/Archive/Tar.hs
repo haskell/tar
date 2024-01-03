@@ -85,7 +85,8 @@ module Codec.Archive.Tar (
   -- vulnerabilities have been common in packages handling tar archives.
   --
   -- The 'extract' and 'unpack' functions check for bad file names. See the
-  -- 'checkSecurity' function for more details. If you need to do any custom
+  -- 'Codec.Archive.Tar.Check.checkSecurity' function for more details.
+  -- If you need to do any custom
   -- unpacking then you should use this.
 
   -- ** Tarbombs
@@ -125,7 +126,7 @@ module Codec.Archive.Tar (
   -- * Types
   -- ** Tar entry type
   -- | This module provides only very simple and limited read-only access to
-  -- the 'Entry' type. If you need access to the details or if you need to
+  -- the 'GenEntry' type. If you need access to the details or if you need to
   -- construct your own entries then also import "Codec.Archive.Tar.Entry".
   GenEntry,
   Entry,
@@ -163,17 +164,15 @@ module Codec.Archive.Tar (
   FormatError(..),
   ) where
 
-import Codec.Archive.Tar.LongNames
-import Codec.Archive.Tar.Types
-
-import Codec.Archive.Tar.Read
-import Codec.Archive.Tar.Write
-
-import Codec.Archive.Tar.Pack
-import Codec.Archive.Tar.Unpack
-import Codec.Archive.Tar.Index (hSeekEndEntryOffset)
-
 import Codec.Archive.Tar.Check
+import Codec.Archive.Tar.Entry
+import Codec.Archive.Tar.Index (hSeekEndEntryOffset)
+import Codec.Archive.Tar.LongNames (decodeLongNames, encodeLongNames, DecodeLongNamesError(..))
+import Codec.Archive.Tar.Pack (pack, packAndCheck)
+import Codec.Archive.Tar.Read (read, FormatError(..))
+import Codec.Archive.Tar.Types (unfoldEntries, foldlEntries, foldEntries, mapEntriesNoFail, mapEntries, Entries, GenEntries(..))
+import Codec.Archive.Tar.Unpack (unpack, unpackAndCheck)
+import Codec.Archive.Tar.Write (write)
 
 import Control.Applicative ((<|>))
 import Control.Exception (Exception, throw, catch, SomeException(..))

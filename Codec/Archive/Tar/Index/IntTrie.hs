@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 module Codec.Archive.Tar.Index.IntTrie (
 

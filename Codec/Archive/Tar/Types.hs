@@ -5,6 +5,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -100,17 +101,27 @@ import qualified "os-string" System.OsString.Posix as PS
 
 import Codec.Archive.Tar.PackAscii
 
+-- | File size in bytes.
 type FileSize  = Int64
--- | The number of seconds since the UNIX epoch
+
+-- | The number of seconds since the UNIX epoch.
 type EpochTime = Int64
+
+-- | Major device number.
 type DevMajor  = Int
+
+-- | Minor device number.
 type DevMinor  = Int
+
+-- | User-defined tar format expansion.
 type TypeCode  = Char
+
+-- | Permissions information for 'GenEntry'.
 type Permissions = FileMode
 
 -- | Polymorphic tar archive entry. High-level interfaces
 -- commonly work with 'GenEntry' 'FilePath' 'FilePath',
--- while low level uses 'GenEntry' 'TarPath' 'LinkTarget'.
+-- while low-level ones use 'GenEntry' 'TarPath' 'LinkTarget'.
 --
 -- @since 0.6.0.0
 data GenEntry tarPath linkTarget = Entry {
@@ -143,14 +154,14 @@ type Entry = GenEntry TarPath LinkTarget
 -- | Low-level function to get a native 'FilePath' of the file or directory
 -- within the archive, not accounting for long names. It's likely
 -- that you want to apply 'Codec.Archive.Tar.decodeLongNames'
--- and use 'entryTarPath' afterwards instead of 'entryPath'.
+-- and use 'Codec.Archive.Tar.Entry.entryTarPath' afterwards instead of 'entryPath'.
 --
 entryPath :: GenEntry TarPath linkTarget -> FilePath
 entryPath = fromTarPath . entryTarPath
 
 -- | Polymorphic content of a tar archive entry. High-level interfaces
 -- commonly work with 'GenEntryContent' 'FilePath',
--- while low level uses 'GenEntryContent' 'LinkTarget'.
+-- while low-level ones use 'GenEntryContent' 'LinkTarget'.
 --
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
@@ -173,6 +184,7 @@ data GenEntryContent linkTarget
 -- ready for serialization / deserialization.
 type EntryContent = GenEntryContent LinkTarget
 
+-- | Ownership information for 'GenEntry'.
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
     ownerName :: String,
@@ -241,7 +253,7 @@ executableFilePermissions = 0o0755
 directoryPermissions :: Permissions
 directoryPermissions  = 0o0755
 
--- | An 'Entry' with all default values except for the file name and type. It
+-- | An entry with all default values except for the file name and type. It
 -- uses the portable USTAR/POSIX format (see 'UstarFormat').
 --
 -- You can use this as a basis and override specific fields, eg:
@@ -261,7 +273,7 @@ simpleEntry tarpath content = Entry {
     entryFormat      = UstarFormat
   }
 
--- | A tar 'Entry' for a file.
+-- | A tar entry for a file.
 --
 -- Entry  fields such as file permissions and ownership have default values.
 --
@@ -274,16 +286,16 @@ fileEntry :: tarPath -> LBS.ByteString -> GenEntry tarPath linkTarget
 fileEntry name fileContent =
   simpleEntry name (NormalFile fileContent (LBS.length fileContent))
 
--- | A tar 'Entry' for a symbolic link.
+-- | A tar entry for a symbolic link.
 symlinkEntry :: tarPath -> linkTarget -> GenEntry tarPath linkTarget
 symlinkEntry name targetLink =
   simpleEntry name (SymbolicLink targetLink)
 
 -- | [GNU extension](https://www.gnu.org/software/tar/manual/html_node/Standard.html)
--- to store a filepath too long to fit into 'entryTarPath'
+-- to store a filepath too long to fit into 'Codec.Archive.Tar.Entry.entryTarPath'
 -- as 'OtherEntryType' @\'L\'@ with the full filepath as 'entryContent'.
 -- The next entry must contain the actual
--- data with truncated 'entryTarPath'.
+-- data with truncated 'Codec.Archive.Tar.Entry.entryTarPath'.
 --
 -- See [What exactly is the GNU tar ././@LongLink "trick"?](https://stackoverflow.com/questions/2078778/what-exactly-is-the-gnu-tar-longlink-trick)
 --
@@ -299,10 +311,10 @@ longLinkEntry tarpath = Entry {
   }
 
 -- | [GNU extension](https://www.gnu.org/software/tar/manual/html_node/Standard.html)
--- to store a link target too long to fit into 'entryTarPath'
+-- to store a link target too long to fit into 'Codec.Archive.Tar.Entry.entryTarPath'
 -- as 'OtherEntryType' @\'K\'@ with the full filepath as 'entryContent'.
 -- The next entry must contain the actual
--- data with truncated 'entryTarPath'.
+-- data with truncated 'Codec.Archive.Tar.Entry.entryTarPath'.
 --
 -- @since 0.6.0.0
 longSymLinkEntry :: FilePath -> GenEntry TarPath linkTarget
@@ -315,7 +327,7 @@ longSymLinkEntry linkTarget = Entry {
     entryFormat      = GnuFormat
   }
 
--- | A tar 'Entry' for a directory.
+-- | A tar entry for a directory.
 --
 -- Entry fields such as file permissions and ownership have default values.
 --
@@ -416,7 +428,6 @@ fromTarPathInternal sep = go
 -- | Convert a native 'FilePath' to a 'TarPath'.
 --
 -- The conversion may fail if the 'FilePath' is empty or too long.
--- Use 'toTarPath'' for a structured output.
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
           -> FilePath
@@ -570,7 +581,7 @@ fromFilePathInternal fromSep toSep = adjustSeps
 -- | Polymorphic sequence of archive entries.
 -- High-level interfaces
 -- commonly work with 'GenEntries' 'FilePath' 'FilePath',
--- while low level uses 'GenEntries' 'TarPath' 'LinkTarget'.
+-- while low-level ones use 'GenEntries' 'TarPath' 'LinkTarget'.
 --
 -- The point of this type as opposed to just using a list is that it makes the
 -- failure case explicit. We need this because the sequence of entries we get
@@ -635,7 +646,7 @@ unfoldEntriesM interleave f = unfold
         Right Nothing  -> pure Done
         Right (Just e) -> Next e <$> interleave unfold
 
--- | This is like the standard 'foldr' function on lists, but for 'Entries'.
+-- | This is like the standard 'Data.List.foldr' function on lists, but for 'Entries'.
 -- Compared to 'foldr' it takes an extra function to account for the
 -- possibility of failure.
 --
@@ -653,7 +664,7 @@ foldEntries next done fail' = fold
     fold Done        = done
     fold (Fail err)  = fail' err
 
--- | A 'foldl'-like function on Entries. It either returns the final
+-- | A 'Data.List.foldl'-like function on Entries. It either returns the final
 -- accumulator result, or the failure along with the intermediate accumulator
 -- value.
 --
@@ -668,7 +679,7 @@ foldlEntries f = go
     go !acc  Done       = Right acc
     go !acc (Fail err)  = Left (err, acc)
 
--- | This is like the standard 'map' function on lists, but for 'Entries'. It
+-- | This is like the standard 'Data.List.map' function on lists, but for 'Entries'. It
 -- includes failure as a extra possible outcome of the mapping function.
 --
 -- If your mapping function cannot fail it may be more convenient to use

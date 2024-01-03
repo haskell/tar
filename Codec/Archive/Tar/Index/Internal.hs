@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 -----------------------------------------------------------------------------
 -- |
@@ -213,14 +214,14 @@ data IndexBuilder
   deriving (Eq, Show)
 
 instance NFData IndexBuilder where
-  rnf (IndexBuilder _ _ _) = () -- fully strict by construction
+  rnf IndexBuilder{} = () -- fully strict by construction
 
 -- | The initial empty 'IndexBuilder'.
 --
 empty :: IndexBuilder
 empty = IndexBuilder StringTable.empty IntTrie.empty 0
 
--- | Add the next 'Entry' into the 'IndexBuilder'.
+-- | Add the next t'Entry' into the 'IndexBuilder'.
 --
 addNextEntry :: Entry -> IndexBuilder -> IndexBuilder
 addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
@@ -238,7 +239,7 @@ skipNextEntry :: Entry -> IndexBuilder -> IndexBuilder
 skipNextEntry entry (IndexBuilder stbl itrie nextOffset) =
     IndexBuilder stbl itrie (nextEntryOffset entry nextOffset)
 
--- | Finish accumulating 'Entry' information and build the compact 'TarIndex'
+-- | Finish accumulating t'Entry' information and build the compact 'TarIndex'
 -- lookup structure.
 --
 finalise :: IndexBuilder -> TarIndex
@@ -321,7 +322,7 @@ unfinalise (TarIndex pathTable pathTrie finalOffset) =
 -- I/O operations
 --
 
--- | Reads an entire 'Entry' at the given 'TarEntryOffset' in the tar file.
+-- | Reads an entire t'Entry' at the given 'TarEntryOffset' in the tar file.
 -- The 'Handle' must be open for reading and be seekable.
 --
 -- This reads the whole entry into memory strictly, not incrementally. For more
@@ -341,7 +342,7 @@ hReadEntry hnd off = do
                                     }
       _                       -> return entry
 
--- | Read the header for a 'Entry' at the given 'TarEntryOffset' in the tar
+-- | Read the header for a t'Entry' at the given 'TarEntryOffset' in the tar
 -- file. The 'entryContent' will contain the correct metadata but an empty file
 -- content. The 'Handle' must be open for reading and be seekable.
 --
@@ -409,7 +410,7 @@ hSeekEntryContentOffset hnd blockOff =
 --
 -- After this action, the 'Handle' position is not in any useful place. If
 -- you want to skip to the next entry, take the 'TarEntryOffset' returned and
--- use 'hReadEntryHeaderOrEof' again. Or if having inspected the 'Entry'
+-- use 'hReadEntryHeaderOrEof' again. Or if having inspected the t'Entry'
 -- header you want to read the entry content (if it has one) then use
 -- 'hSeekEntryContentOffset' on the original input 'TarEntryOffset'.
 --

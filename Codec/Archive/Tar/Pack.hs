@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_HADDOCK hide #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -59,9 +60,6 @@ import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 -- entries. Hard links are treated like ordinary files. Special files like
 -- FIFOs (named pipes), sockets or device files will cause problems.
 --
--- An exception will be thrown for any file names that are too long to
--- represent as a 'TarPath'.
---
 -- * This function returns results lazily. Subdirectories are scanned
 -- and files are read one by one as the list of entries is consumed.
 -- Do not change their contents before the output of 'pack' was consumed in full.
@@ -75,7 +73,7 @@ pack = packAndCheck (const Nothing)
 -- | Like 'pack', but allows to specify additional sanity/security
 -- checks on the input filenames. This is useful if you know which
 -- check will be used on client side
--- in 'Codec.Tar.Check.unpack' / 'Codec.Tar.Check.unpackAndCheck'.
+-- in 'Codec.Archive.Tar.unpack' / 'Codec.Archive.Tar.unpackAndCheck'.
 --
 -- @since 0.6.0.0
 packAndCheck
@@ -128,7 +126,7 @@ interleave = unsafeInterleaveIO . go
       xs' <- interleave xs
       return (x':xs')
 
--- | Construct a tar 'Entry' based on a local file.
+-- | Construct a tar entry based on a local file.
 --
 -- This sets the entry size, the data contained in the file and the file's
 -- modification time. If the file is executable then that information is also
@@ -138,7 +136,7 @@ interleave = unsafeInterleaveIO . go
 --
 packFileEntry
   :: FilePath -- ^ Full path to find the file on the local disk
-  -> tarPath  -- ^ Path to use for the tar 'Entry' in the archive
+  -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath linkTarget)
 packFileEntry filepath tarpath = do
   mtime   <- getModTime filepath
@@ -171,14 +169,14 @@ packFileEntry filepath tarpath = do
     , entryTime = mtime
     }
 
--- | Construct a tar 'Entry' based on a local directory (but not its contents).
+-- | Construct a tar entry based on a local directory (but not its contents).
 --
 -- The only attribute of the directory that is used is its modification time.
 -- Directory ownership and detailed permissions are not preserved.
 --
 packDirectoryEntry
   :: FilePath -- ^ Full path to find the file on the local disk
-  -> tarPath  -- ^ Path to use for the tar 'Entry' in the archive
+  -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath linkTarget)
 packDirectoryEntry filepath tarpath = do
   mtime   <- getModTime filepath
@@ -186,14 +184,14 @@ packDirectoryEntry filepath tarpath = do
     entryTime = mtime
   }
 
--- | Construct a tar 'Entry' based on a local symlink.
+-- | Construct a tar entry based on a local symlink.
 --
 -- This automatically checks symlink safety via 'checkEntrySecurity'.
 --
 -- @since 0.6.0.0
 packSymlinkEntry
   :: FilePath -- ^ Full path to find the file on the local disk
-  -> tarPath  -- ^ Path to use for the tar 'Entry' in the archive
+  -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath FilePath)
 packSymlinkEntry filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath

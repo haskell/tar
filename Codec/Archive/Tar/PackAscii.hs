@@ -1,4 +1,5 @@
 {-# LANGUAGE PackageImports #-}
+{-# OPTIONS_HADDOCK hide #-}
 
 module Codec.Archive.Tar.PackAscii
   ( toPosixString
