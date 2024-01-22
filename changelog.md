@@ -29,6 +29,9 @@
   * [`archive-backpack`](https://github.com/vmchale/archive-backpack/commit/4b3d1bdff15fcf044d6171ca649a930c775d491b)
   * [`keter`](https://github.com/snoyberg/keter/commit/20a33d9276d5781ca6993b857d8d097085983ede)
   * [`libarchive`](https://github.com/vmchale/libarchive/commit/c0e101fede924a6e12f1d726587626c48444e65d)
+  * [`cabal-install`](https://github.com/haskell/cabal/commit/51e6483f95ecb4f395dce36e47af296902a75143)
+  * [`ghcup`](https://github.com/haskell/ghcup-hs/commit/6ae312c1f9dd054546e4afe4c969c37cd54b09a9)
+  * [`hackage-server`](https://github.com/haskell/hackage-server/commit/6b71d1659500aba50b6a1e48aa53039046720af8)
 
   Bug fixes:
 
