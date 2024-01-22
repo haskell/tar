@@ -22,7 +22,6 @@ module Codec.Archive.Tar.Read
 import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
 
-import Data.Char     (ord)
 import Data.Int      (Int64)
 import Data.Bits     (Bits(shiftL, (.&.), complement))
 import Control.Exception (Exception(..))
@@ -34,13 +33,13 @@ import Control.Monad.Trans.State.Lazy
 
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
-import qualified Data.ByteString.Unsafe as BS
 import qualified Data.ByteString.Lazy   as LBS
-import System.IO.Unsafe (unsafePerformIO)
-import "os-string" System.OsString.Posix (PosixString, PosixChar)
-import qualified "os-string" System.OsString.Posix as PS
 
 import Prelude hiding (read)
+
+import "os-string" System.OsString.Internal.Types (PosixString(..))
+
+import qualified "os-string" System.OsString.Posix as PS
 
 -- | Errors that can be encountered when parsing a Tar archive.
 data FormatError
@@ -130,12 +129,12 @@ getEntryStreaming getN getAll = do
           let content = LBS.take size paddedContent
 
           pure $ Right $ Just $ Entry {
-            entryTarPath     = TarPath (byteToPosixString name) (byteToPosixString prefix),
+            entryTarPath     = TarPath name prefix,
             entryContent     = case typecode of
                  '\0' -> NormalFile      content size
                  '0'  -> NormalFile      content size
-                 '1'  -> HardLink        (LinkTarget $ byteToPosixString linkname)
-                 '2'  -> SymbolicLink    (LinkTarget $ byteToPosixString linkname)
+                 '1'  -> HardLink        (LinkTarget linkname)
+                 '2'  -> SymbolicLink    (LinkTarget linkname)
                  _ | format == V7Format
                       -> OtherEntryType  typecode content size
                  '3'  -> CharacterDevice devmajor devminor
@@ -145,15 +144,14 @@ getEntryStreaming getN getAll = do
                  '7'  -> NormalFile      content size
                  _    -> OtherEntryType  typecode content size,
             entryPermissions = mode,
-            entryOwnership   = Ownership (BS.Char8.unpack uname)
-                                         (BS.Char8.unpack gname) uid gid,
+            entryOwnership   = Ownership uname gname uid gid,
             entryTime        = mtime,
             entryFormat      = format
             }
 
 parseHeader
   :: LBS.ByteString
-  -> Either FormatError (BS.ByteString, Permissions, Int, Int, Int64, EpochTime, Char, BS.ByteString, Format, BS.ByteString, BS.ByteString, DevMajor, DevMinor, BS.ByteString)
+  -> Either FormatError (PosixString, Permissions, Int, Int, Int64, EpochTime, Char, PosixString, Format, PosixString, PosixString, DevMajor, DevMinor, PosixString)
 parseHeader header' = do
   case (chksum_, format_ magic) of
     (Right chksum, _ ) | correctChecksum header chksum -> return ()
@@ -254,8 +252,8 @@ getByte off bs = BS.Char8.index bs off
 getChars :: Int -> Int -> BS.ByteString -> BS.ByteString
 getChars = getBytes
 
-getString :: Int -> Int -> BS.ByteString -> BS.ByteString
-getString off len = BS.copy . BS.Char8.takeWhile (/='\0') . getBytes off len
+getString :: Int -> Int -> BS.ByteString -> PS.PosixString
+getString off len = PS.takeWhile (/= PS.unsafeFromChar '\0') . byteToPosixString . getBytes off len
 
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int   #-}
 {-# SPECIALISE readOct :: BS.ByteString -> Maybe Int64 #-}

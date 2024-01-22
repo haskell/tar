@@ -23,4 +23,4 @@ jobs:
       run: |
         source ~/.ghcup/env
         cabal update
-        cabal test --test-show-details=direct
+        cabal test --enable-tests --test-show-details=direct

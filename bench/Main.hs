@@ -10,6 +10,8 @@ import System.Directory
 import System.Environment
 import System.IO.Temp
 
+import qualified System.OsPath as OSP
+
 import Test.Tasty.Bench
 
 main = defaultMain benchmarks
@@ -29,7 +31,9 @@ benchmarks =
       bench "index rebuild" (nf (TarIndex.finalise . TarIndex.unfinalise) entries)
 
   , env loadTarEntries $ \entries ->
-      bench "unpack" (nfIO $ withSystemTempDirectory "tar-bench" $ \baseDir -> Tar.unpack baseDir entries)
+      bench "unpack" (nfIO $ withSystemTempDirectory "tar-bench" $ \baseDir' -> do
+        baseDir <- OSP.encodeFS baseDir'
+        Tar.unpack baseDir entries)
   ]
 
 loadTarFile :: IO BS.ByteString

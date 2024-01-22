@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -53,18 +55,22 @@ module Codec.Archive.Tar.Types (
   TarPath(..),
   toTarPath,
   toTarPath',
+  splitLongPath,
   ToTarPathResult(..),
   fromTarPath,
   fromTarPathToPosixPath,
   fromTarPathToWindowsPath,
-  fromFilePathToNative,
 
   LinkTarget(..),
   toLinkTarget,
   fromLinkTarget,
   fromLinkTargetToPosixPath,
   fromLinkTargetToWindowsPath,
-  fromFilePathToWindowsPath,
+
+  toFSPosixPath,
+  toFSPosixPath',
+  toWindowsPath,
+  fromPosixPath,
 
   GenEntries(..),
   Entries,
@@ -78,28 +84,33 @@ module Codec.Archive.Tar.Types (
 
 import Data.Int      (Int64)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid   (Monoid(..))
 import Data.Semigroup as Sem
 import Data.Typeable
-import qualified Data.ByteString       as BS
-import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
 import Control.DeepSeq
 import Control.Exception (Exception, displayException)
 
-import qualified System.FilePath as FilePath.Native
-         ( joinPath, splitDirectories, addTrailingPathSeparator, hasTrailingPathSeparator, pathSeparator, isAbsolute, hasTrailingPathSeparator )
-import qualified System.FilePath.Posix as FilePath.Posix
-         ( joinPath, splitPath, splitDirectories, hasTrailingPathSeparator
-         , addTrailingPathSeparator, pathSeparator )
-import qualified System.FilePath.Windows as FilePath.Windows
-         ( joinPath, addTrailingPathSeparator, pathSeparator )
+import GHC.Stack (HasCallStack)
+
 import System.Posix.Types
          ( FileMode )
-import "os-string" System.OsString.Posix (PosixString, PosixChar)
-import qualified "os-string" System.OsString.Posix as PS
 
-import Codec.Archive.Tar.PackAscii
+import System.IO.Unsafe (unsafePerformIO)
+import System.OsString.Posix (pstr)
+import qualified System.OsString.Posix as Posix
+import System.OsString.Internal.Types (OsString(..), PosixString(..))
+import qualified System.OsString.Posix as PS
+import qualified System.OsString.Windows as WS
+
+import System.OsPath         (OsPath)
+import System.OsPath.Windows (WindowsPath)
+import System.OsPath.Posix   (PosixPath)
+import qualified System.OsPath as OSP
+import qualified System.OsPath.Posix as PFP
+import qualified System.OsPath.Windows as WFP
+
+import qualified Data.ByteString.Short as SBS
+
 
 -- | File size in bytes.
 type FileSize  = Int64
@@ -151,16 +162,16 @@ data GenEntry tarPath linkTarget = Entry {
 --
 type Entry = GenEntry TarPath LinkTarget
 
--- | Low-level function to get a native 'FilePath' of the file or directory
+-- | Low-level function to get a native 'OsPath of the file or directory
 -- within the archive, not accounting for long names. It's likely
 -- that you want to apply 'Codec.Archive.Tar.decodeLongNames'
 -- and use 'Codec.Archive.Tar.Entry.entryTarPath' afterwards instead of 'entryPath'.
 --
-entryPath :: GenEntry TarPath linkTarget -> FilePath
+entryPath :: GenEntry TarPath linkTarget -> OsPath
 entryPath = fromTarPath . entryTarPath
 
 -- | Polymorphic content of a tar archive entry. High-level interfaces
--- commonly work with 'GenEntryContent' 'FilePath',
+-- commonly work with 'GenEntryContent' 'OsPath',
 -- while low-level ones use 'GenEntryContent' 'LinkTarget'.
 --
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
@@ -187,10 +198,10 @@ type EntryContent = GenEntryContent LinkTarget
 -- | Ownership information for 'GenEntry'.
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
-    ownerName :: String,
+    ownerName :: PosixString,
 
     -- | The owner group name. Should be set to @\"\"@ if unknown.
-    groupName :: String,
+    groupName :: PosixString,
 
     -- | Numeric owner user id. Should be set to @0@ if unknown.
     ownerId :: {-# UNPACK #-} !Int,
@@ -268,7 +279,7 @@ simpleEntry tarpath content = Entry {
                          Directory -> directoryPermissions
                          SymbolicLink _ -> symbolicLinkPermission
                          _         -> ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = Ownership PS.empty PS.empty 0 0,
     entryTime        = 0,
     entryFormat      = UstarFormat
   }
@@ -300,12 +311,12 @@ symlinkEntry name targetLink =
 -- See [What exactly is the GNU tar ././@LongLink "trick"?](https://stackoverflow.com/questions/2078778/what-exactly-is-the-gnu-tar-longlink-trick)
 --
 -- @since 0.6.0.0
-longLinkEntry :: FilePath -> GenEntry TarPath linkTarget
-longLinkEntry tarpath = Entry {
-    entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
-    entryContent     = OtherEntryType 'L' (LBS.fromStrict $ posixToByteString $ toPosixString tarpath) (fromIntegral $ length tarpath),
+longLinkEntry :: PosixPath -> GenEntry TarPath linkTarget
+longLinkEntry (PosixString tarpath) = Entry {
+    entryTarPath     = TarPath [pstr|././@LongLink|] PS.empty,
+    entryContent     = OtherEntryType 'L' (LBS.fromStrict . SBS.fromShort $ tarpath) (fromIntegral $ SBS.length tarpath),
     entryPermissions = ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = Ownership PS.empty PS.empty 0 0,
     entryTime        = 0,
     entryFormat      = GnuFormat
   }
@@ -317,12 +328,12 @@ longLinkEntry tarpath = Entry {
 -- data with truncated 'Codec.Archive.Tar.Entry.entryTarPath'.
 --
 -- @since 0.6.0.0
-longSymLinkEntry :: FilePath -> GenEntry TarPath linkTarget
-longSymLinkEntry linkTarget = Entry {
-    entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
-    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ posixToByteString $ toPosixString $ linkTarget) (fromIntegral $ length linkTarget),
+longSymLinkEntry :: PosixPath -> GenEntry TarPath linkTarget
+longSymLinkEntry (PosixString linkTarget) = Entry {
+    entryTarPath     = TarPath [pstr|././@LongLink|] PS.empty,
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict . SBS.fromShort $ linkTarget) (fromIntegral $ SBS.length linkTarget),
     entryPermissions = ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = Ownership PS.empty PS.empty 0 0,
     entryTime        = 0,
     entryFormat      = GnuFormat
   }
@@ -375,7 +386,7 @@ instance NFData TarPath where
 instance Show TarPath where
   show = show . fromTarPath
 
--- | Convert a 'TarPath' to a native 'FilePath'.
+-- | Convert a 'TarPath' to a native 'OsPath'.
 --
 -- The native 'FilePath' will use the native directory separator but it is not
 -- otherwise checked for validity or sanity. In particular:
@@ -388,10 +399,14 @@ instance Show TarPath where
 --   responsibility to check for these conditions
 --   (e.g., using 'Codec.Archive.Tar.Check.checkEntrySecurity').
 --
-fromTarPath :: TarPath -> FilePath
-fromTarPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Native.pathSeparator)
+fromTarPath :: TarPath -> OsPath
+#if defined(mingw32_HOST_OS)
+fromTarPath = OsString . fromTarPathToWindowsPath
+#else
+fromTarPath = OsString . fromTarPathToPosixPath
+#endif
 
--- | Convert a 'TarPath' to a Unix\/Posix 'FilePath'.
+-- | Convert a 'TarPath' to a Unix\/Posix 'OsPath'.
 --
 -- The difference compared to 'fromTarPath' is that it always returns a Unix
 -- style path irrespective of the current operating system.
@@ -399,10 +414,13 @@ fromTarPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.
 -- This is useful to check how a 'TarPath' would be interpreted on a specific
 -- operating system, eg to perform portability checks.
 --
-fromTarPathToPosixPath :: TarPath -> FilePath
-fromTarPathToPosixPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Posix.pathSeparator)
+fromTarPathToPosixPath :: TarPath -> PosixPath
+fromTarPathToPosixPath (TarPath name prefix)
+  | PS.null prefix = name
+  | PS.null name = prefix
+  | otherwise = prefix <> PS.cons PFP.pathSeparator name
 
--- | Convert a 'TarPath' to a Windows 'FilePath'.
+-- | Convert a 'TarPath' to a Windows 'OsPath'.
 --
 -- The only difference compared to 'fromTarPath' is that it always returns a
 -- Windows style path irrespective of the current operating system.
@@ -410,62 +428,82 @@ fromTarPathToPosixPath = fromPosixString . fromTarPathInternal (PS.unsafeFromCha
 -- This is useful to check how a 'TarPath' would be interpreted on a specific
 -- operating system, eg to perform portability checks.
 --
-fromTarPathToWindowsPath :: TarPath -> FilePath
-fromTarPathToWindowsPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Windows.pathSeparator)
+fromTarPathToWindowsPath :: HasCallStack => TarPath -> WindowsPath
+fromTarPathToWindowsPath tarPath =
+  let posix = fromTarPathToPosixPath tarPath
+  in toWindowsPath posix
 
-fromTarPathInternal :: PosixChar -> TarPath -> PosixString
-fromTarPathInternal sep = go
-  where
-    posixSep = PS.unsafeFromChar FilePath.Posix.pathSeparator
-    adjustSeps = if sep == posixSep then id else
-      PS.map $ \c -> if c == posixSep then sep else c
-    go (TarPath name prefix)
-     | PS.null prefix = adjustSeps name
-     | PS.null name = adjustSeps prefix
-     | otherwise = adjustSeps prefix <> PS.cons sep (adjustSeps name)
-{-# INLINE fromTarPathInternal #-}
+-- | We assume UTF-8 on posix and filesystem encoding on windows.
+toWindowsPath :: HasCallStack => PosixPath -> WindowsPath
+toWindowsPath posix =
+  let str = unsafePerformIO $ PFP.decodeUtf posix
+      win = unsafePerformIO $ WFP.encodeFS str
+  in WS.map (\c -> if WFP.isPathSeparator c then WFP.pathSeparator else c) win
 
--- | Convert a native 'FilePath' to a 'TarPath'.
+
+-- | We assume filesystem encoding on windows and UTF-8 on posix.
+toFSPosixPath :: HasCallStack => WindowsPath -> PosixPath
+toFSPosixPath win =
+  let str = unsafePerformIO $ WFP.decodeFS win
+      posix = Posix.unsafeEncodeUtf str
+  in PS.map (\c -> if PFP.isPathSeparator c then PFP.pathSeparator else c) posix
+
+-- | We assume filesystem encoding on windows and UTF-8 on posix.
+toFSPosixPath' :: HasCallStack => OsPath -> PosixPath
+#if defined(mingw32_HOST_OS)
+toFSPosixPath' (OsString ws) = toFSPosixPath ws
+#else
+toFSPosixPath' (OsString ps) = ps
+#endif
+
+-- | We assume UTF-8 on posix and filesystem encoding on windows.
+fromPosixPath :: HasCallStack => PosixPath -> OsPath
+#if defined(mingw32_HOST_OS)
+fromPosixPath ps = OsString $ toWindowsPath ps
+#else
+fromPosixPath = OsString
+#endif
+
+
+-- | Convert a native 'OsPath' to a 'TarPath'.
 --
--- The conversion may fail if the 'FilePath' is empty or too long.
+-- The conversion may fail if the 'OsPath' is empty or too long.
+-- Use 'toTarPath'' for a structured output.
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
                   -- directories a 'TarPath' must always use a trailing @\/@.
-          -> FilePath
+          -> OsPath
           -> Either String TarPath
 toTarPath isDir path = case toTarPath' path' of
-  FileNameEmpty      -> Left "File name empty"
-  FileNameOK tarPath -> Right tarPath
-  FileNameTooLong{}  -> Left "File name too long"
+  FileNameEmpty        -> Left "File name empty"
+  (FileNameOK tarPath) -> Right tarPath
+  (FileNameTooLong{})  -> Left "File name too long"
   where
-    path' = if isDir && not (FilePath.Native.hasTrailingPathSeparator path)
-            then path <> [FilePath.Native.pathSeparator]
+    path' = if isDir && not (OSP.hasTrailingPathSeparator path)
+            then path <> OSP.pack [OSP.pathSeparator]
             else path
 
--- | Convert a native 'FilePath' to a 'TarPath'.
+-- | Convert a native 'OsPath' to a 'TarPath'.
 -- Directory paths must always have a trailing @\/@, this is not checked.
 --
 -- @since 0.6.0.0
 toTarPath'
-  :: FilePath
+  :: HasCallStack
+  => OsPath
   -> ToTarPathResult
-toTarPath'
-  = splitLongPath
-  . (if nativeSep == posixSep then id else adjustSeps)
-  where
-    nativeSep = FilePath.Native.pathSeparator
-    posixSep = FilePath.Posix.pathSeparator
-    adjustSeps = map $ \c -> if c == nativeSep then posixSep else c
+toTarPath' osp' =
+  let posix = toFSPosixPath' osp'
+  in splitLongPath posix
 
 -- | Return type of 'toTarPath''.
 --
 -- @since 0.6.0.0
 data ToTarPathResult
   = FileNameEmpty
-  -- ^ 'FilePath' was empty, but 'TarPath' must be non-empty.
+  -- ^ 'OsPath' was empty, but 'TarPath' must be non-empty.
   | FileNameOK TarPath
   -- ^ All good, this is just a normal 'TarPath'.
   | FileNameTooLong TarPath
-  -- ^ 'FilePath' was longer than 255 characters, 'TarPath' contains
+  -- ^ 'OsPath' was longer than 255 characters, 'TarPath' contains
   -- a truncated part only. An actual entry must be preceded by
   -- 'longLinkEntry'.
 
@@ -475,104 +513,83 @@ data ToTarPathResult
 -- The strategy is this: take the name-directory components in reverse order
 -- and try to fit as many components into the 100 long name area as possible.
 -- If all the remaining components fit in the 155 name area then we win.
-splitLongPath :: FilePath -> ToTarPathResult
-splitLongPath path = case reverse (FilePath.Posix.splitPath path) of
+splitLongPath :: PosixPath -> ToTarPathResult
+splitLongPath path = case reverse (PFP.splitPath path) of
   [] -> FileNameEmpty
   c : cs -> case packName nameMax (c :| cs) of
-    Nothing                 -> FileNameTooLong $ TarPath (toPosixString $ take 100 path) mempty
-    Just (name, [])         -> FileNameOK $! TarPath (toPosixString name) mempty
+    Nothing                 -> FileNameTooLong $ TarPath (PS.take 100 path) PS.empty
+    Just (name, [])         -> FileNameOK $! TarPath name PS.empty
     Just (name, first:rest) -> case packName prefixMax remainder of
-      Nothing               -> FileNameTooLong $ TarPath (toPosixString $ take 100 path) mempty
-      Just (_     , _:_)    -> FileNameTooLong $ TarPath (toPosixString $ take 100 path) mempty
-      Just (prefix, [])     -> FileNameOK $! TarPath (toPosixString name) (toPosixString prefix)
+      Nothing               -> FileNameTooLong $ TarPath (PS.take 100 path) PS.empty
+      Just (_     , _:_)    -> FileNameTooLong $ TarPath (PS.take 100 path) PS.empty
+      Just (prefix, [])     -> FileNameOK $! TarPath name prefix
       where
         -- drop the '/' between the name and prefix:
-        remainder = init first :| rest
+        remainder = PS.init first :| rest
 
   where
     nameMax, prefixMax :: Int
     nameMax   = 100
     prefixMax = 155
 
-    packName :: Int -> NonEmpty FilePath -> Maybe (FilePath, [FilePath])
+    packName :: Int -> NonEmpty PosixPath -> Maybe (PosixPath, [PosixPath])
     packName maxLen (c :| cs)
       | n > maxLen         = Nothing
       | otherwise          = Just (packName' maxLen n [c] cs)
-      where n = length c
+      where n = PS.length c
 
-    packName' :: Int -> Int -> [FilePath] -> [FilePath] -> (FilePath, [FilePath])
+    packName' :: Int -> Int -> [PosixPath] -> [PosixPath] -> (PosixPath, [PosixPath])
     packName' maxLen n ok (c:cs)
       | n' <= maxLen             = packName' maxLen n' (c:ok) cs
-                                     where n' = n + length c
-    packName' _      _ ok    cs  = (FilePath.Posix.joinPath ok, cs)
+                                     where n' = n + PS.length c
+    packName' _      _ ok    cs  = (PFP.joinPath ok, cs)
 
 -- | The tar format allows just 100 ASCII characters for the 'SymbolicLink' and
 -- 'HardLink' entry types.
 --
-newtype LinkTarget = LinkTarget PosixString
+newtype LinkTarget = LinkTarget PosixPath
   deriving (Eq, Ord, Show)
 
 instance NFData LinkTarget where
     rnf (LinkTarget bs) = rnf bs
 
--- | Convert a native 'FilePath' to a tar 'LinkTarget'.
+-- | Convert a native 'OsPath' to a tar 'LinkTarget'.
 -- string is longer than 100 characters or if it contains non-portable
 -- characters.
-toLinkTarget :: FilePath -> Maybe LinkTarget
-toLinkTarget path
-  | length path <= 100 = do
-    target <- toLinkTarget' path
-    Just $! LinkTarget (toPosixString target)
-  | otherwise = Nothing
+toLinkTarget :: HasCallStack => OsPath -> Either LinkTargetException LinkTarget
+toLinkTarget osPath =
+  let path = toFSPosixPath' osPath
+  in if | PFP.isAbsolute path -> Left (IsAbsolute osPath)
+        | PS.length path <= 100 -> Right $ LinkTarget path
+        | otherwise -> Left (TooLong osPath)
 
-data LinkTargetException = IsAbsolute FilePath
-                         | TooLong FilePath
+data LinkTargetException = IsAbsolute OsPath
+                         | TooLong OsPath
   deriving (Show,Typeable)
 
 instance Exception LinkTargetException where
-  displayException (IsAbsolute fp) = "Link target \"" <> fp <> "\" is unexpectedly absolute"
+  displayException (IsAbsolute fp) = "Link target \"" <> show fp <> "\" is unexpectedly absolute"
   displayException (TooLong _) = "The link target is too long"
 
--- | Convert a native 'FilePath' to a unix filepath suitable for
--- using as 'LinkTarget'. Does not error if longer than 100 characters.
-toLinkTarget' :: FilePath -> Maybe FilePath
-toLinkTarget' path
-  | FilePath.Native.isAbsolute path = Nothing
-  | otherwise = Just $ adjustDirectory $ FilePath.Posix.joinPath $ FilePath.Native.splitDirectories path
-  where
-    adjustDirectory | FilePath.Native.hasTrailingPathSeparator path
-                    = FilePath.Posix.addTrailingPathSeparator
-                    | otherwise = id
-
 -- | Convert a tar 'LinkTarget' to a native 'FilePath'.
-fromLinkTarget :: LinkTarget -> FilePath
-fromLinkTarget (LinkTarget pathbs) = fromFilePathToNative $ fromPosixString pathbs
+fromLinkTarget :: HasCallStack => LinkTarget -> OsPath
+#if defined(mingw32_HOST_OS)
+fromLinkTarget linkTarget =
+  OsString $ fromLinkTargetToWindowsPath linkTarget
+#else
+fromLinkTarget linkTarget =
+  OsString $ fromLinkTargetToPosixPath linkTarget
+#endif
 
 -- | Convert a tar 'LinkTarget' to a Unix\/POSIX 'FilePath' (@\'/\'@ path separators).
-fromLinkTargetToPosixPath :: LinkTarget -> FilePath
-fromLinkTargetToPosixPath (LinkTarget pathbs) = fromPosixString pathbs
+fromLinkTargetToPosixPath :: LinkTarget -> PosixPath
+fromLinkTargetToPosixPath (LinkTarget pathbs) = pathbs
 
 -- | Convert a tar 'LinkTarget' to a Windows 'FilePath' (@\'\\\\\'@ path separators).
-fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
-fromLinkTargetToWindowsPath (LinkTarget pathbs) =
-  fromFilePathToWindowsPath $ fromPosixString pathbs
+fromLinkTargetToWindowsPath :: HasCallStack => LinkTarget -> WindowsPath
+fromLinkTargetToWindowsPath (LinkTarget posix) = toWindowsPath posix
 
--- | Convert a unix FilePath to a native 'FilePath'.
-fromFilePathToNative :: FilePath -> FilePath
-fromFilePathToNative =
-  fromFilePathInternal FilePath.Posix.pathSeparator FilePath.Native.pathSeparator
 
--- | Convert a unix FilePath to a Windows 'FilePath'.
-fromFilePathToWindowsPath :: FilePath -> FilePath
-fromFilePathToWindowsPath =
-  fromFilePathInternal FilePath.Posix.pathSeparator FilePath.Windows.pathSeparator
-
-fromFilePathInternal :: Char -> Char -> FilePath -> FilePath
-fromFilePathInternal fromSep toSep = adjustSeps
-  where
-    adjustSeps = if fromSep == toSep then id else
-      map $ \c -> if c == fromSep then toSep else c
-{-# INLINE fromFilePathInternal #-}
 
 --
 -- * Entries type

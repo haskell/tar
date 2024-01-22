@@ -2,6 +2,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# OPTIONS_HADDOCK hide #-}
@@ -31,14 +32,8 @@ import Codec.Archive.Tar.LongNames
 import Data.Bits
          ( testBit )
 import Data.List (partition, nub)
-import Data.Maybe ( fromMaybe )
-import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as BS
-import System.FilePath
-         ( (</>) )
-import qualified System.FilePath as FilePath.Native
-         ( takeDirectory )
-import System.Directory
+import System.Directory.OsPath
     ( createDirectoryIfMissing,
       copyFile,
       setPermissions,
@@ -54,15 +49,24 @@ import System.Directory
       setOwnerSearchable )
 import Control.Exception
          ( Exception, throwIO, handle )
-import System.IO ( stderr, hPutStr )
-import System.IO.Error ( ioeGetErrorType, isPermissionError )
+import System.IO.Error ( ioeGetErrorType )
 import GHC.IO (unsafeInterleaveIO)
 import Data.Foldable (traverse_)
-import GHC.IO.Exception (IOErrorType(InappropriateType, IllegalOperation, PermissionDenied, InvalidArgument))
+import GHC.IO.Exception (IOErrorType(IllegalOperation, PermissionDenied, InvalidArgument))
 import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
 import Control.Exception as Exception
          ( catch, SomeException(..) )
+
+import System.OsPath         (OsPath)
+import System.OsPath.Posix   (PosixPath)
+
+import qualified System.OsPath as OSP
+import qualified System.File.OsPath as OSP
+
+import qualified System.OsString as OS
+import qualified System.OsString.Posix as PS
+
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -84,7 +88,7 @@ import Control.Exception as Exception
 --
 unpack
   :: Exception e
-  => FilePath
+  => OsPath
   -- ^ Base directory
   -> Entries e
   -- ^ Entries to upack
@@ -103,9 +107,9 @@ unpack = unpackAndCheck (fmap SomeException . checkEntrySecurity)
 -- @since 0.6.0.0
 unpackAndCheck
   :: Exception e
-  => (GenEntry FilePath FilePath -> Maybe SomeException)
+  => (GenEntry PosixPath PosixPath -> Maybe SomeException)
   -- ^ Checks to run on each entry before unpacking
-  -> FilePath
+  -> OsPath
   -- ^ Base directory
   -> Entries e
   -- ^ Entries to upack
@@ -123,11 +127,11 @@ unpackAndCheck secCB baseDir entries = do
     -- files all over the place.
 
     unpackEntries :: Exception e
-                  => [(FilePath, FilePath, Bool)]
+                  => [(PosixPath, PosixPath, Bool)]
                   -- ^ links (path, link, isHardLink)
-                  -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+                  -> GenEntries PosixPath PosixPath (Either e DecodeLongNamesError)
                   -- ^ entries
-                  -> IO [(FilePath, FilePath, Bool)]
+                  -> IO [(PosixPath, PosixPath, Bool)]
     unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = do
@@ -154,42 +158,49 @@ unpackAndCheck secCB baseDir entries = do
         BlockDevice{} -> unpackEntries links es
         NamedPipe -> unpackEntries links es
 
-    extractFile permissions (fromFilePathToNative -> path) content mtime = do
+    extractFile :: Permissions -> PosixPath -> BS.ByteString -> EpochTime -> IO ()
+    extractFile permissions path' content mtime = do
+      let path = fromPosixPath path'
+      let absDir  = baseDir OSP.</> OSP.takeDirectory path
+      let absPath = baseDir OSP.</> path
+
       -- Note that tar archives do not make sure each directory is created
       -- before files they contain, indeed we may have to create several
       -- levels of directory.
       createDirectoryIfMissing True absDir
-      BS.writeFile absPath content
+      OSP.writeFile absPath content
       setOwnerPermissions absPath permissions
       setModTime absPath mtime
-      where
-        absDir  = baseDir </> FilePath.Native.takeDirectory path
-        absPath = baseDir </> path
 
-    extractDir (fromFilePathToNative -> path) mtime = do
+    extractDir :: PosixPath -> EpochTime -> IO ()
+    extractDir path' mtime = do
+      let path = fromPosixPath path'
+      let absPath = baseDir OSP.</> path
       createDirectoryIfMissing True absPath
       setModTime absPath mtime
-      where
-        absPath = baseDir </> path
 
-    saveLink isHardLink (fromFilePathToNative -> path) (fromFilePathToNative -> link) links
-      = seq (length path)
-          $ seq (length link)
+    saveLink :: Bool -> PosixPath -> PosixPath -> [(PosixPath, PosixPath, Bool)] -> [(PosixPath, PosixPath, Bool)]
+    saveLink isHardLink path link links
+      = seq (PS.length path)
+          $ seq (PS.length link)
           $ (path, link, isHardLink):links
 
 
     -- for hardlinks, we just copy
-    handleHardLinks = mapM_ $ \(relPath, relLinkTarget, _) ->
-      let absPath   = baseDir </> relPath
+    handleHardLinks :: [(PosixPath, PosixPath, Bool)] -> IO ()
+    handleHardLinks = mapM_ $ \(relPath', relLinkTarget', _) -> do
+      let relPath = fromPosixPath relPath'
+      let relLinkTarget = fromPosixPath relLinkTarget'
+      let absPath   = baseDir OSP.</> relPath
           -- hard links link targets are always "absolute" paths in
           -- the context of the tar root
-          absTarget = baseDir </> relLinkTarget
+          absTarget = baseDir OSP.</> relLinkTarget
       -- we don't expect races here, since we should be the
       -- only process unpacking the tar archive and writing to
       -- the destination
-      in doesDirectoryExist absTarget >>= \case
-          True -> copyDirectoryRecursive absTarget absPath
-          False -> copyFile absTarget absPath
+      doesDirectoryExist absTarget >>= \case
+        True -> copyDirectoryRecursive absTarget absPath
+        False -> copyFile absTarget absPath
 
     -- For symlinks, we first try to recreate them and if that fails
     -- with 'IllegalOperation', 'PermissionDenied' or 'InvalidArgument',
@@ -197,19 +208,22 @@ unpackAndCheck secCB baseDir entries = do
     -- This error handling isn't too fine grained and maybe should be
     -- platform specific, but this way it might catch erros on unix even on
     -- FAT32 fuse mounted volumes.
-    handleSymlinks = mapM_ $ \(relPath, relLinkTarget, _) ->
-      let absPath   = baseDir </> relPath
+    handleSymlinks :: [(PosixPath, PosixPath, Bool)] -> IO ()
+    handleSymlinks = mapM_ $ \(relPath', relLinkTarget', _) -> do
+      let relPath = fromPosixPath relPath'
+      let relLinkTarget = fromPosixPath relLinkTarget'
+      let absPath   = baseDir OSP.</> relPath
           -- hard links link targets are always "absolute" paths in
           -- the context of the tar root
-          absTarget = FilePath.Native.takeDirectory absPath </> relLinkTarget
+          absTarget = OSP.takeDirectory absPath OSP.</> relLinkTarget
       -- we don't expect races here, since we should be the
       -- only process unpacking the tar archive and writing to
       -- the destination
-      in doesDirectoryExist absTarget >>= \case
-          True -> handleSymlinkError (copyDirectoryRecursive absTarget absPath)
-            $ createDirectoryLink relLinkTarget absPath
-          False -> handleSymlinkError (copyFile absTarget absPath)
-            $ createFileLink relLinkTarget absPath
+      doesDirectoryExist absTarget >>= \case
+        True -> handleSymlinkError (copyDirectoryRecursive absTarget absPath)
+          $ createDirectoryLink relLinkTarget absPath
+        False -> handleSymlinkError (copyFile absTarget absPath)
+          $ createFileLink relLinkTarget absPath
 
       where
         handleSymlinkError action =
@@ -223,7 +237,7 @@ unpackAndCheck secCB baseDir entries = do
 -- | Recursively copy the contents of one directory to another path.
 --
 -- This is a rip-off of Cabal library.
-copyDirectoryRecursive :: FilePath -> FilePath -> IO ()
+copyDirectoryRecursive :: OsPath -> OsPath -> IO ()
 copyDirectoryRecursive srcDir destDir = do
   srcFiles <- getDirectoryContentsRecursive srcDir
   copyFilesWith copyFile destDir [ (srcDir, f)
@@ -231,17 +245,17 @@ copyDirectoryRecursive srcDir destDir = do
   where
     -- | Common implementation of 'copyFiles', 'installOrdinaryFiles',
     -- 'installExecutableFiles' and 'installMaybeExecutableFiles'.
-    copyFilesWith :: (FilePath -> FilePath -> IO ())
-                  -> FilePath -> [(FilePath, FilePath)] -> IO ()
+    copyFilesWith :: (OsPath -> OsPath -> IO ())
+                  -> OsPath -> [(OsPath, OsPath)] -> IO ()
     copyFilesWith doCopy targetDir srcFiles = do
 
       -- Create parent directories for everything
-      let dirs = map (targetDir </>) . nub . map (FilePath.Native.takeDirectory . snd) $ srcFiles
+      let dirs = map (targetDir OSP.</>) . nub . map (OSP.takeDirectory . snd) $ srcFiles
       traverse_ (createDirectoryIfMissing True) dirs
 
       -- Copy all the files
-      sequence_ [ let src  = srcBase   </> srcFile
-                      dest = targetDir </> srcFile
+      sequence_ [ let src  = srcBase   OSP.</> srcFile
+                      dest = targetDir OSP.</> srcFile
                    in doCopy src dest
                 | (srcBase, srcFile) <- srcFiles ]
 
@@ -251,13 +265,13 @@ copyDirectoryRecursive srcDir destDir = do
     -- parent directories. The list is generated lazily so is not well defined if
     -- the source directory structure changes before the list is used.
     --
-    getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
-    getDirectoryContentsRecursive topdir = recurseDirectories [""]
+    getDirectoryContentsRecursive :: OsPath -> IO [OsPath]
+    getDirectoryContentsRecursive topdir = recurseDirectories [[OS.osstr||]]
       where
-        recurseDirectories :: [FilePath] -> IO [FilePath]
+        recurseDirectories :: [OsPath] -> IO [OsPath]
         recurseDirectories []         = return []
         recurseDirectories (dir:dirs) = unsafeInterleaveIO $ do
-          (files, dirs') <- collect [] [] =<< listDirectory (topdir </> dir)
+          (files, dirs') <- collect [] [] =<< listDirectory (topdir OSP.</> dir)
           files' <- recurseDirectories (dirs' ++ dirs)
           return (files ++ files')
 
@@ -265,13 +279,13 @@ copyDirectoryRecursive srcDir destDir = do
             collect files dirs' []              = return (reverse files
                                                          ,reverse dirs')
             collect files dirs' (entry:entries) = do
-              let dirEntry = dir </> entry
-              isDirectory <- doesDirectoryExist (topdir </> dirEntry)
+              let dirEntry = dir OSP.</> entry
+              isDirectory <- doesDirectoryExist (topdir OSP.</> dirEntry)
               if isDirectory
                 then collect files (dirEntry:dirs') entries
                 else collect (dirEntry:files) dirs' entries
 
-setModTime :: FilePath -> EpochTime -> IO ()
+setModTime :: OsPath -> EpochTime -> IO ()
 setModTime path t =
     setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
       `Exception.catch` \e -> case ioeGetErrorType e of
@@ -281,7 +295,7 @@ setModTime path t =
         InvalidArgument -> return ()
         _ -> throwIO e
 
-setOwnerPermissions :: FilePath -> Permissions -> IO ()
+setOwnerPermissions :: OsPath -> Permissions -> IO ()
 setOwnerPermissions path permissions =
   setPermissions path ownerPermissions
   where

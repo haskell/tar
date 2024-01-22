@@ -66,25 +66,26 @@ import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import Codec.Archive.Tar.Index.IntTrie (IntTrie, IntTrieBuilder)
 import Codec.Archive.Tar.PackAscii
 
-import qualified System.FilePath.Posix as FilePath
-import Data.Monoid (Monoid(..))
-import Data.Monoid ((<>))
 import Data.Word
 import Data.Int
 import Data.Bits
-import qualified Data.Array.Unboxed as A
 import Prelude hiding (lookup)
 import System.IO
 import Control.Exception (assert, throwIO)
 import Control.DeepSeq
 
 import qualified Data.ByteString        as BS
-import qualified Data.ByteString.Char8  as BS.Char8
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS
 import Data.ByteString.Builder          as BS
 import Data.ByteString.Builder.Extra    as BS (toLazyByteStringWith,
                                                untrimmedStrategy)
+
+import System.OsPath.Posix   (PosixPath)
+import qualified System.OsPath.Posix as PFP
+
+import qualified System.OsString.Posix as PS
+
 
 -- | An index of the entries in a tar file.
 --
@@ -129,7 +130,7 @@ instance NFData TarIndex where
 -- cheaper if you don't look at them.
 --
 data TarIndexEntry = TarFileEntry {-# UNPACK #-} !TarEntryOffset
-                   | TarDir [(FilePath, TarIndexEntry)]
+                   | TarDir [(PosixPath, TarIndexEntry)]
   deriving (Show, Typeable)
 
 
@@ -155,7 +156,7 @@ type TarEntryOffset = Word32
 --
 -- * 'hReadEntryHeader' to read just the file metadata (e.g. its length);
 --
-lookup :: TarIndex -> FilePath -> Maybe TarIndexEntry
+lookup :: TarIndex -> PosixPath -> Maybe TarIndexEntry
 lookup (TarIndex pathTable pathTrie _) path = do
     fpath  <- toComponentIds pathTable path
     tentry <- IntTrie.lookup pathTrie $ map pathComponentIdToKey fpath
@@ -167,32 +168,31 @@ lookup (TarIndex pathTable pathTrie _) path = do
              | (key, entry) <- entries ]
 
 
-toComponentIds :: StringTable PathComponentId -> FilePath -> Maybe [PathComponentId]
+toComponentIds :: StringTable PathComponentId -> PosixPath -> Maybe [PathComponentId]
 toComponentIds table =
     lookupComponents []
-  . filter (/= BS.Char8.singleton '.')
+  . fmap posixToByteString
+  . filter (/= (PS.singleton $ PS.unsafeFromChar '.'))
   . splitDirectories
-  . posixToByteString
-  . toPosixString
   where
     lookupComponents cs' []     = Just (reverse cs')
     lookupComponents cs' (c:cs) = case StringTable.lookup table c of
       Nothing  -> Nothing
       Just cid -> lookupComponents (cid:cs') cs
 
-fromComponentId :: StringTable PathComponentId -> PathComponentId -> FilePath
-fromComponentId table = fromPosixString . byteToPosixString . StringTable.index table
+fromComponentId :: StringTable PathComponentId -> PathComponentId -> PosixPath
+fromComponentId table = byteToPosixString . StringTable.index table
 
 -- | All the files in the index with their corresponding 'TarEntryOffset's.
 --
 -- Note that the files are in no special order. If you intend to read all or
 -- most files then is is recommended to sort by the 'TarEntryOffset'.
 --
-toList :: TarIndex -> [(FilePath, TarEntryOffset)]
+toList :: TarIndex -> [(PosixPath, TarEntryOffset)]
 toList (TarIndex pathTable pathTrie _) =
     [ (path, IntTrie.unValue off)
     | (cids, off) <- IntTrie.toList pathTrie
-    , let path = FilePath.joinPath (map (fromComponentId pathTable . keyToPathComponentId) cids) ]
+    , let path = PFP.joinPath (map (fromComponentId pathTable . keyToPathComponentId) cids) ]
 
 
 -- | Build a 'TarIndex' from a sequence of tar 'Entries'. The 'Entries' are
@@ -229,7 +229,7 @@ addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
                  (nextEntryOffset entry nextOffset)
   where
     !entrypath    = splitTarPath (entryTarPath entry)
-    (stbl', cids) = StringTable.inserts entrypath stbl
+    (stbl', cids) = StringTable.inserts (posixToByteString <$> entrypath) stbl
     itrie'        = IntTrie.insert (map pathComponentIdToKey cids) (IntTrie.Value nextOffset) itrie
 
 -- | Use this function if you want to skip some entries and not add them to the
@@ -283,17 +283,18 @@ nextEntryOffset entry offset =
     blocks :: Int64 -> TarEntryOffset
     blocks size = fromIntegral (1 + (size - 1) `div` 512)
 
-type FilePathBS = BS.ByteString
 
-splitTarPath :: TarPath -> [FilePathBS]
+splitTarPath :: TarPath -> [PosixPath]
 splitTarPath (TarPath name prefix) =
-    splitDirectories (posixToByteString prefix) ++ splitDirectories (posixToByteString name)
+    splitDirectories prefix ++ splitDirectories name
 
-splitDirectories :: FilePathBS -> [FilePathBS]
+splitDirectories :: PosixPath -> [PosixPath]
 splitDirectories bs =
-    case BS.Char8.split '/' bs of
-      c:cs | BS.null c -> BS.Char8.singleton '/' : filter (not . BS.null) cs
-      cs               ->                          filter (not . BS.null) cs
+    case PS.split sep bs of
+      c:cs | PS.null c -> PS.singleton sep : filter (not . PS.null) cs
+      cs               ->                    filter (not . PS.null) cs
+ where
+  sep = PS.unsafeFromChar '/'
 
 
 -------------------------

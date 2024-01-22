@@ -1,1 +1,7 @@
 packages: . htar
+
+if (os(windows))
+    source-repository-package
+      type: git
+      location: https://github.com/haskell/win32.git
+      tag: 86e2737e1c2a668168ba8497c932a058c5c9a600

@@ -12,13 +12,12 @@ import Prelude hiding (lookup)
 import Codec.Archive.Tar.Index.StringTable
 import Test.Tasty.QuickCheck
 
-import Data.List hiding (lookup, insert)
+import qualified Data.List as L
 import qualified Data.Array.Unboxed as A
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
 #if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
-import Data.ByteString.Builder.Extra    as BS (byteStringCopy)
 #else
 import Data.ByteString.Lazy.Builder     as BS
 import Data.ByteString.Lazy.Builder.Extras as BS (byteStringCopy)
@@ -56,7 +55,7 @@ prop_finalise_unfinalise strs =
     builder === unfinalise (finalise builder)
   where
     builder :: StringTableBuilder Int
-    builder = foldl' (\tbl s -> fst (insert s tbl)) empty strs
+    builder = L.foldl' (\tbl s -> fst (insert s tbl)) empty strs
 
 prop_serialise_deserialise :: [BS.ByteString] -> Property
 prop_serialise_deserialise strs =

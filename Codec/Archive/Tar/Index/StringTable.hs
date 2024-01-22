@@ -27,13 +27,10 @@ module Codec.Archive.Tar.Index.StringTable (
 import Data.Typeable (Typeable)
 
 import Prelude   hiding (lookup, id)
-import Data.List hiding (lookup, insert)
-import Data.Function (on)
+import qualified Data.List as L
 import Data.Word (Word32)
 import Data.Int  (Int32)
 import Data.Bits
-import Data.Monoid (Monoid(..))
-import Data.Monoid ((<>))
 import Control.Exception (assert)
 
 import qualified Data.Array.Unboxed as A
@@ -42,7 +39,6 @@ import qualified Data.Map.Strict        as Map
 import           Data.Map.Strict (Map)
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Unsafe as BS
-import qualified Data.ByteString.Lazy   as LBS
 import Data.ByteString.Builder          as BS
 import Data.ByteString.Builder.Extra    as BS (byteStringCopy)
 
@@ -96,7 +92,7 @@ index (StringTable bs offsets _ids ixs) =
 -- in the construction.
 --
 construct :: Enum id => [BS.ByteString] -> StringTable id
-construct = finalise . foldl' (\tbl s -> fst (insert s tbl)) empty
+construct = finalise . L.foldl' (\tbl s -> fst (insert s tbl)) empty
 
 
 data StringTableBuilder id = StringTableBuilder
@@ -116,7 +112,7 @@ insert str builder@(StringTableBuilder smap nextid) =
                    in (StringTableBuilder smap' (nextid+1), id)
 
 inserts :: Enum id => [BS.ByteString] -> StringTableBuilder id -> (StringTableBuilder id, [id])
-inserts bss builder = mapAccumL (flip insert) builder bss
+inserts bss builder = L.mapAccumL (flip insert) builder bss
 
 finalise :: Enum id => StringTableBuilder id -> StringTable id
 finalise (StringTableBuilder smap _) =

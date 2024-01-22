@@ -164,7 +164,6 @@ module Codec.Archive.Tar (
   FormatError(..),
   ) where
 
-import Codec.Archive.Tar.Check
 import Codec.Archive.Tar.Entry
 import Codec.Archive.Tar.Index (hSeekEndEntryOffset)
 import Codec.Archive.Tar.LongNames (decodeLongNames, encodeLongNames, DecodeLongNamesError(..))
@@ -174,11 +173,12 @@ import Codec.Archive.Tar.Types (unfoldEntries, foldlEntries, foldEntries, mapEnt
 import Codec.Archive.Tar.Unpack (unpack, unpackAndCheck)
 import Codec.Archive.Tar.Write (write)
 
-import Control.Applicative ((<|>))
-import Control.Exception (Exception, throw, catch, SomeException(..))
 import qualified Data.ByteString.Lazy as BL
-import System.IO (withFile, IOMode(..))
+import System.IO (IOMode(..))
 import Prelude hiding (read)
+
+import System.OsPath         (OsPath)
+import qualified System.File.OsPath as OSP
 
 -- | Create a new @\".tar\"@ file from a directory of files.
 --
@@ -213,11 +213,11 @@ import Prelude hiding (read)
 --
 -- * @rwxr-xr-x@ for directories
 --
-create :: FilePath   -- ^ Path of the \".tar\" file to write.
-       -> FilePath   -- ^ Base directory
-       -> [FilePath] -- ^ Files and directories to archive, relative to base dir
+create :: OsPath   -- ^ Path of the \".tar\" file to write.
+       -> OsPath   -- ^ Base directory
+       -> [OsPath] -- ^ Files and directories to archive, relative to base dir
        -> IO ()
-create tar base paths = BL.writeFile tar . write =<< pack base paths
+create tar base paths = OSP.writeFile tar . write =<< pack base paths
 
 -- | Extract all the files contained in a @\".tar\"@ file.
 --
@@ -249,10 +249,10 @@ create tar base paths = BL.writeFile tar . write =<< pack base paths
 -- containing entries that point outside of the tarball (either absolute paths
 -- or relative paths) will be caught and an exception will be thrown.
 --
-extract :: FilePath -- ^ Destination directory
-        -> FilePath -- ^ Tarball
+extract :: OsPath -- ^ Destination directory
+        -> OsPath -- ^ Tarball
         -> IO ()
-extract dir tar = unpack dir . read =<< BL.readFile tar
+extract dir tar = unpack dir . read =<< OSP.readFile tar
 
 -- | Append new entries to a @\".tar\"@ file from a directory of files.
 --
@@ -260,11 +260,11 @@ extract dir tar = unpack dir . read =<< BL.readFile tar
 -- end of an existing tar file. Or if the file does not already exists then
 -- it behaves the same as 'create'.
 --
-append :: FilePath   -- ^ Path of the \".tar\" file to write.
-       -> FilePath   -- ^ Base directory
-       -> [FilePath] -- ^ Files and directories to archive, relative to base dir
+append :: OsPath   -- ^ Path of the \".tar\" file to write.
+       -> OsPath   -- ^ Base directory
+       -> [OsPath] -- ^ Files and directories to archive, relative to base dir
        -> IO ()
 append tar base paths =
-    withFile tar ReadWriteMode $ \hnd -> do
+    OSP.withFile tar ReadWriteMode $ \hnd -> do
       _ <- hSeekEndEntryOffset hnd Nothing
       BL.hPut hnd . write =<< pack base paths

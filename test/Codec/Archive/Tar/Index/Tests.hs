@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
@@ -22,40 +23,43 @@ module Codec.Archive.Tar.Index.Tests (
     prop_finalise_unfinalise,
   ) where
 
-import Codec.Archive.Tar (GenEntries(..), Entries, GenEntry, Entry, GenEntryContent(..))
-import Codec.Archive.Tar.Index.Internal (TarIndexEntry(..), TarIndex(..), IndexBuilder, TarEntryOffset(..))
+import Codec.Archive.Tar.PackAscii
+import Codec.Archive.Tar.Types (fromPosixPath)
+import Codec.Archive.Tar (GenEntries(..), Entries, Entry, GenEntryContent(..))
+import Codec.Archive.Tar.Index.Internal (TarIndexEntry(..), TarIndex(..), IndexBuilder, TarEntryOffset)
 import qualified Codec.Archive.Tar.Index.Internal as Tar
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
 import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie
-import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 import qualified Codec.Archive.Tar.Index.StringTable.Tests as StringTable
 import qualified Codec.Archive.Tar.Types as Tar
 import qualified Codec.Archive.Tar.Write as Tar
 
 import qualified Data.ByteString        as BS
-import qualified Data.ByteString.Char8  as BS.Char8
 import qualified Data.ByteString.Lazy   as LBS
 import Data.Int
-#if (MIN_VERSION_base(4,5,0))
-import Data.Monoid ((<>))
-#endif
 import qualified System.FilePath.Posix as FilePath
 import System.IO
 
 import Prelude hiding (lookup)
 import qualified Prelude
 import Test.QuickCheck
-import Test.QuickCheck.Property (ioProperty)
-import Control.Applicative ((<$>), (<*>))
 import Control.Monad (unless)
-import Data.List (nub, sort, sortBy, stripPrefix, isPrefixOf)
+import Data.List (nub, sort)
 import Data.Maybe
-import Data.Function (on)
 import Control.Exception (SomeException, try, throwIO)
 
 #ifdef MIN_VERSION_bytestring_handle
 import qualified Data.ByteString.Handle as HBS
 #endif
+
+import System.OsString.Internal.Types (OsString(..))
+import qualified System.OsString.Posix as PS
+
+import qualified System.OsPath as OSP
+import System.OsPath (OsPath, osp)
+import System.OsPath.Posix (PosixPath, pstr)
+import qualified System.OsPath.Posix as PFP
+
 
 -- Not quite the properties of a finite mapping because we also have lookups
 -- that result in completions.
@@ -70,9 +74,9 @@ prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
     _                                              -> property False
   where
     index       = construct paths
-    completions = [ head (FilePath.splitDirectories completion)
+    completions = [ head (PFP.splitDirectories completion)
                   | (path,_) <- paths
-                  , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
+                  , completion <- maybeToList $ PS.stripPrefix (p <> PS.singleton PFP.pathSeparator) path ]
 
 prop_toList :: ValidPaths -> Property
 prop_toList (ValidPaths paths) =
@@ -91,8 +95,7 @@ prop_valid (ValidPaths paths) =
   where
     index@(TarIndex pathTable _ _) = construct paths
 
-    pathbits = concatMap (map BS.Char8.pack . FilePath.splitDirectories . fst)
-                         paths
+    pathbits = concatMap (fmap posixToByteString . PFP.splitDirectories . fst) paths
     intpaths :: [([IntTrie.Key], IntTrie.Value)]
     intpaths = [ (map (\(Tar.PathComponentId n) -> IntTrie.Key (fromIntegral n)) cids, IntTrie.Value offset)
                | (path, (_size, offset)) <- paths
@@ -116,13 +119,13 @@ prop_serialiseSize (ValidPaths paths) =
   where
     index = construct paths
 
-newtype NonEmptyFilePath = NonEmptyFilePath FilePath deriving Show
+newtype NonEmptyFilePath = NonEmptyFilePath PosixPath deriving Show
 
 instance Arbitrary NonEmptyFilePath where
-  arbitrary = NonEmptyFilePath . FilePath.joinPath
+  arbitrary = NonEmptyFilePath . fromJust .  PFP.encodeUtf . FilePath.joinPath
                 <$> listOf1 (elements ["a", "b", "c", "d"])
 
-newtype ValidPaths = ValidPaths [(FilePath, (Int64, TarEntryOffset))] deriving Show
+newtype ValidPaths = ValidPaths [(PosixPath, (Int64, TarEntryOffset))] deriving Show
 
 instance Arbitrary ValidPaths where
   arbitrary = do
@@ -131,7 +134,7 @@ instance Arbitrary ValidPaths where
       let offsets = scanl (\o sz -> o + 1 + blocks sz) 0 sizes
       return (ValidPaths (zip paths (zip sizes offsets)))
     where
-      arbitraryPath   = FilePath.joinPath
+      arbitraryPath   = fromJust .  PFP.encodeUtf . FilePath.joinPath
                          <$> listOf1 (elements ["a", "b", "c", "d"])
       makeNoPrefix [] = []
       makeNoPrefix (k:ks)
@@ -139,13 +142,13 @@ instance Arbitrary ValidPaths where
                      = k : makeNoPrefix ks
         | otherwise  =     makeNoPrefix ks
 
-      isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a
+      isPrefixOfOther a b = a `PS.isPrefixOf` b || b `PS.isPrefixOf` a
 
       blocks :: Int64 -> TarEntryOffset
       blocks size = fromIntegral (1 + ((size - 1) `div` 512))
 
 -- Helper for bulk construction.
-construct :: [(FilePath, (Int64, TarEntryOffset))] -> TarIndex
+construct :: [(PosixPath, (Int64, TarEntryOffset))] -> TarIndex
 construct =
     either (const undefined) id
   . Tar.build
@@ -153,24 +156,24 @@ construct =
 
 example0 :: Entries ()
 example0 =
-         testEntry "foo-1.0/foo-1.0.cabal" 1500 -- at block 0
-  `Next` testEntry "foo-1.0/LICENSE"       2000 -- at block 4
-  `Next` testEntry "foo-1.0/Data/Foo.hs"   1000 -- at block 9
+         testEntry [pstr|foo-1.0/foo-1.0.cabal|] 1500 -- at block 0
+  `Next` testEntry [pstr|foo-1.0/LICENSE|]       2000 -- at block 4
+  `Next` testEntry [pstr|foo-1.0/Data/Foo.hs|]   1000 -- at block 9
   `Next` Done
 
 example1 :: Entries ()
 example1 =
-  Next (testEntry "./" 1500) Done <> example0
+  Next (testEntry [pstr|./|] 1500) Done <> example0
 
-testEntry :: FilePath -> Int64 -> Entry
+testEntry :: PosixPath -> Int64 -> Entry
 testEntry name size = Tar.simpleEntry path (NormalFile mempty size)
   where
-    Right path = Tar.toTarPath False name
+    Right path = Tar.toTarPath False (fromPosixPath name)
 
 -- | Simple tar archive containing regular files only
 data SimpleTarArchive = SimpleTarArchive {
     simpleTarEntries :: Tar.Entries ()
-  , simpleTarRaw     :: [(FilePath, LBS.ByteString)]
+  , simpleTarRaw     :: [(OsPath, LBS.ByteString)]
   , simpleTarBS      :: LBS.ByteString
   }
 
@@ -219,16 +222,16 @@ instance Arbitrary SimpleTarArchive where
         , simpleTarBS      = Tar.write entries
         }
     where
-      mkRaw :: Int -> Gen [(FilePath, LBS.ByteString)]
+      mkRaw :: Int -> Gen [(OsPath, LBS.ByteString)]
       mkRaw 0 = return []
       mkRaw n = do
          -- Pick a size around 0, 1, or 2 block boundaries
          sz <- sized $ \n -> elements (take n fileSizes)
          bs <- LBS.pack `fmap` vectorOf sz arbitrary
          es <- mkRaw (n - 1)
-         return $ ("file" ++ show n, bs) : es
+         return $ ([osp|file|] <> fromJust (OSP.encodeUtf (show n)), bs) : es
 
-      mkList :: [(FilePath, LBS.ByteString)] -> [Tar.Entry]
+      mkList :: [(OsPath, LBS.ByteString)] -> [Tar.Entry]
       mkList []            = []
       mkList ((fp, bs):es) = entry : mkList es
         where

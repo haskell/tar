@@ -1,3 +1,4 @@
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
@@ -25,6 +26,8 @@ import qualified Data.ByteString.Lazy as BL
 import Prelude hiding (read)
 import Test.Tasty.QuickCheck
 
+import System.OsPath (osp)
+
 prop_write_read_ustar :: [Entry] -> Property
 prop_write_read_ustar entries =
     foldr Next Done entries' === read (write entries')
@@ -47,7 +50,7 @@ prop_large_filesize :: Word -> Property
 prop_large_filesize n = sz === sz'
   where
     sz = fromIntegral $ n * 1024 * 1024 * 128
-    Right fn = toTarPath False "Large.file"
+    Right fn = toTarPath False [osp|Large.file|]
     entry = simpleEntry fn (NormalFile (BL.replicate sz 42) sz)
     -- Trim the tail so it does not blow up RAM
     tar = BL.take 2048 $ write [entry]

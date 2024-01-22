@@ -42,10 +42,7 @@ import Data.Array.IArray  ((!))
 import qualified Data.Bits as Bits
 import Data.Word (Word32)
 import Data.Bits
-import Data.Monoid (Monoid(..))
-import Data.Monoid ((<>))
 import qualified Data.ByteString        as BS
-import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS
 import Data.ByteString.Builder          as BS
 import Control.Exception (assert)
@@ -53,8 +50,7 @@ import qualified Data.Map.Strict        as Map
 import qualified Data.IntMap.Strict     as IntMap
 import Data.IntMap.Strict (IntMap)
 
-import Data.List hiding (lookup, insert)
-import Data.Function (on)
+import qualified Data.List as L
 
 -- | A compact mapping from sequences of nats to nats.
 --
@@ -224,7 +220,7 @@ freshTrieNode (k:ks) v = TrieNode (freshTrie k ks v)
 
 inserts :: [([Key], Value)]
         -> IntTrieBuilder -> IntTrieBuilder
-inserts kvs t = foldl' (\t' (ks, v) -> insert ks v t') t kvs
+inserts kvs t = L.foldl' (\t' (ks, v) -> insert ks v t') t kvs
 
 finalise :: IntTrieBuilder -> IntTrie
 finalise trie =
