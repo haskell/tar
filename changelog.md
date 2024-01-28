@@ -1,6 +1,6 @@
-## Unreleased
+## 0.6.1.0 Bodigrim <andrew.lelechenko@gmail.com> January 2024
 
-  * Support Unicode in filenames (encoded as UTF8).
+  * Support Unicode in filenames (encoded as UTF-8).
   * Reduce peak memory consumption when unpacking large files.
 
 ## 0.6.0.0 Bodigrim <andrew.lelechenko@gmail.com> December 2023
