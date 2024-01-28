@@ -123,7 +123,7 @@ data TarIndex = TarIndex
 instance NFData TarIndex where
   rnf (TarIndex _ _ _) = () -- fully strict by construction
 
--- | The result of 'lookup' in a 'TarIndex'. It can either be a file directly,
+-- | The result of 'Codec.Archive.Tar.Index.lookup' in a t'TarIndex'. It can either be a file directly,
 -- or a directory entry containing further entries (and all subdirectories
 -- recursively). Note that the subtrees are constructed lazily, so it's
 -- cheaper if you don't look at them.
@@ -144,7 +144,7 @@ newtype PathComponentId = PathComponentId Int
 type TarEntryOffset = Word32
 
 
--- | Look up a given filepath in the 'TarIndex'. It may return a 'TarFileEntry'
+-- | Look up a given filepath in the t'TarIndex'. It may return a 'TarFileEntry'
 -- containing the 'TarEntryOffset' of the file within the tar file, or if
 -- the filepath identifies a directory then it returns a 'TarDir' containing
 -- the list of files within that directory.
@@ -195,7 +195,7 @@ toList (TarIndex pathTable pathTrie _) =
     , let path = FilePath.joinPath (map (fromComponentId pathTable . keyToPathComponentId) cids) ]
 
 
--- | Build a 'TarIndex' from a sequence of tar 'Entries'. The 'Entries' are
+-- | Build a t'TarIndex' from a sequence of tar 'Entries'. The 'Entries' are
 -- assumed to start at offset @0@ within a file.
 --
 build :: Entries e -> Either e TarIndex
@@ -205,7 +205,7 @@ build = go empty
     go !builder  Done       = Right $! finalise builder
     go !_       (Fail err)  = Left err
 
--- | The intermediate type used for incremental construction of a 'TarIndex'.
+-- | The intermediate type used for incremental construction of a t'TarIndex'.
 --
 data IndexBuilder
    = IndexBuilder !(StringTableBuilder PathComponentId)
@@ -216,12 +216,12 @@ data IndexBuilder
 instance NFData IndexBuilder where
   rnf IndexBuilder{} = () -- fully strict by construction
 
--- | The initial empty 'IndexBuilder'.
+-- | The initial empty t'IndexBuilder'.
 --
 empty :: IndexBuilder
 empty = IndexBuilder StringTable.empty IntTrie.empty 0
 
--- | Add the next t'Entry' into the 'IndexBuilder'.
+-- | Add the next t'Entry' into the t'IndexBuilder'.
 --
 addNextEntry :: Entry -> IndexBuilder -> IndexBuilder
 addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
@@ -233,13 +233,13 @@ addNextEntry entry (IndexBuilder stbl itrie nextOffset) =
     itrie'        = IntTrie.insert (map pathComponentIdToKey cids) (IntTrie.Value nextOffset) itrie
 
 -- | Use this function if you want to skip some entries and not add them to the
--- final 'TarIndex'.
+-- final t'TarIndex'.
 --
 skipNextEntry :: Entry -> IndexBuilder -> IndexBuilder
 skipNextEntry entry (IndexBuilder stbl itrie nextOffset) =
     IndexBuilder stbl itrie (nextEntryOffset entry nextOffset)
 
--- | Finish accumulating t'Entry' information and build the compact 'TarIndex'
+-- | Finish accumulating t'Entry' information and build the compact t'TarIndex'
 -- lookup structure.
 --
 finalise :: IndexBuilder -> TarIndex
@@ -250,8 +250,8 @@ finalise (IndexBuilder stbl itrie finalOffset) =
     pathTrie  = IntTrie.finalise itrie
 
 -- | This is the offset immediately following the entry most recently added
--- to the 'IndexBuilder'. You might use this if you need to know the offsets
--- but don't want to use the 'TarIndex' lookup structure.
+-- to the t'IndexBuilder'. You might use this if you need to know the offsets
+-- but don't want to use the t'TarIndex' lookup structure.
 -- Use with 'hSeekEntryOffset'. See also 'nextEntryOffset'.
 --
 indexNextEntryOffset :: IndexBuilder -> TarEntryOffset
@@ -268,7 +268,7 @@ indexEndEntryOffset (TarIndex _ _ off) = off
 -- offset of the current entry.
 --
 -- This is much like using 'skipNextEntry' and 'indexNextEntryOffset', but without
--- using an 'IndexBuilder'.
+-- using an t'IndexBuilder'.
 --
 nextEntryOffset :: Entry -> TarEntryOffset -> TarEntryOffset
 nextEntryOffset entry offset =
@@ -302,14 +302,14 @@ splitDirectories bs =
 
 -- | Resume building an existing index
 --
--- A 'TarIndex' is optimized for a highly compact and efficient in-memory
+-- A t'TarIndex' is optimized for a highly compact and efficient in-memory
 -- representation. This, however, makes it read-only. If you have an existing
--- 'TarIndex' for a large file, and want to add to it, you can translate the
--- 'TarIndex' back to an 'IndexBuilder'. Be aware that this is a relatively
--- costly operation (linear in the size of the 'TarIndex'), though still
+-- t'TarIndex' for a large file, and want to add to it, you can translate the
+-- t'TarIndex' back to an t'IndexBuilder'. Be aware that this is a relatively
+-- costly operation (linear in the size of the t'TarIndex'), though still
 -- faster than starting again from scratch.
 --
--- This is the left inverse to 'finalise' (modulo ordering).
+-- This is the left inverse to 'Codec.Archive.Tar.Index.finalise' (modulo ordering).
 --
 unfinalise :: TarIndex -> IndexBuilder
 unfinalise (TarIndex pathTable pathTrie finalOffset) =
@@ -428,7 +428,7 @@ hReadEntryHeaderOrEof hnd blockOff = do
 -- | Seek to the end of a tar file, to the position where new entries can
 -- be appended, and return that 'TarEntryOffset'.
 --
--- If you have a valid 'TarIndex' for this tar file then you should supply it
+-- If you have a valid t'TarIndex' for this tar file then you should supply it
 -- because it allows seeking directly to the correct location.
 --
 -- If you do not have an index, then this becomes an expensive linear
@@ -461,7 +461,7 @@ hSeekEndEntryOffset hnd Nothing = do
 -- (de)serialisation
 --
 
--- | The 'TarIndex' is compact in memory, and it has a similarly compact
+-- | The t'TarIndex' is compact in memory, and it has a similarly compact
 -- external representation.
 --
 serialise :: TarIndex -> BS.ByteString
@@ -487,7 +487,7 @@ serialiseBuilder (TarIndex stringTable intTrie finalOffset) =
   <> StringTable.serialise stringTable
   <> IntTrie.serialise intTrie
 
--- | Read the external representation back into a 'TarIndex'.
+-- | Read the external representation back into a t'TarIndex'.
 --
 deserialise :: BS.ByteString -> Maybe (TarIndex, BS.ByteString)
 deserialise bs

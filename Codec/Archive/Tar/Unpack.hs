@@ -91,7 +91,7 @@ unpack
   -> IO ()
 unpack = unpackAndCheck (fmap SomeException . checkEntrySecurity)
 
--- | Like 'unpack', but run custom sanity/security checks instead of 'checkEntrySecurity'.
+-- | Like 'Codec.Archive.Tar.unpack', but run custom sanity/security checks instead of 'checkEntrySecurity'.
 -- For example,
 --
 -- > import Control.Exception (SomeException(..))

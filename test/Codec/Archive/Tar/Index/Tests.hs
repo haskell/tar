@@ -248,7 +248,7 @@ instance Arbitrary SimpleTarArchive where
         , 1022 , 1023 , 1024 , 1025 , 1026
         ]
 
--- | 'IndexBuilder' constructed from a 'SimpleIndex'
+-- | t'IndexBuilder' constructed from a 'SimpleIndex'
 newtype SimpleIndexBuilder = SimpleIndexBuilder IndexBuilder
   deriving Show
 

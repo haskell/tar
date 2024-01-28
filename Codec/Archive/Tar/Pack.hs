@@ -62,7 +62,7 @@ import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 --
 -- * This function returns results lazily. Subdirectories are scanned
 -- and files are read one by one as the list of entries is consumed.
--- Do not change their contents before the output of 'pack' was consumed in full.
+-- Do not change their contents before the output of 'Codec.Archive.Tar.pack' was consumed in full.
 --
 pack
   :: FilePath   -- ^ Base directory
@@ -70,7 +70,7 @@ pack
   -> IO [Entry]
 pack = packAndCheck (const Nothing)
 
--- | Like 'pack', but allows to specify additional sanity/security
+-- | Like 'Codec.Archive.Tar.pack', but allows to specify additional sanity/security
 -- checks on the input filenames. This is useful if you know which
 -- check will be used on client side
 -- in 'Codec.Archive.Tar.unpack' / 'Codec.Archive.Tar.unpackAndCheck'.

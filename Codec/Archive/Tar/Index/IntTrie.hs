@@ -123,10 +123,10 @@ toList = concatMap (aux []) . (`completionsFrom` 0)
 -- Toplevel trie array construction
 --
 
--- So constructing the 'IntTrie' as a whole is just a matter of stringing
+-- So constructing the t'IntTrie' as a whole is just a matter of stringing
 -- together all the bits
 
--- | Build an 'IntTrie' from a bunch of (key, value) pairs, where the keys
+-- | Build an t'IntTrie' from a bunch of (key, value) pairs, where the keys
 -- are sequences.
 --
 construct :: [([Key], Value)] -> IntTrie

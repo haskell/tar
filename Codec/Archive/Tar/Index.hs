@@ -22,7 +22,7 @@ module Codec.Archive.Tar.Index (
     -- within the archive.
     --
     -- This module provides an index of a @tar@ file. A linear pass of the
-    -- @tar@ file is needed to 'build' the 'TarIndex', but thereafter you can
+    -- @tar@ file is needed to 'build' the t'TarIndex', but thereafter you can
     -- 'lookup' paths in the @tar@ file, and then use 'hReadEntry' to
     -- seek to the right part of the file and read the entry.
     --
@@ -73,12 +73,12 @@ import Codec.Archive.Tar.Index.Internal
 
 -- $incremental-construction
 -- If you need more control than 'build' then you can construct the index
--- in an accumulator style using the 'IndexBuilder' and operations.
+-- in an accumulator style using the t'IndexBuilder' and operations.
 --
 -- Start with 'empty' and use 'addNextEntry' (or 'skipNextEntry') for
 -- each 'Codec.Archive.Tar.Entry.Entry' in the tar file in order. Every entry must added or skipped in
--- order, otherwise the resulting 'TarIndex' will report the wrong
--- 'TarEntryOffset's. At the end use 'finalise' to get the 'TarIndex'.
+-- order, otherwise the resulting t'TarIndex' will report the wrong
+-- 'TarEntryOffset's. At the end use 'finalise' to get the t'TarIndex'.
 --
 -- For example, 'build' is simply:
 --

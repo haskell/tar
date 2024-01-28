@@ -91,7 +91,7 @@ index (StringTable bs offsets _ids ixs) =
     index' bs offsets . (ixs !) . fromIntegral . fromEnum
 
 
--- | Given a list of strings, construct a 'StringTable' mapping those strings
+-- | Given a list of strings, construct a t'StringTable' mapping those strings
 -- to a dense set of integers. Also return the ids for all the strings used
 -- in the construction.
 --

@@ -121,7 +121,7 @@ type Permissions = FileMode
 
 -- | Polymorphic tar archive entry. High-level interfaces
 -- commonly work with 'GenEntry' 'FilePath' 'FilePath',
--- while low-level ones use 'GenEntry' 'TarPath' 'LinkTarget'.
+-- while low-level ones use 'GenEntry' t'TarPath' t'LinkTarget'.
 --
 -- @since 0.6.0.0
 data GenEntry tarPath linkTarget = Entry {
@@ -161,7 +161,7 @@ entryPath = fromTarPath . entryTarPath
 
 -- | Polymorphic content of a tar archive entry. High-level interfaces
 -- commonly work with 'GenEntryContent' 'FilePath',
--- while low-level ones use 'GenEntryContent' 'LinkTarget'.
+-- while low-level ones use 'GenEntryContent' t'LinkTarget'.
 --
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
@@ -375,7 +375,7 @@ instance NFData TarPath where
 instance Show TarPath where
   show = show . fromTarPath
 
--- | Convert a 'TarPath' to a native 'FilePath'.
+-- | Convert a t'TarPath' to a native 'FilePath'.
 --
 -- The native 'FilePath' will use the native directory separator but it is not
 -- otherwise checked for validity or sanity. In particular:
@@ -391,23 +391,23 @@ instance Show TarPath where
 fromTarPath :: TarPath -> FilePath
 fromTarPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Native.pathSeparator)
 
--- | Convert a 'TarPath' to a Unix\/Posix 'FilePath'.
+-- | Convert a t'TarPath' to a Unix\/Posix 'FilePath'.
 --
 -- The difference compared to 'fromTarPath' is that it always returns a Unix
 -- style path irrespective of the current operating system.
 --
--- This is useful to check how a 'TarPath' would be interpreted on a specific
+-- This is useful to check how a t'TarPath' would be interpreted on a specific
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToPosixPath :: TarPath -> FilePath
 fromTarPathToPosixPath = fromPosixString . fromTarPathInternal (PS.unsafeFromChar FilePath.Posix.pathSeparator)
 
--- | Convert a 'TarPath' to a Windows 'FilePath'.
+-- | Convert a t'TarPath' to a Windows 'FilePath'.
 --
 -- The only difference compared to 'fromTarPath' is that it always returns a
 -- Windows style path irrespective of the current operating system.
 --
--- This is useful to check how a 'TarPath' would be interpreted on a specific
+-- This is useful to check how a t'TarPath' would be interpreted on a specific
 -- operating system, eg to perform portability checks.
 --
 fromTarPathToWindowsPath :: TarPath -> FilePath
@@ -425,11 +425,11 @@ fromTarPathInternal sep = go
      | otherwise = adjustSeps prefix <> PS.cons sep (adjustSeps name)
 {-# INLINE fromTarPathInternal #-}
 
--- | Convert a native 'FilePath' to a 'TarPath'.
+-- | Convert a native 'FilePath' to a t'TarPath'.
 --
 -- The conversion may fail if the 'FilePath' is empty or too long.
 toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
-                  -- directories a 'TarPath' must always use a trailing @\/@.
+                  -- directories a t'TarPath' must always use a trailing @\/@.
           -> FilePath
           -> Either String TarPath
 toTarPath isDir path = case toTarPath' path' of
@@ -441,7 +441,7 @@ toTarPath isDir path = case toTarPath' path' of
             then path <> [FilePath.Native.pathSeparator]
             else path
 
--- | Convert a native 'FilePath' to a 'TarPath'.
+-- | Convert a native 'FilePath' to a t'TarPath'.
 -- Directory paths must always have a trailing @\/@, this is not checked.
 --
 -- @since 0.6.0.0
@@ -461,11 +461,11 @@ toTarPath'
 -- @since 0.6.0.0
 data ToTarPathResult
   = FileNameEmpty
-  -- ^ 'FilePath' was empty, but 'TarPath' must be non-empty.
+  -- ^ 'FilePath' was empty, but t'TarPath' must be non-empty.
   | FileNameOK TarPath
-  -- ^ All good, this is just a normal 'TarPath'.
+  -- ^ All good, this is just a normal t'TarPath'.
   | FileNameTooLong TarPath
-  -- ^ 'FilePath' was longer than 255 characters, 'TarPath' contains
+  -- ^ 'FilePath' was longer than 255 characters, t'TarPath' contains
   -- a truncated part only. An actual entry must be preceded by
   -- 'longLinkEntry'.
 
@@ -515,7 +515,7 @@ newtype LinkTarget = LinkTarget PosixString
 instance NFData LinkTarget where
     rnf (LinkTarget bs) = rnf bs
 
--- | Convert a native 'FilePath' to a tar 'LinkTarget'.
+-- | Convert a native 'FilePath' to a tar t'LinkTarget'.
 -- string is longer than 100 characters or if it contains non-portable
 -- characters.
 toLinkTarget :: FilePath -> Maybe LinkTarget
@@ -534,7 +534,7 @@ instance Exception LinkTargetException where
   displayException (TooLong _) = "The link target is too long"
 
 -- | Convert a native 'FilePath' to a unix filepath suitable for
--- using as 'LinkTarget'. Does not error if longer than 100 characters.
+-- using as t'LinkTarget'. Does not error if longer than 100 characters.
 toLinkTarget' :: FilePath -> Maybe FilePath
 toLinkTarget' path
   | FilePath.Native.isAbsolute path = Nothing
@@ -544,15 +544,15 @@ toLinkTarget' path
                     = FilePath.Posix.addTrailingPathSeparator
                     | otherwise = id
 
--- | Convert a tar 'LinkTarget' to a native 'FilePath'.
+-- | Convert a tar t'LinkTarget' to a native 'FilePath'.
 fromLinkTarget :: LinkTarget -> FilePath
 fromLinkTarget (LinkTarget pathbs) = fromFilePathToNative $ fromPosixString pathbs
 
--- | Convert a tar 'LinkTarget' to a Unix\/POSIX 'FilePath' (@\'/\'@ path separators).
+-- | Convert a tar t'LinkTarget' to a Unix\/POSIX 'FilePath' (@\'/\'@ path separators).
 fromLinkTargetToPosixPath :: LinkTarget -> FilePath
 fromLinkTargetToPosixPath (LinkTarget pathbs) = fromPosixString pathbs
 
--- | Convert a tar 'LinkTarget' to a Windows 'FilePath' (@\'\\\\\'@ path separators).
+-- | Convert a tar t'LinkTarget' to a Windows 'FilePath' (@\'\\\\\'@ path separators).
 fromLinkTargetToWindowsPath :: LinkTarget -> FilePath
 fromLinkTargetToWindowsPath (LinkTarget pathbs) =
   fromFilePathToWindowsPath $ fromPosixString pathbs
@@ -581,7 +581,7 @@ fromFilePathInternal fromSep toSep = adjustSeps
 -- | Polymorphic sequence of archive entries.
 -- High-level interfaces
 -- commonly work with 'GenEntries' 'FilePath' 'FilePath',
--- while low-level ones use 'GenEntries' 'TarPath' 'LinkTarget'.
+-- while low-level ones use 'GenEntries' t'TarPath' t'LinkTarget'.
 --
 -- The point of this type as opposed to just using a list is that it makes the
 -- failure case explicit. We need this because the sequence of entries we get
@@ -647,7 +647,7 @@ unfoldEntriesM interleave f = unfold
         Right (Just e) -> Next e <$> interleave unfold
 
 -- | This is like the standard 'Data.List.foldr' function on lists, but for 'Entries'.
--- Compared to 'foldr' it takes an extra function to account for the
+-- Compared to 'Data.List.foldr' it takes an extra function to account for the
 -- possibility of failure.
 --
 -- This is used to consume a sequence of entries. For example it could be used

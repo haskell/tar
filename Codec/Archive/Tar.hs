@@ -84,7 +84,7 @@ module Codec.Archive.Tar (
   -- called a \"directory traversal vulnerability\". Historically, such
   -- vulnerabilities have been common in packages handling tar archives.
   --
-  -- The 'extract' and 'unpack' functions check for bad file names. See the
+  -- The 'extract' and 'Codec.Archive.Tar.unpack' functions check for bad file names. See the
   -- 'Codec.Archive.Tar.Check.checkSecurity' function for more details.
   -- If you need to do any custom
   -- unpacking then you should use this.
@@ -156,7 +156,7 @@ module Codec.Archive.Tar (
   -- The style of error handling by returning structured errors. The pure
   -- functions in the library do not throw exceptions, they return the errors
   -- as data. The IO actions in the library can throw exceptions, in particular
-  -- the 'unpack' action does this. All the error types used are an instance of
+  -- the 'Codec.Archive.Tar.unpack' action does this. All the error types used are an instance of
   -- the standard 'Exception' class so it is possible to 'throw' and 'catch'
   -- them.
 
