@@ -49,7 +49,7 @@ prop_sorted strings = property $
   where
     _tbl :: StringTable Int
     _tbl@(StringTable strs offsets ids _ixs) = construct strings
-    isSorted xs = and (zipWith (<) xs (tail xs))
+    isSorted xs = and (zipWith (<) xs (drop 1 xs))
 
 prop_finalise_unfinalise :: [BS.ByteString] -> Property
 prop_finalise_unfinalise strs =

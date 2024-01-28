@@ -70,9 +70,10 @@ prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
     _                                              -> property False
   where
     index       = construct paths
-    completions = [ head (FilePath.splitDirectories completion)
+    completions = [ hd
                   | (path,_) <- paths
-                  , completion <- maybeToList $ stripPrefix (p ++ "/") path ]
+                  , completion <- maybeToList $ stripPrefix (p ++ "/") path
+                  , let hd : _ = FilePath.splitDirectories completion ]
 
 prop_toList :: ValidPaths -> Property
 prop_toList (ValidPaths paths) =
