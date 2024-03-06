@@ -5,6 +5,7 @@
 
 module Codec.Archive.Tar.Pack.Tests
   ( prop_roundtrip
+  , unit_roundtrip_unicode
   , unit_roundtrip_symlink
   , unit_roundtrip_long_symlink
   , unit_roundtrip_long_filepath
@@ -17,6 +18,7 @@ import Data.Char
 import Data.FileEmbed
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Pack as Pack
+import qualified Codec.Archive.Tar.Read as Read
 import Codec.Archive.Tar.Types (GenEntries(..), Entries, simpleEntry, toTarPath, GenEntry (entryTarPath))
 import qualified Codec.Archive.Tar.Unpack as Unpack
 import qualified Codec.Archive.Tar.Write as Write
@@ -153,3 +155,17 @@ unit_roundtrip_long_symlink =
   let tar :: BL.ByteString = BL.fromStrict $(embedFile "test/data/long-symlink.tar")
       entries = Tar.foldEntries (:) [] (const []) (Tar.read tar)
   in Tar.write entries === tar
+
+unit_roundtrip_unicode :: Property
+unit_roundtrip_unicode = do
+  ioProperty $ withSystemTempDirectory "tar-test" $ \baseDir -> do
+    let relFile = "TModula𐐀bA.hs"
+
+    canWriteFile <- try (writeFile (baseDir </> relFile) "foo")
+    case canWriteFile of
+      Left (e :: IOException) -> pure $ property True
+      Right () -> do
+        entries <- Pack.pack baseDir [relFile]
+        pure $ case Tar.foldlEntries (flip seq) () (Read.read (Write.write entries)) of
+          Right{} -> property True
+          Left (err, _) -> counterexample (show err) $ property False
