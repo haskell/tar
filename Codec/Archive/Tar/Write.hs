@@ -61,15 +61,15 @@ putEntry entry = case entryContent entry of
 
 putHeader :: Entry -> LBS.ByteString
 putHeader entry =
-     LBS.Char8.pack
-   $ take 148 block
-  ++ putOct 7 checksum
-  ++ ' ' : drop 156 block
+     LBS.fromStrict
+   $ BS.take 148 block
+  <> putOct 7 checksum
+  <> BS.Char8.cons ' ' (BS.drop 156 block)
   where
     block    = putHeaderNoChkSum entry
-    checksum = foldl' (\x y -> x + ord y) 0 block
+    checksum = BS.Char8.foldl' (\x y -> x + ord y) 0 block
 
-putHeaderNoChkSum :: Entry -> String
+putHeaderNoChkSum :: Entry -> BS.ByteString
 putHeaderNoChkSum Entry {
     entryTarPath     = TarPath name prefix,
     entryContent     = content,
@@ -79,40 +79,40 @@ putHeaderNoChkSum Entry {
     entryFormat      = format
   } =
 
-  concat
+  BS.concat
     [ putPosixString 100 name
     , putOct       8 permissions
     , putOct       8 $ ownerId ownership
     , putOct       8 $ groupId ownership
     , numField    12 contentSize
     , putOct      12 modTime
-    , replicate    8 ' ' -- dummy checksum
+    , BS.Char8.replicate 8 ' ' -- dummy checksum
     , putChar8       typeCode
     , putPosixString 100 linkTarget
-    ] ++
+    ] <>
   case format of
   V7Format    ->
-      replicate 255 '\NUL'
-  UstarFormat -> concat
+      BS.Char8.replicate 255 '\NUL'
+  UstarFormat -> BS.Char8.concat
     [ putBString   8 ustarMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
     , putOct       8 deviceMajor
     , putOct       8 deviceMinor
     , putPosixString 155 prefix
-    , replicate   12 '\NUL'
+    , BS.Char8.replicate   12 '\NUL'
     ]
-  GnuFormat -> concat
+  GnuFormat -> BS.Char8.concat
     [ putBString   8 gnuMagic
     , putString   32 $ ownerName ownership
     , putString   32 $ groupName ownership
     , putGnuDev    8 deviceMajor
     , putGnuDev    8 deviceMinor
     , putPosixString 155 prefix
-    , replicate   12 '\NUL'
+    , BS.Char8.replicate   12 '\NUL'
     ]
   where
-    numField :: FieldWidth -> Int64 -> String
+    numField :: FieldWidth -> Int64 -> BS.Char8.ByteString
     numField w n
       | n >= 0 && n < 1 `shiftL` (3 * (w - 1))
       = putOct w n
@@ -133,7 +133,7 @@ putHeaderNoChkSum Entry {
     putGnuDev w n = case content of
       CharacterDevice _ _ -> putOct w n
       BlockDevice     _ _ -> putOct w n
-      _                   -> replicate w '\NUL'
+      _                   -> BS.Char8.replicate w '\NUL'
 
 ustarMagic, gnuMagic :: BS.ByteString
 ustarMagic = BS.Char8.pack "ustar\NUL00"
@@ -143,27 +143,27 @@ gnuMagic   = BS.Char8.pack "ustar  \NUL"
 
 type FieldWidth = Int
 
-putBString :: FieldWidth -> BS.ByteString -> String
-putBString n s = BS.Char8.unpack (BS.take n s) ++ replicate (n - BS.length s) '\NUL'
+putBString :: FieldWidth -> BS.ByteString -> BS.ByteString
+putBString n s = BS.take n s <> BS.Char8.replicate (n - BS.length s) '\NUL'
 
-putPosixString :: FieldWidth -> PosixString -> String
-putPosixString n s = fromPosixString (PS.take n s) ++ replicate (n - PS.length s) '\NUL'
+putPosixString :: FieldWidth -> PosixString -> BS.ByteString
+putPosixString n s = posixToByteString (PS.take n s) <> BS.Char8.replicate (n - PS.length s) '\NUL'
 
-putString :: FieldWidth -> String -> String
-putString n s = take n s ++ replicate (n - length s) '\NUL'
+putString :: FieldWidth -> String -> BS.ByteString
+putString n s = BS.take n (packAscii s) <> BS.Char8.replicate (n - length s) '\NUL'
 
-{-# SPECIALISE putLarge :: FieldWidth -> Int64 -> String #-}
-putLarge :: (Bits a, Integral a) => FieldWidth -> a -> String
-putLarge n0 x0 = '\x80' : reverse (go (n0-1) x0)
+{-# SPECIALISE putLarge :: FieldWidth -> Int64 -> BS.ByteString #-}
+putLarge :: (Bits a, Integral a) => FieldWidth -> a -> BS.ByteString
+putLarge n0 x0 = BS.Char8.pack $ '\x80' : reverse (go (n0-1) x0)
   where go 0 _ = []
         go n x = chr (fromIntegral (x .&. 0xff)) : go (n-1) (x `shiftR` 8)
 
-putOct :: (Integral a, Show a) => FieldWidth -> a -> String
+putOct :: (Integral a, Show a) => FieldWidth -> a -> BS.ByteString
 putOct n x =
-  let octStr = take (n-1) $ showOct x ""
-   in replicate (n - length octStr - 1) '0'
-   ++ octStr
-   ++ putChar8 '\NUL'
+  let octStr = BS.take (n-1) $ BS.Char8.pack $ showOct x ""
+   in BS.Char8.replicate (n - BS.length octStr - 1) '0'
+   <> octStr
+   <> putChar8 '\NUL'
 
-putChar8 :: Char -> String
-putChar8 c = [c]
+putChar8 :: Char -> BS.ByteString
+putChar8 = BS.Char8.singleton

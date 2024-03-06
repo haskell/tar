@@ -1,3 +1,7 @@
+## 0.6.2.0 Bodigrim <andrew.lelechenko@gmail.com> March 2024
+
+  * Fix issues with Unicode support in filenames.
+
 ## 0.6.1.0 Bodigrim <andrew.lelechenko@gmail.com> January 2024
 
   * Support Unicode in filenames (encoded as UTF-8).

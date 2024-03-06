@@ -187,9 +187,11 @@ type EntryContent = GenEntryContent LinkTarget
 -- | Ownership information for 'GenEntry'.
 data Ownership = Ownership {
     -- | The owner user name. Should be set to @\"\"@ if unknown.
+    -- Must not contain non-ASCII characters.
     ownerName :: String,
 
     -- | The owner group name. Should be set to @\"\"@ if unknown.
+    -- Must not contain non-ASCII characters.
     groupName :: String,
 
     -- | Numeric owner user id. Should be set to @0@ if unknown.
