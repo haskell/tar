@@ -1,0 +1,189 @@
+name: Haskell CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        ghc: ['8.6', '8.8', '8.10', '9.0', '9.2', '9.4', '9.6', '9.8']
+        cabal: ['3.10.2.1']
+        include:
+          - os: macOS-latest
+            ghc: '9.4'
+            cabal: '3.10.2.1'
+          - os: macOS-latest
+            ghc: '9.6'
+            cabal: '3.10.2.1'
+          - os: windows-latest
+            ghc: '9.4'
+            cabal: '3.10.2.1'
+          - os: windows-latest
+            ghc: '9.6'
+            cabal: '3.10.2.1'
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get -y update
+        sudo apt-get -y install libtinfo5 libtinfo6 libncurses5 libncurses6 libbz2-dev
+
+    - name: Install ghc/cabal
+      run: |
+        set -eux
+        . .github/scripts/env.sh
+        ghcup install ghc --set ${{ matrix.ghc }}
+        ghcup install cabal ${{ matrix.cabal }}
+      shell: bash
+
+    - name: Build
+      run: |
+        set -eux
+        . .github/scripts/env.sh
+        cabal update
+        cabal build --enable-tests --enable-benchmarks all
+        cabal test --test-show-details=direct all
+        cabal bench all
+        cabal haddock all
+        cabal check
+        cabal sdist all
+      shell: bash
+
+  i386:
+    runs-on: [self-hosted, Linux, X64, linux-space]
+    container:
+      image: i386/ubuntu:bionic
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install
+      run: |
+        apt-get update -y
+        apt-get install -y autoconf build-essential zlib1g-dev libgmp-dev curl libncurses5 libtinfo5 libncurses5-dev libtinfo-dev git libbz2-dev
+        . .github/scripts/env.sh
+        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 sh
+    - name: Test
+      run: |
+        . .github/scripts/env.sh
+        cabal update
+        cabal test all
+        # FIXME: bench: out of memory (requested 2097152 bytes)
+        # cabal bench all
+
+  stack:
+    runs-on: [self-hosted, Linux, X64, linux-space]
+    container:
+      image: ubuntu:bionic
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install
+      run: |
+        apt-get update -y
+        apt-get install -y autoconf build-essential zlib1g-dev libgmp-dev curl libncurses5 libtinfo5 libncurses5-dev libtinfo-dev git libbz2-dev
+        . .github/scripts/env.sh
+        curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 sh
+    - name: Test
+      run: |
+        . .github/scripts/env.sh
+        stack --allow-different-user build
+        stack --allow-different-user test
+
+  arm:
+    runs-on: [self-hosted, Linux, ARM64]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: arm32v7
+            ghc: '9.2.8'
+          - arch: arm64v8
+            ghc: '9.4.8'
+    steps:
+      - uses: docker://hasufell/arm64v8-debian-haskell:10
+        name: Cleanup
+        with:
+          args: "find . -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +"
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - if: matrix.arch == 'arm32v7'
+        uses: docker://hasufell/arm32v7-debian-haskell:10
+        name: Run build (arm32v7 linux)
+        with:
+          args: sh -c ". .github/scripts/env.sh && cabal update && ghcup install ghc --isolate=/usr --force ${{ matrix.ghc }} && cabal test -w ghc-${{ matrix.ghc }} all"
+
+      - if: matrix.arch == 'arm64v8'
+        uses: docker://hasufell/arm64v8-debian-haskell:10
+        name: Run build (arm64v8 linux)
+        with:
+          args: sh -c ". .github/scripts/env.sh && cabal update && ghcup install ghc --isolate=/usr --force ${{ matrix.ghc }} && cabal test -w ghc-${{ matrix.ghc }} all && cabal bench -w ghc-${{ matrix.ghc }} all"
+
+  darwin_arm:
+    runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: 10.13
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: [self-hosted, macOS, ARM64]
+            ghc: 8.10.7
+          - os: [self-hosted, macOS, ARM64]
+            ghc: 9.2.8
+          - os: [self-hosted, macOS, ARM64]
+            ghc: 9.4.8
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run build
+        run: |
+          bash .github/scripts/brew.sh git coreutils llvm@13 autoconf automake
+          export PATH="$HOME/.brew/bin:$HOME/.brew/sbin:$HOME/.brew/opt/llvm@13/bin:$PATH"
+          export CC="$HOME/.brew/opt/llvm@13/bin/clang"
+          export CXX="$HOME/.brew/opt/llvm@13/bin/clang++"
+          export LD=ld
+          export AR="$HOME/.brew/opt/llvm@13/bin/llvm-ar"
+          export RANLIB="$HOME/.brew/opt/llvm@13/bin/llvm-ranlib"
+          . .github/scripts/env.sh
+          curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 BOOTSTRAP_HASKELL_GHC_VERSION=${{ matrix.ghc }} BOOTSTRAP_HASKELL_ADJUST_BASHRC=yes sh
+          cabal test all
+          cabal bench all
+        env:
+          HOMEBREW_CHANGE_ARCH_TO_ARM: 1
+
+  freebsd:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: [self-hosted, FreeBSD, X64]
+            ghc: 9.4.8
+          - os: [self-hosted, FreeBSD, X64]
+            ghc: 9.6.4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Run build
+        run: |
+          pkg install -y curl gcc gmp gmake ncurses perl5 libffi libiconv git bash misc/compat10x misc/compat11x misc/compat12x gmake llvm14 bzip2
+          . .github/scripts/env.sh
+          curl --proto '=https' --tlsv1.2 -sSf https://get-ghcup.haskell.org | BOOTSTRAP_HASKELL_NONINTERACTIVE=1 BOOTSTRAP_HASKELL_INSTALL_NO_STACK=1 BOOTSTRAP_HASKELL_GHC_VERSION=${{ matrix.ghc }} BOOTSTRAP_HASKELL_ADJUST_BASHRC=yes sh
+          export TMPDIR="${CI_PROJECT_DIR}/tmp"
+          mkdir -p "${TMPDIR}"
+          cabal test all
+          cabal bench all
+          bash htar/test-large-files.sh
+
