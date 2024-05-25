@@ -71,7 +71,7 @@ module Codec.Archive.Tar (
   -- on the 'extract' function where we use decompression in the pipeline:
   --
   -- > import qualified Data.ByteString.Lazy as BL
-  -- > import qualified Codec.Compression.Zlib as GZip
+  -- > import qualified Codec.Compression.GZip as GZip
   -- >
   -- > Tar.unpack dir . Tar.read . GZip.decompress =<< BL.readFile tar
   --
