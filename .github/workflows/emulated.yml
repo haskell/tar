@@ -31,6 +31,7 @@ jobs:
           apt-get update -y
           apt-get install -y curl ghc libghc-tasty-quickcheck-dev libghc-file-embed-dev libghc-temporary-dev
         run: |
+          find Codec -iname '*.hs' -type f -exec sed -i.bck 's/"os-string"//g' {} \;
           curl -s https://hackage.haskell.org/package/os-string-2.0.3/os-string-2.0.3.tar.gz | tar xz
           ghc --version
           ghc --make -itest:os-string-2.0.3 -o Main test/Properties.hs +RTS -s
