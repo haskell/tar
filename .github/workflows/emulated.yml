@@ -1,0 +1,38 @@
+name: emulated
+on:
+  - push
+  - pull_request
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Emulation is incredibly slow and memory demanding. It seems that any
+  # executable with GHC RTS takes at least 7-8 Gb of RAM, so we can run
+  # `cabal` or `ghc` on their own, but cannot run them both at the same time,
+  # striking out `cabal test`. Instead we rely on system packages and invoke
+  # `ghc --make` manually, and even so `ghc -O` is prohibitively expensive.
+  emulated:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch: ['s390x', 'ppc64le']
+    steps:
+    - uses: actions/checkout@v3
+    - uses: uraimo/run-on-arch-action@v2.7.2
+      timeout-minutes: 60
+      with:
+        arch: ${{ matrix.arch }}
+        distro: ubuntu_rolling
+        githubToken: ${{ github.token }}
+        install: |
+          apt-get update -y
+          apt-get install -y curl ghc libghc-tasty-quickcheck-dev libghc-file-embed-dev libghc-temporary-dev
+        run: |
+          find Codec -iname '*.hs' -type f -exec sed -i.bck 's/"os-string"//g' {} \;
+          curl -s https://hackage.haskell.org/package/os-string-2.0.3/os-string-2.0.3.tar.gz | tar xz
+          ghc --version
+          ghc --make -itest:os-string-2.0.3 -o Main test/Properties.hs +RTS -s
+          ./Main +RTS -s
