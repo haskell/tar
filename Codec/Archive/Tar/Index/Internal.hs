@@ -63,6 +63,7 @@ import Codec.Archive.Tar.Read  as Tar
 import qualified Codec.Archive.Tar.Index.StringTable as StringTable
 import Codec.Archive.Tar.Index.StringTable (StringTable, StringTableBuilder)
 import qualified Codec.Archive.Tar.Index.IntTrie as IntTrie
+import Codec.Archive.Tar.Index.Utils (readWord32BE)
 import Codec.Archive.Tar.Index.IntTrie (IntTrie, IntTrieBuilder)
 import Codec.Archive.Tar.PackAscii
 
@@ -496,27 +497,19 @@ deserialise bs
 
   | let ver = readWord32BE bs 0
   , ver == 1
-  = do let !finalOffset = readWord32BE bs 4
-       (stringTable, bs')  <- StringTable.deserialiseV1 (BS.drop 8 bs)
+  = do let !finalOffset = readWord32BE bs 1
+       (stringTable, bs')  <- StringTable.deserialiseV1 (BS.unsafeDrop 8 bs)
        (intTrie,     bs'') <- IntTrie.deserialise bs'
        return (TarIndex stringTable intTrie finalOffset, bs'')
 
   | let ver = readWord32BE bs 0
   , ver == 2
-  = do let !finalOffset = readWord32BE bs 4
-       (stringTable, bs')  <- StringTable.deserialiseV2 (BS.drop 8 bs)
+  = do let !finalOffset = readWord32BE bs 1
+       (stringTable, bs')  <- StringTable.deserialiseV2 (BS.unsafeDrop 8 bs)
        (intTrie,     bs'') <- IntTrie.deserialise bs'
        return (TarIndex stringTable intTrie finalOffset, bs'')
 
   | otherwise = Nothing
-
-readWord32BE :: BS.ByteString -> Int -> Word32
-readWord32BE bs i =
-    assert (i >= 0 && i+3 <= BS.length bs - 1) $
-    fromIntegral (BS.unsafeIndex bs (i + 0)) `shiftL` 24
-  + fromIntegral (BS.unsafeIndex bs (i + 1)) `shiftL` 16
-  + fromIntegral (BS.unsafeIndex bs (i + 2)) `shiftL` 8
-  + fromIntegral (BS.unsafeIndex bs (i + 3))
 
 toStrict :: LBS.ByteString -> BS.ByteString
 toStrict = LBS.toStrict

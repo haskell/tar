@@ -37,6 +37,7 @@ import Data.Monoid ((<>))
 import Control.Exception (assert)
 
 import qualified Data.Array.Unboxed as A
+import qualified Data.Array.Base as A
 import           Data.Array.Unboxed ((!))
 import qualified Data.Map.Strict        as Map
 import           Data.Map.Strict (Map)
@@ -45,6 +46,10 @@ import qualified Data.ByteString.Unsafe as BS
 import qualified Data.ByteString.Lazy   as LBS
 import Data.ByteString.Builder          as BS
 import Data.ByteString.Builder.Extra    as BS (byteStringCopy)
+import GHC.IO (unsafePerformIO)
+
+import Unsafe.Coerce (unsafeCoerce)
+import Codec.Archive.Tar.Index.Utils
 
 -- | An efficient mapping from strings to a dense set of integers.
 --
@@ -169,10 +174,10 @@ deserialiseV1 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
 deserialiseV1 bs
   | BS.length bs >= 8
   , let lenStrs = fromIntegral (readWord32BE bs 0)
-        lenArr  = fromIntegral (readWord32BE bs 4)
+        lenArr  = fromIntegral (readWord32BE bs 1)
         lenTotal= 8 + lenStrs + 4 * lenArr
   , BS.length bs >= lenTotal
-  , let strs = BS.take lenStrs (BS.drop 8 bs)
+  , let strs = BS.unsafeTake lenStrs (BS.unsafeDrop 8 bs)
         arr  = A.array (0, fromIntegral lenArr - 1)
                        [ (i, readWord32BE bs off)
                        | (i, off) <- zip [0 .. fromIntegral lenArr - 1]
@@ -194,41 +199,32 @@ deserialiseV2 :: BS.ByteString -> Maybe (StringTable id, BS.ByteString)
 deserialiseV2 bs
   | BS.length bs >= 8
   , let lenStrs = fromIntegral (readWord32BE bs 0)
-        lenArr  = fromIntegral (readWord32BE bs 4)
+        lenArr  = fromIntegral (readWord32BE bs 1)
         lenTotal= 8                   -- the two length prefixes
                 + lenStrs
                 + 4 * lenArr
                 +(4 * (lenArr - 1)) * 2 -- offsets array is 1 longer
   , BS.length bs >= lenTotal
-  , let strs = BS.take lenStrs (BS.drop 8 bs)
-        offs = A.listArray (0, fromIntegral lenArr - 1)
-                           [ readWord32BE bs off
-                           | off <- offsets offsOff ]
-        -- the second two arrays are 1 shorter
-        ids  = A.listArray (0, fromIntegral lenArr - 2)
-                           [ readInt32BE bs off
-                           | off <- offsets idsOff ]
-        ixs  = A.listArray (0, fromIntegral lenArr - 2)
-                           [ readInt32BE bs off
-                           | off <- offsets ixsOff ]
-        offsOff = 8 + lenStrs
-        idsOff  = offsOff + 4 * lenArr
-        ixsOff  = idsOff  + 4 * (lenArr-1)
-        offsets from = [from,from+4 .. from + 4 * (lenArr - 1)]
+  , let strs    = BS.unsafeTake lenStrs (BS.unsafeDrop 8 bs)
+        offs_bs = BS.unsafeDrop (8 + lenStrs) bs
+        ids_bs  = BS.unsafeDrop (lenArr * 4) offs_bs
+        ixs_bs  = BS.unsafeDrop ((lenArr - 1) * 4) ids_bs
+
+        castArray :: A.UArray i Word32 -> A.UArray i Int32
+        castArray (A.UArray a b c d) = (A.UArray a b c d)
+
+        -- Bangs are crucial for this to work in spite of unsafePerformIO!
+        (offs, ids, ixs) = unsafePerformIO $ do
+                  !r1 <- beToLe (fromIntegral lenArr) offs_bs
+                  !r2 <- castArray <$> beToLe (fromIntegral lenArr - 1) ids_bs
+                  !r3 <- castArray <$> beToLe (fromIntegral lenArr - 1) ixs_bs
+                  return (r1, r2, r3)
+
+
         !stringTable = StringTable strs offs ids ixs
-        !bs'         = BS.drop lenTotal bs
-  = Just (stringTable, bs')
+        !bs_left     = BS.drop lenTotal bs
+  = Just (stringTable, bs_left)
 
   | otherwise
   = Nothing
 
-readInt32BE :: BS.ByteString -> Int -> Int32
-readInt32BE bs i = fromIntegral (readWord32BE bs i)
-
-readWord32BE :: BS.ByteString -> Int -> Word32
-readWord32BE bs i =
-    assert (i >= 0 && i+3 <= BS.length bs - 1) $
-    fromIntegral (BS.unsafeIndex bs (i + 0)) `shiftL` 24
-  + fromIntegral (BS.unsafeIndex bs (i + 1)) `shiftL` 16
-  + fromIntegral (BS.unsafeIndex bs (i + 2)) `shiftL` 8
-  + fromIntegral (BS.unsafeIndex bs (i + 3))

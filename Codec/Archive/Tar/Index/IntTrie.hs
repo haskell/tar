@@ -1,5 +1,7 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
 {-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
+{-# LANGUAGE MagicHash #-}
+{-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 module Codec.Archive.Tar.Index.IntTrie (
@@ -55,6 +57,9 @@ import Data.IntMap.Strict (IntMap)
 
 import Data.List hiding (lookup, insert)
 import Data.Function (on)
+import GHC.IO
+
+import Codec.Archive.Tar.Index.Utils
 
 -- | A compact mapping from sequences of nats to nats.
 --
@@ -338,19 +343,11 @@ deserialise bs
   , let lenArr   = readWord32BE bs 0
         lenTotal = 4 + 4 * fromIntegral lenArr
   , BS.length bs >= 4 + 4 * fromIntegral lenArr
-  , let !arr = A.array (0, lenArr-1)
-                      [ (i, readWord32BE bs off)
-                      | (i, off) <- zip [0..lenArr-1] [4,8 .. lenTotal - 4] ]
-        !bs' = BS.drop lenTotal bs
-  = Just (IntTrie arr, bs')
+  , let !bs_without_len = BS.unsafeDrop 4 bs
+        !bs_remaining = BS.unsafeDrop lenTotal bs
+        !arr = unsafePerformIO $ beToLe lenArr bs_without_len
+  = Just (IntTrie arr, bs_remaining)
 
   | otherwise
   = Nothing
 
-readWord32BE :: BS.ByteString -> Int -> Word32
-readWord32BE bs i =
-    assert (i >= 0 && i+3 <= BS.length bs - 1) $
-    fromIntegral (BS.unsafeIndex bs (i + 0)) `shiftL` 24
-  + fromIntegral (BS.unsafeIndex bs (i + 1)) `shiftL` 16
-  + fromIntegral (BS.unsafeIndex bs (i + 2)) `shiftL` 8
-  + fromIntegral (BS.unsafeIndex bs (i + 3))
