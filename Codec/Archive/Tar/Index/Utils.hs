@@ -17,7 +17,7 @@ import Control.DeepSeq (NFData(..))
 import GHC.Storable
 import GHC.ByteOrder
 
-#include <ghcautoconf.h>
+#include <MachDeps.h>
 
 -- | Construct a `UArray Word32 Word32` from a ByteString of 32bit big endian
 -- words.
