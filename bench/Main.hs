@@ -30,6 +30,9 @@ benchmarks =
 
   , env loadTarEntries $ \entries ->
       bench "unpack" (nfIO $ withSystemTempDirectory "tar-bench" $ \baseDir -> Tar.unpack baseDir entries)
+
+  , env (fmap TarIndex.serialise  loadTarIndex) $ \tarfile ->
+      bench "deserialise index" (nf TarIndex.deserialise tarfile)
   ]
 
 loadTarFile :: IO BS.ByteString
