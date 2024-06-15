@@ -1,3 +1,7 @@
+## 0.6.3.0 Bodigrim <andrew.lelechenko@gmail.com> June 2024
+
+  * [Speed up `deserialize`](https://github.com/haskell/tar/pull/95).
+
 ## 0.6.2.0 Bodigrim <andrew.lelechenko@gmail.com> March 2024
 
   * Fix issues with Unicode support in filenames.

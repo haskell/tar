@@ -1,6 +1,6 @@
 cabal-version:   2.2
 name:            tar
-version:         0.6.2.0
+version:         0.6.3.0
 license:         BSD-3-Clause
 license-file:    LICENSE
 author:          Duncan Coutts <duncan@community.haskell.org>
