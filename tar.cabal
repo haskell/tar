@@ -143,4 +143,4 @@ benchmark bench
                  deepseq,
                  temporary < 1.4,
                  time,
-                 tasty-bench < 0.4
+                 tasty-bench >= 0.4 && < 0.5
