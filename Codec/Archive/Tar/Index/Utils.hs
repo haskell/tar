@@ -1,4 +1,6 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns, CPP #-}
+{-# OPTIONS_HADDOCK hide #-}
+
 module Codec.Archive.Tar.Index.Utils where
 
 import Data.ByteString as BS
