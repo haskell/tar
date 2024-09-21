@@ -7,6 +7,7 @@ module Codec.Archive.Tar.PackAscii
   , posixToByteString
   , byteToPosixString
   , packAscii
+  , filePathToOsPath
   ) where
 
 import Data.ByteString (ByteString)
@@ -16,6 +17,7 @@ import Data.Char
 import GHC.Stack
 import System.IO.Unsafe (unsafePerformIO)
 import "os-string" System.OsString.Posix (PosixString)
+import qualified "filepath" System.OsPath as OS
 import qualified "os-string" System.OsString.Posix as PS
 import qualified "os-string" System.OsString.Internal.Types as PS
 
@@ -35,3 +37,6 @@ packAscii :: HasCallStack => FilePath -> BS.Char8.ByteString
 packAscii xs
   | all isAscii xs = BS.Char8.pack xs
   | otherwise = error $ "packAscii: only ASCII inputs are supported, but got " ++ xs
+
+filePathToOsPath :: FilePath -> OS.OsPath
+filePathToOsPath = unsafePerformIO . OS.encodeFS

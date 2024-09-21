@@ -27,6 +27,7 @@ module Codec.Archive.Tar.Unpack (
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Check
 import Codec.Archive.Tar.LongNames
+import Codec.Archive.Tar.PackAscii (filePathToOsPath)
 
 import Data.Bits
          ( testBit )
@@ -34,11 +35,13 @@ import Data.List (partition, nub)
 import Data.Maybe ( fromMaybe )
 import qualified Data.ByteString.Char8 as Char8
 import qualified Data.ByteString.Lazy as BS
-import System.FilePath
-         ( (</>) )
-import qualified System.FilePath as FilePath.Native
+import Prelude hiding (writeFile)
+import System.File.OsPath
+import System.OsPath
+         ( OsPath, (</>) )
+import qualified System.OsPath as FilePath.Native
          ( takeDirectory )
-import System.Directory
+import System.Directory.OsPath
     ( createDirectoryIfMissing,
       copyFile,
       setPermissions,
@@ -110,7 +113,7 @@ unpackAndCheck
   -> Entries e
   -- ^ Entries to upack
   -> IO ()
-unpackAndCheck secCB baseDir entries = do
+unpackAndCheck secCB (filePathToOsPath -> baseDir) entries = do
   let resolvedEntries = decodeLongNames entries
   uEntries <- unpackEntries [] resolvedEntries
   let (hardlinks, symlinks) = partition (\(_, _, x) -> x) uEntries
@@ -123,11 +126,11 @@ unpackAndCheck secCB baseDir entries = do
     -- files all over the place.
 
     unpackEntries :: Exception e
-                  => [(FilePath, FilePath, Bool)]
+                  => [(OsPath, OsPath, Bool)]
                   -- ^ links (path, link, isHardLink)
                   -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
                   -- ^ entries
-                  -> IO [(FilePath, FilePath, Bool)]
+                  -> IO [(OsPath, OsPath, Bool)]
     unpackEntries _     (Fail err)      = either throwIO throwIO err
     unpackEntries links Done            = return links
     unpackEntries links (Next entry es) = do
@@ -154,31 +157,37 @@ unpackAndCheck secCB baseDir entries = do
         BlockDevice{} -> unpackEntries links es
         NamedPipe -> unpackEntries links es
 
-    extractFile permissions (fromFilePathToNative -> path) content mtime = do
+    extractFile :: Permissions -> FilePath -> BS.ByteString -> EpochTime -> IO ()
+    extractFile permissions (filePathToNativeOsPath -> path) content mtime = do
       -- Note that tar archives do not make sure each directory is created
       -- before files they contain, indeed we may have to create several
       -- levels of directory.
       createDirectoryIfMissing True absDir
-      BS.writeFile absPath content
+      writeFile absPath content
       setOwnerPermissions absPath permissions
       setModTime absPath mtime
       where
         absDir  = baseDir </> FilePath.Native.takeDirectory path
         absPath = baseDir </> path
 
-    extractDir (fromFilePathToNative -> path) mtime = do
+    extractDir :: FilePath -> EpochTime -> IO ()
+    extractDir (filePathToNativeOsPath -> path) mtime = do
       createDirectoryIfMissing True absPath
       setModTime absPath mtime
       where
         absPath = baseDir </> path
 
-    saveLink isHardLink (fromFilePathToNative -> path) (fromFilePathToNative -> link) links
-      = seq (length path)
-          $ seq (length link)
-          $ (path, link, isHardLink):links
-
+    saveLink
+      :: t
+      -> FilePath
+      -> FilePath
+      -> [(OsPath, OsPath, t)]
+      -> [(OsPath, OsPath, t)]
+    saveLink isHardLink (filePathToNativeOsPath -> path) (filePathToNativeOsPath -> link) =
+      path `seq` link `seq` ((path, link, isHardLink) :)
 
     -- for hardlinks, we just copy
+    handleHardLinks :: [(OsPath, OsPath, t)] -> IO ()
     handleHardLinks = mapM_ $ \(relPath, relLinkTarget, _) ->
       let absPath   = baseDir </> relPath
           -- hard links link targets are always "absolute" paths in
@@ -197,6 +206,7 @@ unpackAndCheck secCB baseDir entries = do
     -- This error handling isn't too fine grained and maybe should be
     -- platform specific, but this way it might catch erros on unix even on
     -- FAT32 fuse mounted volumes.
+    handleSymlinks :: [(OsPath, OsPath, c)] -> IO ()
     handleSymlinks = mapM_ $ \(relPath, relLinkTarget, _) ->
       let absPath   = baseDir </> relPath
           -- hard links link targets are always "absolute" paths in
@@ -220,10 +230,13 @@ unpackAndCheck secCB baseDir entries = do
                       else throwIO e
                  )
 
+filePathToNativeOsPath :: FilePath -> OsPath
+filePathToNativeOsPath = filePathToOsPath . fromFilePathToNative
+
 -- | Recursively copy the contents of one directory to another path.
 --
 -- This is a rip-off of Cabal library.
-copyDirectoryRecursive :: FilePath -> FilePath -> IO ()
+copyDirectoryRecursive :: OsPath -> OsPath -> IO ()
 copyDirectoryRecursive srcDir destDir = do
   srcFiles <- getDirectoryContentsRecursive srcDir
   copyFilesWith copyFile destDir [ (srcDir, f)
@@ -231,8 +244,8 @@ copyDirectoryRecursive srcDir destDir = do
   where
     -- | Common implementation of 'copyFiles', 'installOrdinaryFiles',
     -- 'installExecutableFiles' and 'installMaybeExecutableFiles'.
-    copyFilesWith :: (FilePath -> FilePath -> IO ())
-                  -> FilePath -> [(FilePath, FilePath)] -> IO ()
+    copyFilesWith :: (OsPath -> OsPath -> IO ())
+                  -> OsPath -> [(OsPath, OsPath)] -> IO ()
     copyFilesWith doCopy targetDir srcFiles = do
 
       -- Create parent directories for everything
@@ -251,10 +264,10 @@ copyDirectoryRecursive srcDir destDir = do
     -- parent directories. The list is generated lazily so is not well defined if
     -- the source directory structure changes before the list is used.
     --
-    getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
-    getDirectoryContentsRecursive topdir = recurseDirectories [""]
+    getDirectoryContentsRecursive :: OsPath -> IO [OsPath]
+    getDirectoryContentsRecursive topdir = recurseDirectories [mempty]
       where
-        recurseDirectories :: [FilePath] -> IO [FilePath]
+        recurseDirectories :: [OsPath] -> IO [OsPath]
         recurseDirectories []         = return []
         recurseDirectories (dir:dirs) = unsafeInterleaveIO $ do
           (files, dirs') <- collect [] [] =<< listDirectory (topdir </> dir)
@@ -271,7 +284,7 @@ copyDirectoryRecursive srcDir destDir = do
                 then collect files (dirEntry:dirs') entries
                 else collect (dirEntry:files) dirs' entries
 
-setModTime :: FilePath -> EpochTime -> IO ()
+setModTime :: OsPath -> EpochTime -> IO ()
 setModTime path t =
     setModificationTime path (posixSecondsToUTCTime (fromIntegral t))
       `Exception.catch` \e -> case ioeGetErrorType e of
@@ -281,7 +294,7 @@ setModTime path t =
         InvalidArgument -> return ()
         _ -> throwIO e
 
-setOwnerPermissions :: FilePath -> Permissions -> IO ()
+setOwnerPermissions :: OsPath -> Permissions -> IO ()
 setOwnerPermissions path permissions =
   setPermissions path ownerPermissions
   where
@@ -291,5 +304,5 @@ setOwnerPermissions path permissions =
       setOwnerReadable   (testBit permissions 8) $
       setOwnerWritable   (testBit permissions 7) $
       setOwnerExecutable (testBit permissions 6) $
-      setOwnerSearchable (testBit permissions 6) $
+      setOwnerSearchable (testBit permissions 6)
       emptyPermissions

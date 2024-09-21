@@ -29,10 +29,52 @@ jobs:
         githubToken: ${{ github.token }}
         install: |
           apt-get update -y
-          apt-get install -y curl ghc libghc-tasty-quickcheck-dev libghc-file-embed-dev libghc-temporary-dev
+          apt-get install -y autoconf build-essential curl ghc libghc-tasty-quickcheck-dev libghc-file-embed-dev libghc-temporary-dev
         run: |
-          find Codec -iname '*.hs' -type f -exec sed -i.bck 's/"os-string"//g' {} \;
-          curl -s https://hackage.haskell.org/package/os-string-2.0.3/os-string-2.0.3.tar.gz | tar xz
+          curl -s https://hackage.haskell.org/package/os-string-2.0.6/os-string-2.0.6.tar.gz | tar xz
+          curl -s https://hackage.haskell.org/package/filepath-1.5.3.0/filepath-1.5.3.0.tar.gz | tar xz
+          curl -s https://hackage.haskell.org/package/file-io-0.1.4/file-io-0.1.4.tar.gz | tar xz
+          curl -s https://hackage.haskell.org/package/unix-2.8.5.1/unix-2.8.5.1.tar.gz | tar xz
+          curl -s https://hackage.haskell.org/package/directory-1.3.8.5/directory-1.3.8.5.tar.gz | tar xz
+
+          cd unix-2.8.5.1
+          chmod +x configure
+          ./configure
+          find /usr/lib/ghc -iname HsFFI.h
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Directory.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Directory/Common.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Directory/PosixPath.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Env/Internal.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Files/Common.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Files/PosixString.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/IO/Common.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/IO/PosixString.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/User/ByteString.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/User/Common.hsc
+
+          sed -i -e 's/MIN_VERSION_base(4, 11, 0)/1/g' System/Posix/Files.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Files.hsc
+
+          sed -i -e 's/MIN_VERSION_filepath(1, 5, 0)/1/g' System/Posix/Env/PosixString.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/Env/PosixString.hsc
+
+          sed -i -e 's/MIN_VERSION_filepath(1, 5, 0)/1/g' System/Posix/PosixPath/FilePath.hsc
+          sed -i -e 's/MIN_VERSION_base(4, 11, 0)/1/g' System/Posix/PosixPath/FilePath.hsc
+          hsc2hs -Iinclude -I$(dirname $(find /usr/lib/ghc -iname HsFFI.h)) System/Posix/PosixPath/FilePath.hsc
+          cd ..
+
+          cd directory-1.3.8.5
+          chmod +x configure
+          ./configure
+          hsc2hs -I. System/Directory/Internal/Posix.hsc
+          cd ..
+
+          find . -iname '*.hs' -type f -exec sed -i.bck 's/import "filepath"/import/g' {} \;
+          find . -iname '*.hs' -type f -exec sed -i.bck 's/import "os-string"/import/g' {} \;
+          find . -iname '*.hs' -type f -exec sed -i.bck 's/import qualified "filepath"/import qualified/g' {} \;
+          find . -iname '*.hs' -type f -exec sed -i.bck 's/import qualified "os-string"/import qualified/g' {} \;
+          sed -i -e 's/MIN_VERSION_filepath(1, 5, 0)/1/g' file-io-0.1.4/posix/System/File/Platform.hs
+          sed -i -e 's/MIN_VERSION_filepath(1, 5, 0)/1/g' file-io-0.1.4/System/File/OsPath/Internal.hs
           ghc --version
-          ghc --make -itest:os-string-2.0.3 -o Main test/Properties.hs +RTS -s
+          ghc --make -fno-safe-haskell -itest:os-string-2.0.6:filepath-1.5.3.0:file-io-0.1.4:file-io-0.1.4/posix:unix-2.8.5.1:directory-1.3.8.5 -Iunix-2.8.5.1/include:directory-1.3.8.5 -o Main unix-2.8.5.1/cbits/HsUnix.c test/Properties.hs +RTS -s
           ./Main +RTS -s
