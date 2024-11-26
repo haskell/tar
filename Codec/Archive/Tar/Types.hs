@@ -76,6 +76,7 @@ module Codec.Archive.Tar.Types (
   unfoldEntriesM,
   ) where
 
+import Data.Bifunctor (Bifunctor, bimap)
 import Data.Int      (Int64)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid   (Monoid(..))
@@ -145,7 +146,18 @@ data GenEntry tarPath linkTarget = Entry {
     -- | The tar format the archive is using.
     entryFormat :: !Format
   }
-  deriving (Eq, Show)
+  deriving
+  ( Eq
+  , Show
+  , Functor -- ^ @since 0.6.4.0
+  )
+
+-- | @since 0.6.4.0
+instance Bifunctor GenEntry where
+  bimap f g e = e
+    { entryTarPath = f (entryTarPath e)
+    , entryContent = fmap g (entryContent e)
+    }
 
 -- | Monomorphic tar archive entry, ready for serialization / deserialization.
 --
@@ -178,7 +190,12 @@ data GenEntryContent linkTarget
   | NamedPipe
   | OtherEntryType  {-# UNPACK #-} !TypeCode LBS.ByteString
                     {-# UNPACK #-} !FileSize
-  deriving (Eq, Ord, Show)
+  deriving
+  ( Eq
+  , Ord
+  , Show
+  , Functor -- ^ @since 0.6.4.0
+  )
 
 -- | Monomorphic content of a tar archive entry,
 -- ready for serialization / deserialization.
