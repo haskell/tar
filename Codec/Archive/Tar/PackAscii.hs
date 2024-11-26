@@ -1,5 +1,8 @@
 {-# LANGUAGE PackageImports #-}
+
 {-# OPTIONS_HADDOCK hide #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid restricted function" #-}
 
 module Codec.Archive.Tar.PackAscii
   ( toPosixString
@@ -8,6 +11,7 @@ module Codec.Archive.Tar.PackAscii
   , byteToPosixString
   , packAscii
   , filePathToOsPath
+  , osPathToFilePath
   ) where
 
 import Data.ByteString (ByteString)
@@ -40,3 +44,6 @@ packAscii xs
 
 filePathToOsPath :: FilePath -> OS.OsPath
 filePathToOsPath = unsafePerformIO . OS.encodeFS
+
+osPathToFilePath :: OS.OsPath -> FilePath
+osPathToFilePath = unsafePerformIO . OS.decodeFS

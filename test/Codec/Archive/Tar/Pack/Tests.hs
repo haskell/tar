@@ -21,6 +21,7 @@ import Data.Char
 import Data.FileEmbed
 import qualified Codec.Archive.Tar as Tar
 import qualified Codec.Archive.Tar.Pack as Pack
+import Codec.Archive.Tar.PackAscii (filePathToOsPath)
 import qualified Codec.Archive.Tar.Read as Read
 import Codec.Archive.Tar.Types (GenEntries(..), Entries, simpleEntry, toTarPath, GenEntry (entryTarPath))
 import qualified Codec.Archive.Tar.Unpack as Unpack
@@ -109,8 +110,8 @@ prop_roundtrip n' xss cnt
                 pure $ cnt === cnt'
               else do
                 -- Forcing the result, otherwise lazy IO misbehaves.
-                recFiles <- Pack.getDirectoryContentsRecursive baseDir >>= evaluate . force
-                pure $ counterexample ("File " ++ absFile ++ " does not exist; instead found\n" ++ unlines recFiles) False
+                recFiles <- Pack.getDirectoryContentsRecursive (filePathToOsPath baseDir) >>= evaluate . force
+                pure $ counterexample ("File " ++ absFile ++ " does not exist; instead found\n" ++ unlines (map show recFiles)) False
 
   | otherwise = discard
 

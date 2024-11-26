@@ -1,9 +1,11 @@
-{-# LANGUAGE MultiWayIf #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
+
 {-# OPTIONS_HADDOCK hide #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid restricted function" #-}
+
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar
@@ -28,16 +30,20 @@ module Codec.Archive.Tar.Pack (
   ) where
 
 import Codec.Archive.Tar.LongNames
+import Codec.Archive.Tar.PackAscii (filePathToOsPath, osPathToFilePath)
 import Codec.Archive.Tar.Types
+
 import Control.Monad (join, when, forM, (>=>))
+import Data.Bifunctor (bimap)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
 import Data.Foldable
-import System.FilePath
-         ( (</>) )
-import qualified System.FilePath as FilePath.Native
+import System.File.OsPath
+import System.OsPath
+         ( OsPath, (</>) )
+import qualified System.OsPath as FilePath.Native
          ( addTrailingPathSeparator, hasTrailingPathSeparator, splitDirectories )
-import System.Directory
+import System.Directory.OsPath
          ( listDirectory, doesDirectoryExist, getModificationTime
          , pathIsSymbolicLink, getSymbolicLinkTarget
          , Permissions(..), getPermissions, getFileSize )
@@ -46,7 +52,7 @@ import Data.Time.Clock
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
 import System.IO
-         ( IOMode(ReadMode), openBinaryFile, hFileSize )
+         ( IOMode(ReadMode), hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Control.Exception (throwIO, SomeException)
 import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
@@ -81,15 +87,17 @@ packAndCheck
   -> FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
-packAndCheck secCB baseDir relpaths = do
+packAndCheck secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpaths) = do
   paths <- preparePaths baseDir relpaths
-  entries <- packPaths baseDir paths
+  entries' <- packPaths baseDir paths
+  let entries = map (bimap osPathToFilePath osPathToFilePath) entries'
   traverse_ (maybe (pure ()) throwIO . secCB) entries
   pure $ concatMap encodeLongNames entries
 
-preparePaths :: FilePath -> [FilePath] -> IO [FilePath]
+preparePaths :: OsPath -> [OsPath] -> IO [OsPath]
 preparePaths baseDir = fmap concat . interleave . map go
   where
+    go :: OsPath -> IO [OsPath]
     go relpath = do
       let abspath = baseDir </> relpath
       isDir  <- doesDirectoryExist abspath
@@ -97,24 +105,24 @@ preparePaths baseDir = fmap concat . interleave . map go
       if isDir && not isSymlink then do
         entries <- getDirectoryContentsRecursive abspath
         let entries' = map (relpath </>) entries
-        return $ if null relpath
+        return $ if relpath == mempty
           then entries'
           else FilePath.Native.addTrailingPathSeparator relpath : entries'
       else return [relpath]
 
 -- | Pack paths while accounting for overlong filepaths.
 packPaths
-  :: FilePath
-  -> [FilePath]
-  -> IO [GenEntry FilePath FilePath]
+  :: OsPath
+  -> [OsPath]
+  -> IO [GenEntry OsPath OsPath]
 packPaths baseDir paths = interleave $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
   isSymlink <- pathIsSymbolicLink abspath
   let mkEntry
-        | isSymlink = packSymlinkEntry
-        | isDir = packDirectoryEntry
-        | otherwise = packFileEntry
+        | isSymlink = packSymlinkEntry'
+        | isDir = packDirectoryEntry'
+        | otherwise = packFileEntry'
   mkEntry abspath relpath
 
 interleave :: [IO a] -> IO [a]
@@ -138,7 +146,13 @@ packFileEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath linkTarget)
-packFileEntry filepath tarpath = do
+packFileEntry = packFileEntry' . filePathToOsPath
+
+packFileEntry'
+  :: OsPath  -- ^ Full path to find the file on the local disk
+  -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
+  -> IO (GenEntry tarPath linkTarget)
+packFileEntry' filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
   -- Get file size without opening it.
@@ -148,7 +162,7 @@ packFileEntry filepath tarpath = do
     -- If file is short enough, just read it strictly
     -- so that no file handle dangles around indefinitely.
     then do
-      cnt <- B.readFile filepath
+      cnt <- readFile' filepath
       pure (BL.fromStrict cnt, fromIntegral $ B.length cnt)
     else do
       hndl <- openBinaryFile filepath ReadMode
@@ -178,7 +192,13 @@ packDirectoryEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath linkTarget)
-packDirectoryEntry filepath tarpath = do
+packDirectoryEntry = packDirectoryEntry' . filePathToOsPath
+
+packDirectoryEntry'
+  :: OsPath  -- ^ Full path to find the file on the local disk
+  -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
+  -> IO (GenEntry tarPath linkTarget)
+packDirectoryEntry' filepath tarpath = do
   mtime   <- getModTime filepath
   return (directoryEntry tarpath) {
     entryTime = mtime
@@ -193,7 +213,13 @@ packSymlinkEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath FilePath)
-packSymlinkEntry filepath tarpath = do
+packSymlinkEntry = ((fmap (fmap osPathToFilePath) .) . packSymlinkEntry') . filePathToOsPath
+
+packSymlinkEntry'
+  :: OsPath  -- ^ Full path to find the file on the local disk
+  -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
+  -> IO (GenEntry tarPath OsPath)
+packSymlinkEntry' filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
   pure $ symlinkEntry tarpath linkTarget
 
@@ -215,11 +241,11 @@ packSymlinkEntry filepath tarpath = do
 -- If the source directory structure changes before the result is used in full,
 -- the behaviour is undefined.
 --
-getDirectoryContentsRecursive :: FilePath -> IO [FilePath]
+getDirectoryContentsRecursive :: OsPath -> IO [OsPath]
 getDirectoryContentsRecursive dir0 =
-  fmap (drop 1) (recurseDirectories dir0 [""])
+  fmap (drop 1) (recurseDirectories dir0 [mempty])
 
-recurseDirectories :: FilePath -> [FilePath] -> IO [FilePath]
+recurseDirectories :: OsPath -> [OsPath] -> IO [OsPath]
 recurseDirectories _    []         = return []
 recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
   (files, dirs') <- collect [] [] =<< listDirectory (base </> dir)
@@ -238,7 +264,7 @@ recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
         then collect files (dirEntry':dirs') entries
         else collect (dirEntry:files) dirs' entries
 
-getModTime :: FilePath -> IO EpochTime
+getModTime :: OsPath -> IO EpochTime
 getModTime path = do
   -- The directory package switched to the new time package
   t <- getModificationTime path
