@@ -78,17 +78,12 @@ jobs:
             compilerVersion: 8.6.5
             setup-method: ghcup
             allow-failure: false
-          - compiler: ghc-8.4.4
-            compilerKind: ghc
-            compilerVersion: 8.4.4
-            setup-method: ghcup
-            allow-failure: false
       fail-fast: false
     steps:
       - name: apt-get install
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends gnupg ca-certificates dirmngr curl git software-properties-common libtinfo5 libnuma-dev
+          apt-get install -y --no-install-recommends gnupg ca-certificates dirmngr curl git software-properties-common libtinfo5
       - name: Install GHCup
         run: |
           mkdir -p "$HOME/.ghcup/bin"
@@ -271,7 +266,7 @@ jobs:
           ${CABAL} -vnormal check
       - name: haddock
         run: |
-          if [ $((HCNUMVER >= 80600)) -ne 0 ] ; then $CABAL v2-haddock --disable-documentation --haddock-all $ARG_COMPILER --with-haddock $HADDOCK $ARG_TESTS $ARG_BENCH all ; fi
+          $CABAL v2-haddock --disable-documentation --haddock-all $ARG_COMPILER --with-haddock $HADDOCK $ARG_TESTS $ARG_BENCH all
       - name: unconstrained build
         run: |
           rm -f cabal.project.local

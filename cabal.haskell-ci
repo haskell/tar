@@ -1,2 +1,1 @@
 installed: -directory -unix -bytestring -filepath
-haddock: >= 8.6
