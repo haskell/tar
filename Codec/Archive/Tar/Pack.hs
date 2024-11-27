@@ -47,6 +47,8 @@ import System.Directory.OsPath
          ( listDirectory, doesDirectoryExist, getModificationTime
          , pathIsSymbolicLink, getSymbolicLinkTarget
          , Permissions(..), getPermissions, getFileSize )
+import System.Directory.OsPath.FileType as FT
+import System.Directory.OsPath.Streaming
 import Data.Time.Clock
          ( UTCTime )
 import Data.Time.Clock.POSIX
@@ -242,27 +244,33 @@ packSymlinkEntry' filepath tarpath = do
 -- the behaviour is undefined.
 --
 getDirectoryContentsRecursive :: OsPath -> IO [OsPath]
-getDirectoryContentsRecursive dir0 =
-  fmap (drop 1) (recurseDirectories dir0 [mempty])
-
-recurseDirectories :: OsPath -> [OsPath] -> IO [OsPath]
-recurseDirectories _    []         = return []
-recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
-  (files, dirs') <- collect [] [] =<< listDirectory (base </> dir)
-
-  files' <- recurseDirectories base (dirs' ++ dirs)
-  return (dir : files ++ files')
-
+getDirectoryContentsRecursive base = recurseDirectories [mempty]
   where
-    collect files dirs' []              = return (reverse files, reverse dirs')
-    collect files dirs' (entry:entries) = do
-      let dirEntry  = dir </> entry
-          dirEntry' = FilePath.Native.addTrailingPathSeparator dirEntry
-      isDirectory <- doesDirectoryExist (base </> dirEntry)
-      isSymlink <- pathIsSymbolicLink (base </> dirEntry)
-      if isDirectory && not isSymlink
-        then collect files (dirEntry':dirs') entries
-        else collect (dirEntry:files) dirs' entries
+    recurseDirectories :: [OsPath] -> IO [OsPath]
+    recurseDirectories [] = pure []
+    recurseDirectories (path : paths) = do
+      stream <- openDirStream (base </> path)
+      recurseStream path stream paths
+
+    recurseStream :: OsPath -> DirStream -> [OsPath] -> IO [OsPath]
+    recurseStream currPath currStream rest = go
+      where
+        go = unsafeInterleaveIO $ do
+          mfn <- readDirStream currStream
+          case mfn of
+            Nothing -> do
+              closeDirStream currStream
+              recurseDirectories rest
+            Just fn -> do
+              ty <- getFileType basePathFn
+              case ty of
+                FT.Directory ->
+                  (FilePath.Native.addTrailingPathSeparator pathFn :) <$>
+                    recurseStream currPath currStream (pathFn : rest)
+                _ -> (pathFn :) <$> go
+              where
+                pathFn = currPath </> fn
+                basePathFn = base </> pathFn
 
 getModTime :: OsPath -> IO EpochTime
 getModTime path = do
