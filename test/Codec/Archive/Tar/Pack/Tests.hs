@@ -3,6 +3,9 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Avoid restricted function" #-}
+
 module Codec.Archive.Tar.Pack.Tests
   ( prop_roundtrip
   , unit_roundtrip_unicode
@@ -23,6 +26,7 @@ import Codec.Archive.Tar.Types (GenEntries(..), Entries, simpleEntry, toTarPath,
 import qualified Codec.Archive.Tar.Unpack as Unpack
 import qualified Codec.Archive.Tar.Write as Write
 import Control.Exception
+import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty(..))
 import GHC.IO.Encoding
 import System.Directory
@@ -46,8 +50,8 @@ supportsUnicode = unsafePerformIO $ do
 
 -- | Write a single file, deeply buried within nested folders;
 -- pack and unpack; read back and compare results.
-prop_roundtrip :: [String] -> String -> Property
-prop_roundtrip xss cnt
+prop_roundtrip :: Int -> [String] -> String -> Property
+prop_roundtrip n' xss cnt
   | x : xs <- filter (not . null) $ map mkFilePath xss
   = ioProperty $ withSystemTempDirectory "tar-test" $ \baseDir -> do
     file : dirs <- pure $ trimUpToMaxPathLength baseDir (x : xs)
@@ -56,10 +60,17 @@ prop_roundtrip xss cnt
         absDir = baseDir </> relDir
         relFile = relDir </> file
         absFile = absDir </> file
-        errMsg = "relDir  = " ++ relDir ++
-               "\nabsDir  = " ++ absDir ++
-               "\nrelFile = " ++ relFile ++
-               "\nabsFile = " ++ absFile
+        n       = n' `mod` (length dirs + 1)
+        (target, expectedFileNames) = case n of
+          0 -> (relFile, [relFile])
+          _ -> (joinPath $ take (n - 1) dirs,
+            map (addTrailingPathSeparator . joinPath)
+              (drop (max 1 (n - 1)) $ L.inits dirs) ++ [relFile])
+        errMsg = "relDir  = '" ++ relDir ++ "'" ++
+               "\nabsDir  = '" ++ absDir ++ "'" ++
+               "\nrelFile = '" ++ relFile ++ "'" ++
+               "\nabsFile = '" ++ absFile ++ "'" ++
+               "\ntarget  = '" ++ target ++ "'"
 
     -- Not all filesystems allow paths to contain arbitrary Unicode.
     -- E. g., at the moment of writing Apple FS does not support characters
@@ -72,9 +83,8 @@ prop_roundtrip xss cnt
         case canWriteFile of
           Left (e :: IOException) -> discard
           Right () -> counterexample errMsg <$> do
-
             -- Forcing the result, otherwise lazy IO misbehaves.
-            !entries <- Pack.pack baseDir [relFile] >>= evaluate . force
+            !entries <- Pack.pack baseDir [target] >>= evaluate . force
 
             let fileNames
                   = map (map (\c -> if c == Posix.pathSeparator then pathSeparator else c))
@@ -82,7 +92,7 @@ prop_roundtrip xss cnt
                   -- decodeLongNames produces FilePath with POSIX path separators
                   $ Tar.decodeLongNames $ foldr Next Done entries
 
-            if [relFile] /= fileNames then pure ([relFile] === fileNames) else do
+            if expectedFileNames /= fileNames then pure (expectedFileNames === fileNames) else do
 
               -- Try hard to clean up
               removeFile absFile
