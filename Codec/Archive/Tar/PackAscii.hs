@@ -1,6 +1,7 @@
 {-# LANGUAGE PackageImports #-}
 
 {-# OPTIONS_HADDOCK hide #-}
+{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Avoid restricted function" #-}
 
