@@ -454,7 +454,7 @@ toTarPath :: Bool -- ^ Is the path for a directory? This is needed because for
 toTarPath isDir path = case toTarPath' path' of
   FileNameEmpty      -> Left "File name empty"
   FileNameOK tarPath -> Right tarPath
-  FileNameTooLong{}  -> Left "File name too long"
+  FileNameTooLong{}  -> Left $ "File name too long: " ++ path'
   where
     path' = if isDir && not (FilePath.Native.hasTrailingPathSeparator path)
             then path <> [FilePath.Native.pathSeparator]
