@@ -1,1 +1,1 @@
-installed: -directory -unix -bytestring -filepath
+installed: -directory -unix -bytestring -filepath -text -process -binary

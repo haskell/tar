@@ -77,3 +77,4 @@ module Codec.Archive.Tar.Entry (
 
 import Codec.Archive.Tar.Types
 import Codec.Archive.Tar.Pack
+import System.Directory.OsPath.Streaming (getDirectoryContentsRecursive)

@@ -31,6 +31,7 @@ import qualified Data.List as L
 import Data.List.NonEmpty (NonEmpty(..))
 import GHC.IO.Encoding
 import System.Directory
+import System.Directory.OsPath.Streaming (getDirectoryContentsRecursive)
 import System.FilePath
 import qualified System.FilePath.Posix as Posix
 import qualified System.Info
@@ -110,7 +111,7 @@ prop_roundtrip n' xss cnt
                 pure $ cnt === cnt'
               else do
                 -- Forcing the result, otherwise lazy IO misbehaves.
-                recFiles <- Pack.getDirectoryContentsRecursive (filePathToOsPath baseDir) >>= evaluate . force
+                recFiles <- getDirectoryContentsRecursive (filePathToOsPath baseDir) >>= evaluate . force
                 pure $ counterexample ("File " ++ absFile ++ " does not exist; instead found\n" ++ unlines (map show recFiles)) False
 
   | otherwise = discard

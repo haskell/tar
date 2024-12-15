@@ -16,6 +16,10 @@ jobs:
       id: setup-haskell-cabal
       with:
         ghc-version: 'latest'
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update -y
+        sudo apt-get install -y libbz2-dev
     - name: Update cabal package database
       run: cabal update
     - uses: actions/cache@v4

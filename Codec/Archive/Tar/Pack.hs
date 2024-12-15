@@ -25,15 +25,12 @@ module Codec.Archive.Tar.Pack (
     packDirectoryEntry,
     packSymlinkEntry,
     longLinkEntry,
-
-    getDirectoryContentsRecursive,
   ) where
 
 import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.PackAscii (filePathToOsPath, osPathToFilePath)
 import Codec.Archive.Tar.Types
 
-import Control.Monad (join, when, forM, (>=>))
 import Data.Bifunctor (bimap)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -42,22 +39,19 @@ import System.File.OsPath
 import System.OsPath
          ( OsPath, (</>) )
 import qualified System.OsPath as FilePath.Native
-         ( addTrailingPathSeparator, hasTrailingPathSeparator, splitDirectories )
+         ( addTrailingPathSeparator, hasTrailingPathSeparator )
 import System.Directory.OsPath
-         ( listDirectory, doesDirectoryExist, getModificationTime
+         ( doesDirectoryExist, getModificationTime
          , pathIsSymbolicLink, getSymbolicLinkTarget
          , Permissions(..), getPermissions, getFileSize )
-import System.Directory.OsPath.FileType as FT
-import System.Directory.OsPath.Streaming
-import Data.Time.Clock
-         ( UTCTime )
+import System.Directory.OsPath.Types as FT
+import System.Directory.OsPath.Streaming (getDirectoryContentsRecursive)
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
 import System.IO
          ( IOMode(ReadMode), hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Control.Exception (throwIO, SomeException)
-import Codec.Archive.Tar.Check.Internal (checkEntrySecurity)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
 -- specified will have their contents included recursively. Paths in the
@@ -106,11 +100,15 @@ preparePaths baseDir = fmap concat . interleave . map go
       isSymlink <- pathIsSymbolicLink abspath
       if isDir && not isSymlink then do
         entries <- getDirectoryContentsRecursive abspath
-        let entries' = map (relpath </>) entries
+        let entries' = map ((relpath </>) . addSeparatorIfDir) entries
         return $ if relpath == mempty
           then entries'
           else FilePath.Native.addTrailingPathSeparator relpath : entries'
       else return [relpath]
+
+    addSeparatorIfDir (fn, ty) = case ty of
+      FT.Directory{} -> FilePath.Native.addTrailingPathSeparator fn
+      _ -> fn
 
 -- | Pack paths while accounting for overlong filepaths.
 packPaths
@@ -208,8 +206,6 @@ packDirectoryEntry' filepath tarpath = do
 
 -- | Construct a tar entry based on a local symlink.
 --
--- This automatically checks symlink safety via 'checkEntrySecurity'.
---
 -- @since 0.6.0.0
 packSymlinkEntry
   :: FilePath -- ^ Full path to find the file on the local disk
@@ -224,53 +220,6 @@ packSymlinkEntry'
 packSymlinkEntry' filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
   pure $ symlinkEntry tarpath linkTarget
-
--- | This is a utility function, much like 'listDirectory'. The
--- difference is that it includes the contents of subdirectories.
---
--- The paths returned are all relative to the top directory. Directory paths
--- are distinguishable by having a trailing path separator
--- (see 'FilePath.Native.hasTrailingPathSeparator').
---
--- All directories are listed before the files that they contain. Amongst the
--- contents of a directory, subdirectories are listed after normal files. The
--- overall result is that files within a directory will be together in a single
--- contiguous group. This tends to improve file layout and IO performance when
--- creating or extracting tar archives.
---
--- * This function returns results lazily. Subdirectories are not scanned
--- until the files entries in the parent directory have been consumed.
--- If the source directory structure changes before the result is used in full,
--- the behaviour is undefined.
---
-getDirectoryContentsRecursive :: OsPath -> IO [OsPath]
-getDirectoryContentsRecursive base = recurseDirectories [mempty]
-  where
-    recurseDirectories :: [OsPath] -> IO [OsPath]
-    recurseDirectories [] = pure []
-    recurseDirectories (path : paths) = do
-      stream <- openDirStream (base </> path)
-      recurseStream path stream paths
-
-    recurseStream :: OsPath -> DirStream -> [OsPath] -> IO [OsPath]
-    recurseStream currPath currStream rest = go
-      where
-        go = unsafeInterleaveIO $ do
-          mfn <- readDirStream currStream
-          case mfn of
-            Nothing -> do
-              closeDirStream currStream
-              recurseDirectories rest
-            Just fn -> do
-              ty <- getFileType basePathFn
-              case ty of
-                FT.Directory ->
-                  (FilePath.Native.addTrailingPathSeparator pathFn :) <$>
-                    recurseStream currPath currStream (pathFn : rest)
-                _ -> (pathFn :) <$> go
-              where
-                pathFn = currPath </> fn
-                basePathFn = base </> pathFn
 
 getModTime :: OsPath -> IO EpochTime
 getModTime path = do
