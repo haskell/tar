@@ -35,5 +35,6 @@ executable htar
     tar        >= 0.4.2,
     zlib       >= 0.4 && < 0.8,
     bzlib      >= 0.4 && < 0.7,
-    time       >= 1.5
+    time       >= 1.5,
+    hashable
 
