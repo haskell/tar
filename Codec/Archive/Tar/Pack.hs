@@ -44,7 +44,7 @@ import System.Directory.OsPath
          ( doesDirectoryExist, getModificationTime
          , pathIsSymbolicLink, getSymbolicLinkTarget
          , Permissions(..), getPermissions, getFileSize )
-import System.Directory.OsPath.Types as FT
+import qualified System.Directory.OsPath.Types as FT
 import System.Directory.OsPath.Streaming (getDirectoryContentsRecursive)
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
