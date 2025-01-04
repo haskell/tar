@@ -1,3 +1,8 @@
+## 0.6.4.0 Bodigrim <andrew.lelechenko@gmail.com> January 2025
+
+  * Migrate internals of packing / unpacking to `OsPath`.
+  * Use `getDirectoryContentsRecursive` from `directory-ospath-streaming`.
+
 ## 0.6.3.0 Bodigrim <andrew.lelechenko@gmail.com> June 2024
 
   * [Speed up `deserialize`](https://github.com/haskell/tar/pull/95).
