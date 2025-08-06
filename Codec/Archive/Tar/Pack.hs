@@ -89,7 +89,7 @@ packAndCheck secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpat
   paths <- preparePaths baseDir relpaths
   entries' <- packPaths baseDir paths
   let entries = map (bimap osPathToFilePath osPathToFilePath) entries'
-  traverse_ (maybe (pure ()) throwIO . secCB) entries
+  interleavedSequence_ $ map (maybe (pure ()) throwIO . secCB) entries
   pure $ concatMap encodeLongNames entries
 
 preparePaths :: OsPath -> [OsPath] -> IO [OsPath]
@@ -131,6 +131,9 @@ packPaths baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
 interleavedSequence :: [IO a] -> IO [a]
 interleavedSequence =
   foldr ((unsafeInterleaveIO .) . liftA2 (:)) (pure [])
+
+interleavedSequence_ :: [IO ()] -> IO ()
+interleavedSequence_ = foldr ((unsafeInterleaveIO .) . (*>)) (pure ())
 
 -- | Construct a tar entry based on a local file.
 --
