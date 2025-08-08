@@ -31,6 +31,8 @@ import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.PackAscii (filePathToOsPath, osPathToFilePath)
 import Codec.Archive.Tar.Types
 
+import Control.Applicative
+import Prelude hiding (Applicative(..))
 import Data.Bifunctor (bimap)
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as BL
@@ -91,7 +93,7 @@ packAndCheck secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpat
   pure $ concatMap encodeLongNames entries
 
 preparePaths :: OsPath -> [OsPath] -> IO [OsPath]
-preparePaths baseDir = fmap concat . interleave . map go
+preparePaths baseDir = fmap concat . interleavedSequence . map go
   where
     go :: OsPath -> IO [OsPath]
     go relpath = do
@@ -115,7 +117,7 @@ packPaths
   :: OsPath
   -> [OsPath]
   -> IO [GenEntry OsPath OsPath]
-packPaths baseDir paths = interleave $ flip map paths $ \relpath -> do
+packPaths baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
   isSymlink <- pathIsSymbolicLink abspath
@@ -125,14 +127,10 @@ packPaths baseDir paths = interleave $ flip map paths $ \relpath -> do
         | otherwise = packFileEntry'
   mkEntry abspath relpath
 
-interleave :: [IO a] -> IO [a]
-interleave = unsafeInterleaveIO . go
-  where
-    go []     = return []
-    go (x:xs) = do
-      x'  <- x
-      xs' <- interleave xs
-      return (x':xs')
+-- | As a normal 'sequence', but interleaving IO actions.
+interleavedSequence :: [IO a] -> IO [a]
+interleavedSequence =
+  foldr ((unsafeInterleaveIO .) . liftA2 (:)) (pure [])
 
 -- | Construct a tar entry based on a local file.
 --
