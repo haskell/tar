@@ -21,9 +21,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install prerequisites
+        run: |
+          sudo pkg install -y curl gcc gmp gmake ncurses perl5 libffi libiconv git bash misc/compat10x misc/compat11x misc/compat12x gmake autoconf bzip2
+
       - name: Run build
         run: |
-          pkg install -y curl gcc gmp gmake ncurses perl5 libffi libiconv git bash misc/compat10x misc/compat11x misc/compat12x gmake llvm14 bzip2
           export RUNNER_OS=FreeBSD
           export GHCUP_INSTALL_BASE_PREFIX="$GITHUB_WORKSPACE"
           export GHCUP_BIN="$GHCUP_INSTALL_BASE_PREFIX/.ghcup/bin"
