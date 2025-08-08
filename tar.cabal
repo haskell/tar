@@ -83,7 +83,6 @@ library tar-internal
   other-extensions:
     BangPatterns
     CPP
-    DeriveDataTypeable
     GeneralizedNewtypeDeriving
     PatternGuards
     ScopedTypeVariables
@@ -127,7 +126,6 @@ test-suite properties
   other-extensions:
     CPP
     BangPatterns,
-    DeriveDataTypeable
     ScopedTypeVariables
 
   ghc-options: -fno-ignore-asserts

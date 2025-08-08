@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 -----------------------------------------------------------------------------
@@ -55,8 +55,6 @@ module Codec.Archive.Tar.Index.Internal (
     serialiseLBS,
     serialiseSize,
   ) where
-
-import Data.Typeable (Typeable)
 
 import Codec.Archive.Tar.Types as Tar
 import Codec.Archive.Tar.Read  as Tar
@@ -119,7 +117,7 @@ data TarIndex = TarIndex
   -- additional entries.
   {-# UNPACK #-} !TarEntryOffset
 
-  deriving (Eq, Show, Typeable)
+  deriving (Eq, Show)
 
 instance NFData TarIndex where
   rnf (TarIndex _ _ _) = () -- fully strict by construction
@@ -131,11 +129,10 @@ instance NFData TarIndex where
 --
 data TarIndexEntry = TarFileEntry {-# UNPACK #-} !TarEntryOffset
                    | TarDir [(FilePath, TarIndexEntry)]
-  deriving (Show, Typeable)
-
+  deriving (Show)
 
 newtype PathComponentId = PathComponentId Int
-  deriving (Eq, Ord, Enum, Show, Typeable)
+  deriving (Eq, Ord, Enum, Show)
 
 -- | An offset within a tar file. Use 'hReadEntry', 'hReadEntryHeader' or
 -- 'hSeekEntryOffset'.
@@ -143,7 +140,6 @@ newtype PathComponentId = PathComponentId Int
 -- This is actually a tar \"record\" number, not a byte offset.
 --
 type TarEntryOffset = Word32
-
 
 -- | Look up a given filepath in the t'TarIndex'. It may return a 'TarFileEntry'
 -- containing the 'TarEntryOffset' of the file within the tar file, or if

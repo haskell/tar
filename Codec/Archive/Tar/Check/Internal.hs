@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -42,7 +41,6 @@ import Codec.Archive.Tar.Types
 import Control.Applicative ((<|>))
 import qualified Data.ByteString.Lazy.Char8 as Char8
 import Data.Maybe (fromMaybe)
-import Data.Typeable (Typeable)
 import Control.Exception (Exception(..))
 import qualified System.FilePath as FilePath.Native
          ( splitDirectories, isAbsolute, isValid, (</>), takeDirectory, hasDrive )
@@ -130,7 +128,6 @@ data FileNameError
   | AbsoluteFileName FilePath
   | UnsafeLinkTarget FilePath
   -- ^ @since 0.6.0.0
-  deriving (Typeable)
 
 instance Show FileNameError where
   show = showFileNameError Nothing
@@ -198,7 +195,6 @@ data TarBombError
              --
              -- @since 0.6.0.0
     FilePath -- ^ Expected top directory.
-  deriving (Typeable)
 
 instance Exception TarBombError
 
@@ -289,7 +285,6 @@ data PortabilityError
   | NonPortableFileType
   | NonPortableEntryNameChar FilePath
   | NonPortableFileName PortabilityPlatform FileNameError
-  deriving (Typeable)
 
 -- | The name of a platform that portability issues arise from
 type PortabilityPlatform = String

@@ -81,7 +81,6 @@ import Data.Int      (Int64)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Monoid   (Monoid(..))
 import Data.Semigroup as Sem
-import Data.Typeable
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
@@ -546,7 +545,7 @@ toLinkTarget path
 
 data LinkTargetException = IsAbsolute FilePath
                          | TooLong FilePath
-  deriving (Show,Typeable)
+  deriving (Show)
 
 instance Exception LinkTargetException where
   displayException (IsAbsolute fp) = "Link target \"" <> fp <> "\" is unexpectedly absolute"

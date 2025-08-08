@@ -26,7 +26,6 @@ import Data.Char     (ord)
 import Data.Int      (Int64)
 import Data.Bits     (Bits(shiftL, (.&.), complement))
 import Control.Exception (Exception(..))
-import Data.Typeable (Typeable)
 import Control.Applicative
 import Control.Monad
 import Control.DeepSeq
@@ -52,7 +51,7 @@ data FormatError
   | NotTarFormat
   | UnrecognisedTarFormat
   | HeaderBadNumericEncoding
-  deriving (Eq, Show, Typeable)
+  deriving (Eq, Show)
 
 instance Exception FormatError where
   displayException TruncatedArchive         = "truncated tar archive"

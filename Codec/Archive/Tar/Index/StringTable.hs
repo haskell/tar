@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, BangPatterns, PatternGuards, DeriveDataTypeable #-}
+{-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_HADDOCK hide #-}
 
@@ -23,8 +23,6 @@ module Codec.Archive.Tar.Index.StringTable (
 
     index'
  ) where
-
-import Data.Typeable (Typeable)
 
 import Prelude   hiding (lookup, id)
 import Data.List hiding (lookup, insert)
@@ -58,7 +56,7 @@ data StringTable id = StringTable
          {-# UNPACK #-} !(A.UArray Int32 Word32) -- string offset table
          {-# UNPACK #-} !(A.UArray Int32 Int32)  -- string index to id table
          {-# UNPACK #-} !(A.UArray Int32 Int32)  -- string id to index table
-  deriving (Show, Typeable)
+  deriving (Show)
 
 instance (Eq id, Enum id) => Eq (StringTable id) where
   tbl1 == tbl2 = unfinalise tbl1 == unfinalise tbl2
@@ -107,7 +105,7 @@ construct = finalise . foldl' (\tbl s -> fst (insert s tbl)) empty
 data StringTableBuilder id = StringTableBuilder
                                               !(Map BS.ByteString id)
                                {-# UNPACK #-} !Word32
-  deriving (Eq, Show, Typeable)
+  deriving (Eq, Show)
 
 empty :: StringTableBuilder id
 empty = StringTableBuilder Map.empty 0

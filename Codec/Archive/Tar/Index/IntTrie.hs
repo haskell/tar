@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
-{-# LANGUAGE DeriveDataTypeable, ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_HADDOCK hide #-}
@@ -37,8 +37,6 @@ module Codec.Archive.Tar.Index.IntTrie (
 
 import Prelude hiding (lookup)
 
-import Data.Typeable (Typeable)
-
 import qualified Data.Array.Unboxed as A
 import Data.Array.IArray  ((!))
 import qualified Data.Bits as Bits
@@ -67,7 +65,7 @@ import Codec.Archive.Tar.Index.Utils
 -- correspond to files), they do not have values at the branch points (which
 -- correspond to directories).
 newtype IntTrie = IntTrie (A.UArray Word32 Word32)
-    deriving (Eq, Show, Typeable)
+    deriving (Eq, Show)
 
 -- | The most significant bit is used for tagging,
 -- see 'tagLeaf' / 'tagNode' below, so morally it's Word31 only.
