@@ -21,7 +21,9 @@
 module Codec.Archive.Tar.Pack (
     pack,
     packAndCheck,
+    packAndCheckWithLimit,
     packFileEntry,
+    packFileEntryWithLimit,
     packDirectoryEntry,
     packSymlinkEntry,
     longLinkEntry,
@@ -85,9 +87,20 @@ packAndCheck
   -> FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
-packAndCheck secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpaths) = do
+packAndCheck = packAndCheckWithLimit (Just defaultLazyLimit)
+
+-- | Like 'packAndCheck', but allowing to specify file size limit for whether entry contents are read using lazy I/O.
+--
+-- @since 0.6.5.0
+packAndCheckWithLimit
+  :: Maybe Integer -- ^ file size limit over which files are read using lazy IO. Read always strictly if 'Nothing' is provided.
+  -> (GenEntry FilePath FilePath -> Maybe SomeException)
+  -> FilePath   -- ^ Base directory
+  -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
+  -> IO [Entry]
+packAndCheckWithLimit lazyLimit secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpaths) = do
   paths <- preparePaths baseDir relpaths
-  entries' <- packPaths baseDir paths
+  entries' <- packPaths lazyLimit baseDir paths
   let entries = map (bimap osPathToFilePath osPathToFilePath) entries'
   traverse_ (maybe (pure ()) throwIO . secCB) entries
   pure $ concatMap encodeLongNames entries
@@ -114,17 +127,18 @@ preparePaths baseDir = fmap concat . interleavedSequence . map go
 
 -- | Pack paths while accounting for overlong filepaths.
 packPaths
-  :: OsPath
+  :: Maybe Integer
+  -> OsPath
   -> [OsPath]
   -> IO [GenEntry OsPath OsPath]
-packPaths baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
+packPaths lazyLimit baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
   isSymlink <- pathIsSymbolicLink abspath
   let mkEntry
         | isSymlink = packSymlinkEntry'
         | isDir = packDirectoryEntry'
-        | otherwise = packFileEntry'
+        | otherwise = packFileEntry' lazyLimit
   mkEntry abspath relpath
 
 -- | As a normal 'sequence', but interleaving IO actions.
@@ -144,19 +158,38 @@ packFileEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath linkTarget)
-packFileEntry = packFileEntry' . filePathToOsPath
+packFileEntry = packFileEntryWithLimit (Just defaultLazyLimit)
+
+-- | Default file size limit for above which file entries are read using lazy I/O.
+defaultLazyLimit :: Integer
+defaultLazyLimit = 131072
+
+-- | Like 'packFileEntry' but with file size limit for whether entry contents are read using lazy I/O.
+--
+-- @since 0.6.5.0
+packFileEntryWithLimit
+  :: Maybe Integer  -- ^ file size limit over which files are read using lazy IO. Read always strictly if 'Nothing' is provided.
+  -> FilePath -- ^ Full path to find the file on the local disk
+  -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
+  -> IO (GenEntry tarPath linkTarget)
+packFileEntryWithLimit limit = packFileEntry' limit . filePathToOsPath
 
 packFileEntry'
-  :: OsPath  -- ^ Full path to find the file on the local disk
+  :: Maybe Integer  -- ^ file size limit over which files are read using lazy IO. Read always strictly if 'Nothing' is provided.
+  -> OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry tarPath linkTarget)
-packFileEntry' filepath tarpath = do
+packFileEntry' lazyLimit filepath tarpath = do
+  let readStrictly :: Integer -> Bool
+      readStrictly size = case lazyLimit of
+          Nothing -> True
+          Just maxSize -> size < maxSize
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
   -- Get file size without opening it.
   approxSize <- getFileSize filepath
 
-  (content, size) <- if approxSize < 131072
+  (content, size) <- if readStrictly approxSize
     -- If file is short enough, just read it strictly
     -- so that no file handle dangles around indefinitely.
     then do
