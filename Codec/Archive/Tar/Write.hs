@@ -12,7 +12,7 @@
 -- Portability :  portable
 --
 -----------------------------------------------------------------------------
-module Codec.Archive.Tar.Write (write) where
+module Codec.Archive.Tar.Write (write, write') where
 
 import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
@@ -39,6 +39,13 @@ import qualified "os-string" System.OsString.Posix as PS
 write :: [Entry] -> LBS.ByteString
 write es = LBS.concat $ map putEntry es ++ [LBS.replicate (512*2) 0]
 
+write' :: [GenEntry FilePath TarPath LinkTarget] -> IO LBS.ByteString
+write' es = interleavedByteStringConcat $ map putEntry' es ++ [pure $ LBS.replicate (512*2) 0]
+
+interleavedByteStringConcat :: [IO LBS.ByteString] -> IO LBS.ByteString
+interleavedByteStringConcat _ = fail "TODO: interleavedByteStringConcat"
+-- TODO: use unsafeInterleaveIO to produce result lazy bytestring lazily.
+
 putEntry :: Entry -> LBS.ByteString
 putEntry entry = case entryContent entry of
   NormalFile       content size
@@ -58,6 +65,19 @@ putEntry entry = case entryContent entry of
     header       = putHeader entry
     padding size = LBS.replicate paddingSize 0
       where paddingSize = fromIntegral (negate size `mod` 512)
+
+putEntry' :: GenEntry FilePath TarPath LinkTarget -> IO LBS.ByteString
+putEntry' entry' = case entryContent entry' of
+  NormalFile path size -> do
+    content <- LBS.readFile path
+    if LBS.length content /= size
+    then fail "wrong size"
+    else do
+      let entry = entry { entryContent = NormalFile content size }
+      return $ putEntry entry
+  -- TODO: otherwise we can essentially unsafeCoerce
+  _ -> fail "TODO: putEntry' non-NormalFile entries"
+
 
 putHeader :: Entry -> LBS.ByteString
 putHeader entry =
