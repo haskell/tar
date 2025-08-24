@@ -81,7 +81,7 @@ pack = packAndCheck (const Nothing)
 --
 -- @since 0.6.0.0
 packAndCheck
-  :: (GenEntry FilePath FilePath -> Maybe SomeException)
+  :: (GenEntry BL.ByteString FilePath FilePath -> Maybe SomeException)
   -> FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
@@ -116,7 +116,7 @@ preparePaths baseDir = fmap concat . interleavedSequence . map go
 packPaths
   :: OsPath
   -> [OsPath]
-  -> IO [GenEntry OsPath OsPath]
+  -> IO [GenEntry BL.ByteString OsPath OsPath]
 packPaths baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
@@ -143,13 +143,13 @@ interleavedSequence =
 packFileEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry BL.ByteString tarPath linkTarget)
 packFileEntry = packFileEntry' . filePathToOsPath
 
 packFileEntry'
   :: OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry BL.ByteString tarPath linkTarget)
 packFileEntry' filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
@@ -189,13 +189,13 @@ packFileEntry' filepath tarpath = do
 packDirectoryEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry BL.ByteString tarPath linkTarget)
 packDirectoryEntry = packDirectoryEntry' . filePathToOsPath
 
 packDirectoryEntry'
   :: OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry BL.ByteString tarPath linkTarget)
 packDirectoryEntry' filepath tarpath = do
   mtime   <- getModTime filepath
   return (directoryEntry tarpath) {
@@ -208,13 +208,13 @@ packDirectoryEntry' filepath tarpath = do
 packSymlinkEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath FilePath)
+  -> IO (GenEntry BL.ByteString tarPath FilePath)
 packSymlinkEntry = ((fmap (fmap osPathToFilePath) .) . packSymlinkEntry') . filePathToOsPath
 
 packSymlinkEntry'
   :: OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath OsPath)
+  -> IO (GenEntry BL.ByteString tarPath OsPath)
 packSymlinkEntry' filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
   pure $ symlinkEntry tarpath linkTarget
