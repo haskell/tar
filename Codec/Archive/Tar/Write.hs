@@ -12,10 +12,11 @@
 -- Portability :  portable
 --
 -----------------------------------------------------------------------------
-module Codec.Archive.Tar.Write (write) where
+module Codec.Archive.Tar.Write (write, write') where
 
 import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
+import Codec.Archive.Tar.Pack (defaultRead)
 
 import Data.Bits
 import Data.Char     (chr,ord)
@@ -23,6 +24,9 @@ import Data.Int
 import Data.List     (foldl')
 import Data.Monoid   (mempty)
 import Numeric       (showOct)
+import System.IO.Unsafe (unsafeInterleaveIO)
+import System.OsPath
+         ( OsPath )
 
 import qualified Data.ByteString             as BS
 import qualified Data.ByteString.Char8       as BS.Char8
@@ -38,6 +42,19 @@ import qualified "os-string" System.OsString.Posix as PS
 --
 write :: [Entry] -> LBS.ByteString
 write es = LBS.concat $ map putEntry es ++ [LBS.replicate (512*2) 0]
+
+-- | Like 'write' but for 'GenEntry' with 'OsPath' as contents.
+--
+-- @since 0.7.0.0
+write' :: [GenEntry OsPath TarPath LinkTarget] -> IO LBS.ByteString
+write' es = interleavedByteStringConcat $ map putEntry' es ++ [pure $ LBS.replicate (512*2) 0]
+
+interleavedByteStringConcat :: [IO LBS.ByteString] -> IO LBS.ByteString
+interleavedByteStringConcat [] = return LBS.empty
+interleavedByteStringConcat (x:xs) = do
+  y <- x
+  ys <- unsafeInterleaveIO (interleavedByteStringConcat xs)
+  return (LBS.append y ys)
 
 putEntry :: Entry -> LBS.ByteString
 putEntry entry = case entryContent entry of
@@ -58,6 +75,23 @@ putEntry entry = case entryContent entry of
     header       = putHeader entry
     padding size = LBS.replicate paddingSize 0
       where paddingSize = fromIntegral (negate size `mod` 512)
+
+putEntry' :: GenEntry OsPath TarPath LinkTarget -> IO LBS.ByteString
+putEntry' entry' = do
+  entryContent' <- case entryContent entry' of
+    NormalFile path size -> do
+      content <- defaultRead size path
+      return $ NormalFile content size
+
+    Directory -> return Directory
+    SymbolicLink linkTarget -> return (SymbolicLink linkTarget)
+    HardLink linkTarget -> return (HardLink linkTarget)
+    CharacterDevice devMajor devMinor -> return (CharacterDevice devMajor devMinor)
+    BlockDevice devMajor devMinor -> return (BlockDevice devMajor devMinor)
+    NamedPipe -> return NamedPipe
+    OtherEntryType typeCode lbs fileSize -> return (OtherEntryType typeCode lbs fileSize)
+
+  return (putEntry entry' { entryContent = entryContent' })
 
 putHeader :: Entry -> LBS.ByteString
 putHeader entry =

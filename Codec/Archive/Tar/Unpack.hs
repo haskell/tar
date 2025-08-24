@@ -67,6 +67,7 @@ import Data.Time.Clock.POSIX
          ( posixSecondsToUTCTime )
 import Control.Exception as Exception
          ( catch, SomeException(..) )
+import qualified Data.ByteString.Lazy as BL
 
 -- | Create local files and directories based on the entries of a tar archive.
 --
@@ -107,7 +108,7 @@ unpack = unpackAndCheck (fmap SomeException . checkEntrySecurity)
 -- @since 0.6.0.0
 unpackAndCheck
   :: Exception e
-  => (GenEntry FilePath FilePath -> Maybe SomeException)
+  => (GenEntry BL.ByteString FilePath FilePath -> Maybe SomeException)
   -- ^ Checks to run on each entry before unpacking
   -> FilePath
   -- ^ Base directory
@@ -129,7 +130,7 @@ unpackAndCheck secCB (filePathToOsPath -> baseDir) entries = do
     unpackEntries :: Exception e
                   => [(OsPath, OsPath, Bool)]
                   -- ^ links (path, link, isHardLink)
-                  -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+                  -> GenEntries BL.ByteString FilePath FilePath (Either e DecodeLongNamesError)
                   -- ^ entries
                   -> IO [(OsPath, OsPath, Bool)]
     unpackEntries _     (Fail err)      = either throwIO throwIO err

@@ -20,6 +20,8 @@
 -----------------------------------------------------------------------------
 module Codec.Archive.Tar.Pack (
     pack,
+    pack',
+    defaultRead,
     packAndCheck,
     packFileEntry,
     packDirectoryEntry,
@@ -31,6 +33,7 @@ import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.PackAscii (filePathToOsPath, osPathToFilePath)
 import Codec.Archive.Tar.Types
 
+import Data.Int (Int64)
 import Control.Applicative
 import Prelude hiding (Applicative(..))
 import Data.Bifunctor (bimap)
@@ -51,9 +54,10 @@ import System.Directory.OsPath.Streaming (getDirectoryContentsRecursive)
 import Data.Time.Clock.POSIX
          ( utcTimeToPOSIXSeconds )
 import System.IO
-         ( IOMode(ReadMode), hFileSize )
+         ( IOMode(ReadMode), hFileSize, hClose )
 import System.IO.Unsafe (unsafeInterleaveIO)
 import Control.Exception (throwIO, SomeException)
+import System.IO.Error (annotateIOError)
 
 -- | Creates a tar archive from a list of directory or files. Any directories
 -- specified will have their contents included recursively. Paths in the
@@ -74,6 +78,16 @@ pack
   -> IO [Entry]
 pack = packAndCheck (const Nothing)
 
+-- | 'pack'' is like 'pack', but doesn't read the contents of files,
+-- only creating entries with 'OsPath' as contents.
+--
+-- @since 0.7.0.0
+pack'
+  :: FilePath
+  -> [FilePath]
+  -> IO [GenEntry OsPath TarPath LinkTarget]
+pack' = packAndCheckWithRead (\_ -> return) (const Nothing)
+
 -- | Like 'Codec.Archive.Tar.pack', but allows to specify additional sanity/security
 -- checks on the input filenames. This is useful if you know which
 -- check will be used on client side
@@ -81,13 +95,21 @@ pack = packAndCheck (const Nothing)
 --
 -- @since 0.6.0.0
 packAndCheck
-  :: (GenEntry FilePath FilePath -> Maybe SomeException)
+  :: (GenEntry BL.ByteString FilePath FilePath -> Maybe SomeException)
   -> FilePath   -- ^ Base directory
   -> [FilePath] -- ^ Files and directories to pack, relative to the base dir
   -> IO [Entry]
-packAndCheck secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpaths) = do
+packAndCheck = packAndCheckWithRead defaultRead
+
+packAndCheckWithRead
+  :: (Int64 -> OsPath -> IO content)
+  -> (GenEntry content FilePath FilePath -> Maybe SomeException)
+  -> FilePath
+  -> [FilePath]
+  -> IO [GenEntry content TarPath LinkTarget]
+packAndCheckWithRead r secCB (filePathToOsPath -> baseDir) (map filePathToOsPath -> relpaths) = do
   paths <- preparePaths baseDir relpaths
-  entries' <- packPaths baseDir paths
+  entries' <- packPathsWithRead r baseDir paths
   let entries = map (bimap osPathToFilePath osPathToFilePath) entries'
   traverse_ (maybe (pure ()) throwIO . secCB) entries
   pure $ concatMap encodeLongNames entries
@@ -113,18 +135,19 @@ preparePaths baseDir = fmap concat . interleavedSequence . map go
       _ -> fn
 
 -- | Pack paths while accounting for overlong filepaths.
-packPaths
-  :: OsPath
+packPathsWithRead
+  :: (Int64 -> OsPath -> IO content)
+  -> OsPath
   -> [OsPath]
-  -> IO [GenEntry OsPath OsPath]
-packPaths baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
+  -> IO [GenEntry content OsPath OsPath]
+packPathsWithRead r baseDir paths = interleavedSequence $ flip map paths $ \relpath -> do
   let isDir = FilePath.Native.hasTrailingPathSeparator abspath
       abspath = baseDir </> relpath
   isSymlink <- pathIsSymbolicLink abspath
   let mkEntry
         | isSymlink = packSymlinkEntry'
         | isDir = packDirectoryEntry'
-        | otherwise = packFileEntry'
+        | otherwise = packFileEntryWithRead' r
   mkEntry abspath relpath
 
 -- | As a normal 'sequence', but interleaving IO actions.
@@ -143,13 +166,13 @@ interleavedSequence =
 packFileEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry BL.ByteString tarPath linkTarget)
 packFileEntry = packFileEntry' . filePathToOsPath
 
 packFileEntry'
   :: OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry BL.ByteString tarPath linkTarget)
 packFileEntry' filepath tarpath = do
   mtime   <- getModTime filepath
   perms   <- getPermissions filepath
@@ -181,6 +204,64 @@ packFileEntry' filepath tarpath = do
     , entryTime = mtime
     }
 
+-- |
+--
+-- @since 0.7.0.0
+defaultRead
+  :: Int64 -- ^ expected size
+  -> OsPath
+  -> IO BL.ByteString
+defaultRead approxSize filepath = do
+  if approxSize < 131072
+    -- If file is short enough, just read it strictly
+    -- so that no file handle dangles around indefinitely.
+    then do
+      cnt <- readFile' filepath
+      let sz = fromIntegral (B.length cnt) :: Int64
+      if sz /= approxSize
+      then throwWrongSize sz
+      else pure (BL.fromStrict cnt)
+    else do
+      hndl <- openBinaryFile filepath ReadMode
+      -- File size could have changed between measuring approxSize
+      -- and here. Measuring again.
+      sz <- fromInteger <$> hFileSize hndl
+      if sz /= approxSize
+      then do
+        hClose hndl
+        throwWrongSize sz
+      else do
+        -- Lazy I/O at its best: once cnt is forced in full,
+        -- BL.hGetContents will close the handle.
+        cnt <- BL.hGetContents hndl
+        -- It would be wrong to return (cnt, BL.length sz):
+        -- NormalFile constructor below forces size which in turn
+        -- allocates entire cnt in memory at once.
+        pure cnt
+  where
+    throwWrongSize :: Int64 -> IO a
+    throwWrongSize sz = do
+        let msg = "File size changed, expecting " ++ show approxSize ++ "; got " ++ show sz
+        ioError (annotateIOError (userError msg) "defaultRead" Nothing (Just (osPathToFilePath filepath)))
+
+packFileEntryWithRead'
+  :: (Int64 -> OsPath -> IO content)
+  -> OsPath  -- ^ Full path to find the file on the local disk
+  -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
+  -> IO (GenEntry content tarPath linkTarget)
+packFileEntryWithRead' r filepath tarpath = do
+  mtime   <- getModTime filepath
+  perms   <- getPermissions filepath
+  -- Get file size without opening it.
+  size <- fromInteger <$> getFileSize filepath
+  content <- r size filepath
+
+  pure (simpleEntry tarpath (NormalFile content size))
+    { entryPermissions =
+      if executable perms then executableFilePermissions else ordinaryFilePermissions
+    , entryTime = mtime
+    }
+
 -- | Construct a tar entry based on a local directory (but not its contents).
 --
 -- The only attribute of the directory that is used is its modification time.
@@ -189,13 +270,13 @@ packFileEntry' filepath tarpath = do
 packDirectoryEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry content tarPath linkTarget)
 packDirectoryEntry = packDirectoryEntry' . filePathToOsPath
 
 packDirectoryEntry'
   :: OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath linkTarget)
+  -> IO (GenEntry content tarPath linkTarget)
 packDirectoryEntry' filepath tarpath = do
   mtime   <- getModTime filepath
   return (directoryEntry tarpath) {
@@ -208,13 +289,13 @@ packDirectoryEntry' filepath tarpath = do
 packSymlinkEntry
   :: FilePath -- ^ Full path to find the file on the local disk
   -> tarPath  -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath FilePath)
+  -> IO (GenEntry content tarPath FilePath)
 packSymlinkEntry = ((fmap (fmap osPathToFilePath) .) . packSymlinkEntry') . filePathToOsPath
 
 packSymlinkEntry'
   :: OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
-  -> IO (GenEntry tarPath OsPath)
+  -> IO (GenEntry content tarPath OsPath)
 packSymlinkEntry' filepath tarpath = do
   linkTarget <- getSymbolicLinkTarget filepath
   pure $ symlinkEntry tarpath linkTarget
