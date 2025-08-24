@@ -76,13 +76,13 @@ import qualified System.FilePath.Posix   as FilePath.Posix
 -- such as exhaustion of file handlers.
 checkSecurity
   :: Entries e
-  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
+  -> GenEntries Char8.ByteString FilePath FilePath (Either (Either e DecodeLongNamesError) FileNameError)
 checkSecurity = checkEntries checkEntrySecurity . decodeLongNames
 
 -- | Worker of 'Codec.Archive.Tar.Check.checkSecurity'.
 --
 -- @since 0.6.0.0
-checkEntrySecurity :: GenEntry FilePath FilePath -> Maybe FileNameError
+checkEntrySecurity :: GenEntry Char8.ByteString FilePath FilePath -> Maybe FileNameError
 checkEntrySecurity e =
   check (entryTarPath e) <|>
   case entryContent e of
@@ -166,7 +166,7 @@ showFileNameError mb_plat err = case err of
 checkTarbomb
   :: FilePath
   -> Entries e
-  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) TarBombError)
+  -> GenEntries Char8.ByteString FilePath FilePath (Either (Either e DecodeLongNamesError) TarBombError)
 checkTarbomb expectedTopDir
   = checkEntries (checkEntryTarbomb expectedTopDir)
   . decodeLongNames
@@ -174,7 +174,7 @@ checkTarbomb expectedTopDir
 -- | Worker of 'checkTarbomb'.
 --
 -- @since 0.6.0.0
-checkEntryTarbomb :: FilePath -> GenEntry FilePath linkTarget -> Maybe TarBombError
+checkEntryTarbomb :: FilePath -> GenEntry Char8.ByteString FilePath linkTarget -> Maybe TarBombError
 checkEntryTarbomb expectedTopDir entry = do
   case entryContent entry of
     -- Global extended header aka XGLTYPE aka pax_global_header
@@ -232,13 +232,13 @@ instance Show TarBombError where
 -- such as exhaustion of file handlers.
 checkPortability
   :: Entries e
-  -> GenEntries FilePath FilePath (Either (Either e DecodeLongNamesError) PortabilityError)
+  -> GenEntries Char8.ByteString FilePath FilePath (Either (Either e DecodeLongNamesError) PortabilityError)
 checkPortability = checkEntries checkEntryPortability . decodeLongNames
 
 -- | Worker of 'checkPortability'.
 --
 -- @since 0.6.0.0
-checkEntryPortability :: GenEntry FilePath linkTarget -> Maybe PortabilityError
+checkEntryPortability :: GenEntry Char8.ByteString FilePath linkTarget -> Maybe PortabilityError
 checkEntryPortability entry
   | entryFormat entry `elem` [V7Format, GnuFormat]
   = Just $ NonPortableFormat (entryFormat entry)
@@ -306,8 +306,8 @@ instance Show PortabilityError where
 -- Utils
 
 checkEntries
-  :: (GenEntry tarPath linkTarget -> Maybe e')
-  -> GenEntries tarPath linkTarget e
-  -> GenEntries tarPath linkTarget (Either e e')
+  :: (GenEntry content tarPath linkTarget -> Maybe e')
+  -> GenEntries content tarPath linkTarget e
+  -> GenEntries content tarPath linkTarget (Either e e')
 checkEntries checkEntry =
   mapEntries (\entry -> maybe (Right entry) Left (checkEntry entry))
