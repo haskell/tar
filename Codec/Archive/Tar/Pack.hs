@@ -21,6 +21,7 @@
 module Codec.Archive.Tar.Pack (
     pack,
     pack',
+    defaultRead,
     packAndCheck,
     packFileEntry,
     packDirectoryEntry,
@@ -32,6 +33,7 @@ import Codec.Archive.Tar.LongNames
 import Codec.Archive.Tar.PackAscii (filePathToOsPath, osPathToFilePath)
 import Codec.Archive.Tar.Types
 
+import Data.Int (Int64)
 import Control.Applicative
 import Prelude hiding (Applicative(..))
 import Data.Bifunctor (bimap)
@@ -98,7 +100,7 @@ packAndCheck
 packAndCheck = packAndCheckWithRead defaultRead
 
 packAndCheckWithRead
-  :: (Int -> OsPath -> IO content)
+  :: (Int64 -> OsPath -> IO content)
   -> (GenEntry content FilePath FilePath -> Maybe SomeException)
   -> FilePath
   -> [FilePath]
@@ -132,7 +134,7 @@ preparePaths baseDir = fmap concat . interleavedSequence . map go
 
 -- | Pack paths while accounting for overlong filepaths.
 packPathsWithRead
-  :: (Int -> OsPath -> IO content)
+  :: (Int64 -> OsPath -> IO content)
   -> OsPath
   -> [OsPath]
   -> IO [GenEntry content OsPath OsPath]
@@ -204,7 +206,7 @@ packFileEntry' filepath tarpath = do
 --
 -- @since 0.7.0.0
 defaultRead
-  :: Int -- ^ expected size
+  :: Int64 -- ^ expected size
   -> OsPath
   -> IO BL.ByteString
 defaultRead approxSize filepath = do
@@ -235,7 +237,7 @@ defaultRead approxSize filepath = do
         pure cnt
 
 packFileEntryWithRead'
-  :: (Int -> OsPath -> IO content)
+  :: (Int64 -> OsPath -> IO content)
   -> OsPath  -- ^ Full path to find the file on the local disk
   -> tarPath -- ^ Path to use for the tar 'GenEntry' in the archive
   -> IO (GenEntry content tarPath linkTarget)
