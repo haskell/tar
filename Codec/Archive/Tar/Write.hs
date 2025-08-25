@@ -23,6 +23,7 @@ import Data.Int
 import Data.List     (foldl')
 import Data.Monoid   (mempty)
 import Numeric       (showOct)
+import System.IO.Unsafe (unsafeInterleaveIO)
 
 import qualified Data.ByteString             as BS
 import qualified Data.ByteString.Char8       as BS.Char8
@@ -43,8 +44,11 @@ write' :: [GenEntry FilePath TarPath LinkTarget] -> IO LBS.ByteString
 write' es = interleavedByteStringConcat $ map putEntry' es ++ [pure $ LBS.replicate (512*2) 0]
 
 interleavedByteStringConcat :: [IO LBS.ByteString] -> IO LBS.ByteString
-interleavedByteStringConcat _ = fail "TODO: interleavedByteStringConcat"
--- TODO: use unsafeInterleaveIO to produce result lazy bytestring lazily.
+interleavedByteStringConcat [] = return LBS.empty
+interleavedByteStringConcat (x:xs) = do
+  y <- x
+  ys <- unsafeInterleaveIO (interleavedByteStringConcat xs)
+  return (LBS.append y ys)
 
 putEntry :: Entry -> LBS.ByteString
 putEntry entry = case entryContent entry of
@@ -67,17 +71,23 @@ putEntry entry = case entryContent entry of
       where paddingSize = fromIntegral (negate size `mod` 512)
 
 putEntry' :: GenEntry FilePath TarPath LinkTarget -> IO LBS.ByteString
-putEntry' entry' = case entryContent entry' of
-  NormalFile path size -> do
-    content <- LBS.readFile path
-    if LBS.length content /= size
-    then fail "wrong size"
-    else do
-      let entry = entry { entryContent = NormalFile content size }
-      return $ putEntry entry
-  -- TODO: otherwise we can essentially unsafeCoerce
-  _ -> fail "TODO: putEntry' non-NormalFile entries"
+putEntry' entry' = do
+  entryContent' <- case entryContent entry' of
+    NormalFile path size -> do
+      content <- BS.readFile path -- strict read as we would force lazy bytestring anyway by checking the size next.
+      if fromIntegral (BS.length content) /= size
+      then fail "wrong size"
+      else return $ NormalFile (LBS.fromStrict content) size
 
+    Directory -> return Directory
+    SymbolicLink linkTarget -> return (SymbolicLink linkTarget)
+    HardLink linkTarget -> return (HardLink linkTarget)
+    CharacterDevice devMajor devMinor -> return (CharacterDevice devMajor devMinor)
+    BlockDevice devMajor devMinor -> return (BlockDevice devMajor devMinor)
+    NamedPipe -> return NamedPipe
+    OtherEntryType typeCode lbs fileSize -> return (OtherEntryType typeCode lbs fileSize)
+
+  return (putEntry entry' { entryContent = entryContent' })
 
 putHeader :: Entry -> LBS.ByteString
 putHeader entry =

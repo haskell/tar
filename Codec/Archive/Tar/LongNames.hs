@@ -38,8 +38,8 @@ instance Exception DecodeLongNamesError
 --
 -- @since 0.6.0.0
 encodeLongNames
-  :: GenEntry BL.ByteString FilePath FilePath
-  -> [Entry]
+  :: GenEntry content FilePath FilePath
+  -> [GenEntry content TarPath LinkTarget]
 encodeLongNames e = maybe id (:) mEntry $ maybe id (:) mEntry' [e'']
   where
     (mEntry, e') = encodeLinkTarget e

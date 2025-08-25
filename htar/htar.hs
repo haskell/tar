@@ -72,11 +72,11 @@ data Verbosity = Verbose | Concise
 ------------------------
 -- List archive contents
 
-entryInfo :: Verbosity -> Tar.GenEntry FilePath FilePath -> String
+entryInfo :: Verbosity -> Tar.GenEntry ByteString FilePath FilePath -> String
 entryInfo Verbose = detailedInfo
 entryInfo Concise = Tar.entryTarPath
 
-detailedInfo :: Tar.GenEntry FilePath FilePath -> String
+detailedInfo :: Tar.GenEntry ByteString FilePath FilePath -> String
 detailedInfo entry =
   unwords [ typeCode : permissions
           , justify 19 (owner ++ '/' : group) size
