@@ -124,14 +124,14 @@ type Permissions = FileMode
 -- while low-level ones use 'GenEntry' t'TarPath' t'LinkTarget'.
 --
 -- @since 0.6.0.0
-data GenEntry tarPath linkTarget = Entry {
+data GenEntry content tarPath linkTarget = Entry {
 
     -- | The path of the file or directory within the archive.
     entryTarPath :: !tarPath,
 
     -- | The real content of the entry. For 'NormalFile' this includes the
     -- file data. An entry usually contains a 'NormalFile' or a 'Directory'.
-    entryContent :: !(GenEntryContent linkTarget),
+    entryContent :: !(GenEntryContent content linkTarget),
 
     -- | File permissions (Unix style file mode).
     entryPermissions :: {-# UNPACK #-} !Permissions,
@@ -152,7 +152,7 @@ data GenEntry tarPath linkTarget = Entry {
   )
 
 -- | @since 0.6.4.0
-instance Bifunctor GenEntry where
+instance Bifunctor (GenEntry content) where
   bimap f g e = e
     { entryTarPath = f (entryTarPath e)
     , entryContent = fmap g (entryContent e)
@@ -160,14 +160,14 @@ instance Bifunctor GenEntry where
 
 -- | Monomorphic tar archive entry, ready for serialization / deserialization.
 --
-type Entry = GenEntry TarPath LinkTarget
+type Entry = GenEntry LBS.ByteString TarPath LinkTarget
 
 -- | Low-level function to get a native 'FilePath' of the file or directory
 -- within the archive, not accounting for long names. It's likely
 -- that you want to apply 'Codec.Archive.Tar.decodeLongNames'
 -- and use 'Codec.Archive.Tar.Entry.entryTarPath' afterwards instead of 'entryPath'.
 --
-entryPath :: GenEntry TarPath linkTarget -> FilePath
+entryPath :: GenEntry content TarPath linkTarget -> FilePath
 entryPath = fromTarPath . entryTarPath
 
 -- | Polymorphic content of a tar archive entry. High-level interfaces
@@ -177,8 +177,8 @@ entryPath = fromTarPath . entryTarPath
 -- Portable archives should contain only 'NormalFile' and 'Directory'.
 --
 -- @since 0.6.0.0
-data GenEntryContent linkTarget
-  = NormalFile      LBS.ByteString {-# UNPACK #-} !FileSize
+data GenEntryContent content linkTarget
+  = NormalFile      content {-# UNPACK #-} !FileSize
   | Directory
   | SymbolicLink    !linkTarget
   | HardLink        !linkTarget
@@ -198,7 +198,7 @@ data GenEntryContent linkTarget
 
 -- | Monomorphic content of a tar archive entry,
 -- ready for serialization / deserialization.
-type EntryContent = GenEntryContent LinkTarget
+type EntryContent = GenEntryContent LBS.ByteString LinkTarget
 
 -- | Ownership information for 'GenEntry'.
 data Ownership = Ownership {
@@ -239,10 +239,10 @@ data Format =
    | GnuFormat
   deriving (Eq, Ord, Show)
 
-instance (NFData tarPath, NFData linkTarget) => NFData (GenEntry tarPath linkTarget) where
+instance (NFData tarPath, NFData content, NFData linkTarget) => NFData (GenEntry content tarPath linkTarget) where
   rnf (Entry p c _ _ _ _) = rnf p `seq` rnf c
 
-instance NFData linkTarget => NFData (GenEntryContent linkTarget) where
+instance (NFData linkTarget, NFData content) => NFData (GenEntryContent content linkTarget) where
   rnf x = case x of
       NormalFile       c _  -> rnf c
       SymbolicLink lnk      -> rnf lnk
@@ -278,9 +278,9 @@ directoryPermissions  = 0o0755
 --
 -- > (emptyEntry name HardLink) { linkTarget = target }
 --
-simpleEntry :: tarPath -> GenEntryContent linkTarget -> GenEntry tarPath linkTarget
-simpleEntry tarpath content = Entry {
-    entryTarPath     = tarpath,
+simpleEntry :: tarPath -> GenEntryContent content linkTarget -> GenEntry content tarPath linkTarget
+simpleEntry tarPath content = Entry {
+    entryTarPath     = tarPath,
     entryContent     = content,
     entryPermissions = case content of
                          Directory -> directoryPermissions
@@ -300,12 +300,12 @@ simpleEntry tarpath content = Entry {
 --
 -- > (fileEntry name content) { fileMode = executableFileMode }
 --
-fileEntry :: tarPath -> LBS.ByteString -> GenEntry tarPath linkTarget
+fileEntry :: tarPath -> LBS.ByteString -> GenEntry LBS.ByteString tarPath linkTarget
 fileEntry name fileContent =
   simpleEntry name (NormalFile fileContent (LBS.length fileContent))
 
 -- | A tar entry for a symbolic link.
-symlinkEntry :: tarPath -> linkTarget -> GenEntry tarPath linkTarget
+symlinkEntry :: tarPath -> linkTarget -> GenEntry content tarPath linkTarget
 symlinkEntry name targetLink =
   simpleEntry name (SymbolicLink targetLink)
 
@@ -318,7 +318,7 @@ symlinkEntry name targetLink =
 -- See [What exactly is the GNU tar ././@LongLink "trick"?](https://stackoverflow.com/questions/2078778/what-exactly-is-the-gnu-tar-longlink-trick)
 --
 -- @since 0.6.0.0
-longLinkEntry :: FilePath -> GenEntry TarPath linkTarget
+longLinkEntry :: FilePath -> GenEntry content TarPath linkTarget
 longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
     entryContent     = OtherEntryType 'L' (LBS.fromStrict $ posixToByteString $ toPosixString tarpath) (fromIntegral $ length tarpath),
@@ -335,7 +335,7 @@ longLinkEntry tarpath = Entry {
 -- data with truncated 'Codec.Archive.Tar.Entry.entryTarPath'.
 --
 -- @since 0.6.0.0
-longSymLinkEntry :: FilePath -> GenEntry TarPath linkTarget
+longSymLinkEntry :: FilePath -> GenEntry content TarPath linkTarget
 longSymLinkEntry linkTarget = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
     entryContent     = OtherEntryType 'K' (LBS.fromStrict $ posixToByteString $ toPosixString $ linkTarget) (fromIntegral $ length linkTarget),
@@ -349,7 +349,7 @@ longSymLinkEntry linkTarget = Entry {
 --
 -- Entry fields such as file permissions and ownership have default values.
 --
-directoryEntry :: tarPath -> GenEntry tarPath linkTarget
+directoryEntry :: tarPath -> GenEntry content tarPath linkTarget
 directoryEntry name = simpleEntry name Directory
 
 --
@@ -613,8 +613,8 @@ fromFilePathInternal fromSep toSep = adjustSeps
 -- archive.
 --
 -- @since 0.6.0.0
-data GenEntries tarPath linkTarget e
-  = Next (GenEntry tarPath linkTarget) (GenEntries tarPath linkTarget e)
+data GenEntries content tarPath linkTarget e
+  = Next (GenEntry content tarPath linkTarget) (GenEntries content tarPath linkTarget e)
   | Done
   | Fail e
   deriving
@@ -629,7 +629,7 @@ infixr 5 `Next`
 
 -- | Monomorphic sequence of archive entries,
 -- ready for serialization / deserialization.
-type Entries e = GenEntries TarPath LinkTarget e
+type Entries e = GenEntries LBS.ByteString TarPath LinkTarget e
 
 -- | This is like the standard 'Data.List.unfoldr' function on lists, but for 'Entries'.
 -- It includes failure as an extra possibility that the stepper function may
@@ -639,9 +639,9 @@ type Entries e = GenEntries TarPath LinkTarget e
 -- used internally to lazily unfold entries from a 'LBS.ByteString'.
 --
 unfoldEntries
-  :: (a -> Either e (Maybe (GenEntry tarPath linkTarget, a)))
+  :: (a -> Either e (Maybe (GenEntry content tarPath linkTarget, a)))
   -> a
-  -> GenEntries tarPath linkTarget e
+  -> GenEntries content tarPath linkTarget e
 unfoldEntries f = unfold
   where
     unfold x = case f x of
@@ -653,8 +653,8 @@ unfoldEntriesM
   :: Monad m
   => (forall a. m a -> m a)
   -- ^ id or unsafeInterleaveIO
-  -> m (Either e (Maybe (GenEntry tarPath linkTarget)))
-  -> m (GenEntries tarPath linkTarget e)
+  -> m (Either e (Maybe (GenEntry content tarPath linkTarget)))
+  -> m (GenEntries content tarPath linkTarget e)
 unfoldEntriesM interleave f = unfold
   where
     unfold = do
@@ -672,10 +672,10 @@ unfoldEntriesM interleave f = unfold
 -- to scan a tarball for problems or to collect an index of the contents.
 --
 foldEntries
-  :: (GenEntry tarPath linkTarget -> a -> a)
+  :: (GenEntry content tarPath linkTarget -> a -> a)
   -> a
   -> (e -> a)
-  -> GenEntries tarPath linkTarget e -> a
+  -> GenEntries content tarPath linkTarget e -> a
 foldEntries next done fail' = fold
   where
     fold (Next e es) = next e (fold es)
@@ -687,9 +687,9 @@ foldEntries next done fail' = fold
 -- value.
 --
 foldlEntries
-  :: (a -> GenEntry tarPath linkTarget -> a)
+  :: (a -> GenEntry content tarPath linkTarget -> a)
   -> a
-  -> GenEntries tarPath linkTarget e
+  -> GenEntries content tarPath linkTarget e
   -> Either (e, a) a
 foldlEntries f = go
   where
@@ -703,32 +703,32 @@ foldlEntries f = go
 -- If your mapping function cannot fail it may be more convenient to use
 -- 'mapEntriesNoFail'
 mapEntries
-  :: (GenEntry tarPath linkTarget -> Either e' (GenEntry tarPath linkTarget))
+  :: (GenEntry content tarPath linkTarget -> Either e' (GenEntry content tarPath linkTarget))
   -- ^ Function to apply to each entry
-  -> GenEntries tarPath linkTarget e
+  -> GenEntries content tarPath linkTarget e
   -- ^ Input sequence
-  -> GenEntries tarPath linkTarget (Either e e')
+  -> GenEntries content tarPath linkTarget (Either e e')
 mapEntries f =
   foldEntries (\entry rest -> either (Fail . Right) (`Next` rest) (f entry)) Done (Fail . Left)
 
 -- | Like 'mapEntries' but the mapping function itself cannot fail.
 --
 mapEntriesNoFail
-  :: (GenEntry tarPath linkTarget -> GenEntry tarPath linkTarget)
-  -> GenEntries tarPath linkTarget e
-  -> GenEntries tarPath linkTarget e
+  :: (GenEntry content tarPath linkTarget -> GenEntry content tarPath linkTarget)
+  -> GenEntries content tarPath linkTarget e
+  -> GenEntries content tarPath linkTarget e
 mapEntriesNoFail f =
   foldEntries (Next . f) Done Fail
 
 -- | @since 0.5.1.0
-instance Sem.Semigroup (GenEntries tarPath linkTarget e) where
+instance Sem.Semigroup (GenEntries content tarPath linkTarget e) where
   a <> b = foldEntries Next b Fail a
 
-instance Monoid (GenEntries tarPath linkTarget e) where
+instance Monoid (GenEntries content tarPath linkTarget e) where
   mempty  = Done
   mappend = (Sem.<>)
 
-instance (NFData tarPath, NFData linkTarget, NFData e) => NFData (GenEntries tarPath linkTarget e) where
+instance (NFData tarPath, NFData content, NFData linkTarget, NFData e) => NFData (GenEntries content tarPath linkTarget e) where
   rnf (Next e es) = rnf e `seq` rnf es
   rnf  Done       = ()
   rnf (Fail e)    = rnf e

@@ -38,16 +38,16 @@ instance Exception DecodeLongNamesError
 --
 -- @since 0.6.0.0
 encodeLongNames
-  :: GenEntry FilePath FilePath
-  -> [Entry]
+  :: GenEntry content FilePath FilePath
+  -> [GenEntry content TarPath LinkTarget]
 encodeLongNames e = maybe id (:) mEntry $ maybe id (:) mEntry' [e'']
   where
     (mEntry, e') = encodeLinkTarget e
     (mEntry', e'') = encodeTarPath e'
 
 encodeTarPath
-  :: GenEntry FilePath linkTarget
-  -> (Maybe (GenEntry TarPath whatever), GenEntry TarPath linkTarget)
+  :: GenEntry content FilePath linkTarget
+  -> (Maybe (GenEntry content TarPath whatever), GenEntry content TarPath linkTarget)
   -- ^ (LongLink entry, actual entry)
 encodeTarPath e = case toTarPath' (entryTarPath e) of
   FileNameEmpty -> (Nothing, e { entryTarPath = TarPath mempty mempty })
@@ -55,8 +55,8 @@ encodeTarPath e = case toTarPath' (entryTarPath e) of
   FileNameTooLong tarPath -> (Just $ longLinkEntry $ entryTarPath e, e { entryTarPath = tarPath })
 
 encodeLinkTarget
-  :: GenEntry tarPath FilePath
-  -> (Maybe (GenEntry TarPath LinkTarget), GenEntry tarPath LinkTarget)
+  :: GenEntry content tarPath FilePath
+  -> (Maybe (GenEntry content TarPath LinkTarget), GenEntry content tarPath LinkTarget)
   -- ^ (LongLink symlink entry, actual entry)
 encodeLinkTarget e = case entryContent e of
   NormalFile x y -> (Nothing, e { entryContent = NormalFile x y })
@@ -72,7 +72,7 @@ encodeLinkTarget e = case entryContent e of
 
 encodeLinkPath
   :: FilePath
-  -> (Maybe (GenEntry TarPath LinkTarget), LinkTarget)
+  -> (Maybe (GenEntry content TarPath LinkTarget), LinkTarget)
 encodeLinkPath lnk = case toTarPath' lnk of
   FileNameEmpty -> (Nothing, LinkTarget mempty)
   FileNameOK (TarPath name prefix)
@@ -91,10 +91,10 @@ encodeLinkPath lnk = case toTarPath' lnk of
 -- @since 0.6.0.0
 decodeLongNames
   :: Entries e
-  -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+  -> GenEntries BL.ByteString FilePath FilePath (Either e DecodeLongNamesError)
 decodeLongNames = go Nothing Nothing
   where
-    go :: Maybe FilePath -> Maybe FilePath -> Entries e -> GenEntries FilePath FilePath (Either e DecodeLongNamesError)
+    go :: Maybe FilePath -> Maybe FilePath -> Entries e -> GenEntries BL.ByteString FilePath FilePath (Either e DecodeLongNamesError)
     go _ _ (Fail err) = Fail (Left err)
     go _ _ Done = Done
 
@@ -141,13 +141,13 @@ otherEntryPayloadToFilePath :: BL.ByteString -> FilePath
 otherEntryPayloadToFilePath =
   fromPosixString . byteToPosixString . B.takeWhile (/= '\0') . BL.toStrict
 
-castEntry :: Entry -> GenEntry FilePath FilePath
+castEntry :: Entry -> GenEntry BL.ByteString FilePath FilePath
 castEntry e = e
   { entryTarPath = fromTarPathToPosixPath (entryTarPath e)
   , entryContent = castEntryContent (entryContent e)
   }
 
-castEntryContent :: EntryContent -> GenEntryContent FilePath
+castEntryContent :: EntryContent -> GenEntryContent BL.ByteString FilePath
 castEntryContent = \case
   NormalFile x y -> NormalFile x y
   Directory -> Directory
