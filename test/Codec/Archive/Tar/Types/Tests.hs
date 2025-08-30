@@ -8,8 +8,9 @@
 -- License     :  BSD3
 --
 -----------------------------------------------------------------------------
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Codec.Archive.Tar.Types.Tests
   ( limitToV7FormatCompat
