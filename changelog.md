@@ -1,3 +1,12 @@
+## 0.7.0.0 Bodigrim <andrew.lelechenko@gmail.com> September 2025
+
+  This release fixes a long-standing issue with exhaustion of file handles
+  (thanks to Oleg Grenrus).
+
+  * Extend `GenEntries` with yet another type argument for file contents.
+  * Add `write' :: [GenEntry OsPath TarPath LinkTarget] -> IO LazyByteString`.
+  * Add `pack' :: FilePath -> [FilePath] -> IO [GenEntry OsPath TarPath LinkTarget]`.
+
 ## 0.6.4.0 Bodigrim <andrew.lelechenko@gmail.com> January 2025
 
   * Migrate internals of packing / unpacking to `OsPath`.
