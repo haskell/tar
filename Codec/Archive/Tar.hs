@@ -65,7 +65,7 @@ module Codec.Archive.Tar (
   -- > import qualified Data.ByteString.Lazy as BL
   -- > import qualified Codec.Compression.GZip as GZip
   -- >
-  -- > BL.writeFile tar . GZip.compress . Tar.write =<< Tar.pack base dir
+  -- > BL.writeFile tar . GZip.compress =<< Tar.write' =<< Tar.pack' base dir
   --
   -- Similarly, extracting a compressed @.tar.gz@ is just a minor variation
   -- on the 'extract' function where we use decompression in the pipeline:
@@ -192,12 +192,7 @@ import Prelude hiding (read)
 -- @.\/base\/dir\/foo.txt@. The file names inside the resulting tar file will be
 -- relative to @dir@, eg @dir\/foo.txt@.
 --
--- This is a high level \"all in one\" operation. Since you may need variations
--- on this function it is instructive to see how it is written. It is just:
---
--- > import qualified Data.ByteString.Lazy as BL
--- >
--- > BL.writeFile tar . Tar.write =<< Tar.pack base paths
+-- This is a high level \"all in one\" operation, combining 'pack'' and 'write''.
 --
 -- Notes:
 --
@@ -219,7 +214,7 @@ create :: FilePath   -- ^ Path of the \".tar\" file to write.
        -> FilePath   -- ^ Base directory
        -> [FilePath] -- ^ Files and directories to archive, relative to base dir
        -> IO ()
-create tar base paths = BL.writeFile tar . write =<< pack base paths
+create tar base paths = BL.writeFile tar =<< write' =<< pack' base paths
 
 -- | Extract all the files contained in a @\".tar\"@ file.
 --
@@ -230,12 +225,7 @@ create tar base paths = BL.writeFile tar . write =<< pack base paths
 -- So for example if the @tarball.tar@ file contains @foo\/bar.txt@ then this
 -- will extract it to @dir\/foo\/bar.txt@.
 --
--- This is a high level \"all in one\" operation. Since you may need variations
--- on this function it is instructive to see how it is written. It is just:
---
--- > import qualified Data.ByteString.Lazy as BL
--- >
--- > Tar.unpack dir . Tar.read =<< BL.readFile tar
+-- This is a high level \"all in one\" operation, combining 'unpack' and 'read'.
 --
 -- Notes:
 --
@@ -269,4 +259,4 @@ append :: FilePath   -- ^ Path of the \".tar\" file to write.
 append tar base paths =
     withFile tar ReadWriteMode $ \hnd -> do
       _ <- hSeekEndEntryOffset hnd Nothing
-      BL.hPut hnd . write =<< pack base paths
+      BL.hPut hnd =<< write' =<< pack' base paths
