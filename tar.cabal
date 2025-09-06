@@ -138,11 +138,6 @@ benchmark bench
   build-depends: base < 5,
                  tar,
                  bytestring >= 0.10,
-                 filepath,
                  directory >= 1.2,
-                 array,
-                 containers,
-                 deepseq,
                  temporary < 1.4,
-                 time,
                  tasty-bench >= 0.4 && < 0.5

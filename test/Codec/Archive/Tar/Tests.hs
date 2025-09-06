@@ -44,12 +44,15 @@ prop_write_read_v7 entries =
     entries' = map limitToV7FormatCompat $ filter ((== V7Format) . entryFormat) entries
 
 prop_large_filesize :: Word -> Property
-prop_large_filesize n = sz === sz'
-  where
-    sz = fromIntegral $ n * 1024 * 1024 * 128
-    Right fn = toTarPath False "Large.file"
-    entry = simpleEntry fn (NormalFile (BL.replicate sz 42) sz)
-    -- Trim the tail so it does not blow up RAM
-    tar = BL.take 2048 $ write [entry]
-    Next entry' _ = read tar
-    NormalFile _ sz' = entryContent entry'
+prop_large_filesize n = case toTarPath False "Large.file" of
+  Left{} -> property False
+  Right fn -> case read tar of
+    Next entry' _ -> case entryContent entry' of
+      NormalFile _ sz' -> sz === sz'
+      _ -> property False
+    _ -> property False
+    where
+      sz = fromIntegral $ n * 1024 * 1024 * 128
+      entry = simpleEntry fn (NormalFile (BL.replicate sz 42) sz)
+      -- Trim the tail so it does not blow up RAM
+      tar = BL.take 2048 $ write [entry]

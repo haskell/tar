@@ -34,8 +34,9 @@ prop_valid strs =
     tbl = construct strs
 
     lookupIndex :: BS.ByteString -> Property
-    lookupIndex str = index tbl ident === str
-      where Just ident = lookup tbl str
+    lookupIndex str = case lookup tbl str of
+      Nothing -> property False
+      Just ident -> index tbl ident === str
 
     indexLookup :: Int -> Property
     indexLookup ident = lookup tbl str === Just ident
@@ -76,9 +77,13 @@ prop_serialiseSize strs =
     strtable = construct strs
 
 enumStrings :: Enum id => StringTable id -> [BS.ByteString]
-enumStrings (StringTable bs offsets _ _) = map (index' bs offsets) [0..h-1]
-  where (0,h) = A.bounds offsets
+enumStrings (StringTable bs offsets _ _) =
+  map (index' bs offsets) [lo .. hi - 1]
+  where
+    (lo, hi) = A.bounds offsets
 
 enumIds :: Enum id => StringTable id -> [id]
-enumIds (StringTable _ offsets _ _) = [toEnum 0 .. toEnum (fromIntegral (h-1))]
-  where (0,h) = A.bounds offsets
+enumIds (StringTable _ offsets _ _) =
+  [toEnum (fromIntegral lo) .. toEnum (fromIntegral (hi - 1))]
+  where
+    (lo, hi) = A.bounds offsets

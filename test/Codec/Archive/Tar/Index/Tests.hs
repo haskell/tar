@@ -1,5 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TupleSections #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Index.Tests
@@ -36,9 +37,7 @@ import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
 import qualified Data.ByteString.Lazy   as LBS
 import Data.Int
-#if (MIN_VERSION_base(4,5,0))
 import Data.Monoid ((<>))
-#endif
 import qualified System.FilePath.Posix as FilePath
 import System.IO
 
@@ -48,7 +47,9 @@ import Test.QuickCheck
 import Test.QuickCheck.Property (ioProperty)
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad (unless)
-import Data.List (nub, sort, sortBy, stripPrefix, isPrefixOf)
+import Data.Bifunctor (first)
+import Data.List (nub, sort, sortBy, stripPrefix, isPrefixOf, uncons)
+import qualified Data.List.NonEmpty as NE
 import Data.Maybe
 import Data.Function (on)
 import Control.Exception (SomeException, try, throwIO)
@@ -65,15 +66,15 @@ prop_lookup (ValidPaths paths) (NonEmptyFilePath p) =
   case (Tar.lookup index p, Prelude.lookup p paths) of
     (Nothing,                    Nothing)          -> property True
     (Just (TarFileEntry offset), Just (_,offset')) -> offset === offset'
-    (Just (TarDir entries),      Nothing)          -> sort (nub (map fst entries))
-                                                   === sort (nub completions)
+    (Just (TarDir entries),      Nothing)          ->
+      fmap NE.head (NE.group (sort (map fst entries))) ===
+        fmap NE.head (NE.group (sort completions))
     _                                              -> property False
   where
-    index       = construct paths
-    completions = [ hd
-                  | (path,_) <- paths
-                  , completion <- maybeToList $ stripPrefix (p ++ "/") path
-                  , let hd : _ = FilePath.splitDirectories completion ]
+    index = construct paths
+    completions = map fst $
+      mapMaybe (uncons . FilePath.splitDirectories) $
+        mapMaybe (stripPrefix (p ++ "/") . fst) paths
 
 prop_toList :: ValidPaths -> Property
 prop_toList (ValidPaths paths) =
@@ -94,10 +95,12 @@ prop_valid (ValidPaths paths) =
 
     pathbits = concatMap (map BS.Char8.pack . FilePath.splitDirectories . fst)
                          paths
+
     intpaths :: [([IntTrie.Key], IntTrie.Value)]
-    intpaths = [ (map (\(Tar.PathComponentId n) -> IntTrie.Key (fromIntegral n)) cids, IntTrie.Value offset)
-               | (path, (_size, offset)) <- paths
-               , let Just cids = Tar.toComponentIds pathTable path ]
+    intpaths =
+      map (first (map (\(Tar.PathComponentId n) -> IntTrie.Key (fromIntegral n)))) $
+        mapMaybe (\(path, (_size, offset)) -> (, IntTrie.Value offset) <$> Tar.toComponentIds pathTable path) paths
+
     prop' = conjoin $ flip map paths $ \(file, (_size, offset)) ->
       case Tar.lookup index file of
         Just (TarFileEntry offset') -> offset' === offset
@@ -164,9 +167,9 @@ example1 =
   Next (testEntry "./" 1500) Done <> example0
 
 testEntry :: FilePath -> Int64 -> Entry
-testEntry name size = Tar.simpleEntry path (NormalFile mempty size)
-  where
-    Right path = Tar.toTarPath False name
+testEntry name size = case Tar.toTarPath False name of
+  Left err -> error err
+  Right path -> Tar.simpleEntry path (NormalFile mempty size)
 
 -- | Simple tar archive containing regular files only
 data SimpleTarArchive = SimpleTarArchive {
@@ -231,11 +234,12 @@ instance Arbitrary SimpleTarArchive where
 
       mkList :: [(FilePath, LBS.ByteString)] -> [Tar.Entry]
       mkList []            = []
-      mkList ((fp, bs):es) = entry : mkList es
-        where
-          Right path = Tar.toTarPath False fp
-          entry   = Tar.simpleEntry path content
-          content = NormalFile bs (LBS.length bs)
+      mkList ((fp, bs):es) = case Tar.toTarPath False fp of
+        Left err -> error err
+        Right path -> entry : mkList es
+          where
+            entry   = Tar.simpleEntry path content
+            content = NormalFile bs (LBS.length bs)
 
       mkEntries :: [Tar.Entry] -> Tar.Entries ()
       mkEntries []     = Tar.Done
