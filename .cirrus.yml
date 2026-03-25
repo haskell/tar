@@ -18,9 +18,10 @@ task:
     platform: openbsd
   install_script: pkg_add ghc cabal-install git
   script:
-    - export CABAL_DIR=/tmp/.cabal
+    - mkdir -p /home/cabal
+    - ln -s /home/cabal $HOME/.cabal
     - cabal update
-    - cabal test all -c 'unix installed' -c 'prettyprinter < 0' -c 'ansi-terminal < 1' -c 'random < 1.2'
+    - cabal test all
 
 task:
   name: NetBSD
