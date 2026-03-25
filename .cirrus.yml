@@ -20,7 +20,7 @@ task:
   script:
     - export CABAL_DIR=/tmp/.cabal
     - cabal update
-    - cabal test all
+    - cabal test all -c 'unix installed' -c 'prettyprinter < 0' -c 'ansi-terminal < 1' -c 'random < 1.2'
 
 task:
   name: NetBSD
