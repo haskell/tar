@@ -99,25 +99,43 @@ decodeLongNames = go Nothing Nothing
     go _ _ Done = Done
 
     go Nothing Nothing (Next e rest) = case entryContent e of
+      OtherEntryType 'x' fn _
+        | Just fp <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
+        go (Just (B.unpack fp)) Nothing rest
       OtherEntryType 'K' fn _ ->
-        go (Just (otherEntryPayloadToFilePath fn)) Nothing rest
+        go (Just (otherEntryKLPayloadToFilePath fn)) Nothing rest
+      OtherEntryType 'x' fn _
+        | Just fp <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
+        go Nothing (Just (B.unpack fp)) rest
       OtherEntryType 'L' fn _ ->
-        go Nothing (Just (otherEntryPayloadToFilePath fn)) rest
+        go Nothing (Just (otherEntryKLPayloadToFilePath fn)) rest
       _ ->
         Next (castEntry e) (go Nothing Nothing rest)
 
     go Nothing (Just path) (Next e rest) = case entryContent e of
+      OtherEntryType 'x' fn _
+        | Just fp <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
+        go (Just (B.unpack fp)) (Just path) rest
       OtherEntryType 'K' fn _ ->
-        go (Just (otherEntryPayloadToFilePath fn)) (Just path) rest
+        go (Just (otherEntryKLPayloadToFilePath fn)) (Just path) rest
+      OtherEntryType 'x' fn _
+        | Just{} <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
+        Fail $ Right TwoTypeLEntries
       OtherEntryType 'L' _ _ ->
         Fail $ Right TwoTypeLEntries
       _ -> Next ((castEntry e) { entryTarPath = path }) (go Nothing Nothing rest)
 
     go (Just link) Nothing (Next e rest) = case entryContent e of
+      OtherEntryType 'x' fn _
+        | Just{} <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
+        Fail $ Right TwoTypeKEntries
       OtherEntryType 'K' _ _ ->
         Fail $ Right TwoTypeKEntries
+      OtherEntryType 'x' fn _
+        | Just fp <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
+        go (Just link) (Just (B.unpack fp)) rest
       OtherEntryType 'L' fn _ ->
-        go (Just link) (Just (otherEntryPayloadToFilePath fn)) rest
+        go (Just link) (Just (otherEntryKLPayloadToFilePath fn)) rest
       SymbolicLink{} ->
         Next ((castEntry e) { entryContent = SymbolicLink link }) (go Nothing Nothing rest)
       HardLink{} ->
@@ -126,8 +144,14 @@ decodeLongNames = go Nothing Nothing
         Fail $ Right NoLinkEntryAfterTypeKEntry
 
     go (Just link) (Just path) (Next e rest) = case entryContent e of
+      OtherEntryType 'x' fn _
+        | Just{} <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
+        Fail $ Right TwoTypeKEntries
       OtherEntryType 'K' _ _ ->
         Fail $ Right TwoTypeKEntries
+      OtherEntryType 'x' fn _
+        | Just{} <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
+        Fail $ Right TwoTypeLEntries
       OtherEntryType 'L' _ _ ->
         Fail $ Right TwoTypeLEntries
       SymbolicLink{} ->
@@ -137,9 +161,26 @@ decodeLongNames = go Nothing Nothing
       _ ->
         Fail $ Right NoLinkEntryAfterTypeKEntry
 
-otherEntryPayloadToFilePath :: BL.ByteString -> FilePath
-otherEntryPayloadToFilePath =
+otherEntryKLPayloadToFilePath :: BL.ByteString -> FilePath
+otherEntryKLPayloadToFilePath =
   fromPosixString . byteToPosixString . B.takeWhile (/= '\0') . BL.toStrict
+
+parsePaxExtendedHeader :: BL.ByteString -> [(B.ByteString, B.ByteString)]
+parsePaxExtendedHeader xs
+  | BL.null xs = []
+  | otherwise = case BL.readInt xs of
+  Nothing -> corrupted
+  Just (n, ys) -> let (zs, xs') = BL.splitAt (fromIntegral (n - length (show n))) ys in
+    case B.uncons (BL.toStrict zs) of
+      Just (' ', us) -> case B.unsnoc us of
+        Just (vs, '\n') -> let (key, value') = B.span (/= '=') vs in
+          case B.uncons value' of
+            Just ('=', value) -> (key, value) : parsePaxExtendedHeader xs'
+            _ -> corrupted
+        _ -> corrupted
+      _ -> corrupted
+  where
+    corrupted = [] -- let's be permissive
 
 castEntry :: Entry -> GenEntry BL.ByteString FilePath FilePath
 castEntry e = e
