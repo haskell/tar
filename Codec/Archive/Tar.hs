@@ -112,7 +112,10 @@ module Codec.Archive.Tar (
   -- produces the standard format.
   read,
   write,
+  writeEntry,
   write',
+  writeEntry',
+  writeTrailer,
 
   -- * Packing and unpacking files to\/from internal representation
   -- | These functions are for packing and unpacking portable archives. They
@@ -174,7 +177,7 @@ import Codec.Archive.Tar.Pack (pack, pack', packAndCheck)
 import Codec.Archive.Tar.Read (read, FormatError(..))
 import Codec.Archive.Tar.Types (unfoldEntries, foldlEntries, foldEntries, mapEntriesNoFail, mapEntries, Entries, GenEntries(..))
 import Codec.Archive.Tar.Unpack (unpack, unpackAndCheck)
-import Codec.Archive.Tar.Write (write, write')
+import Codec.Archive.Tar.Write (write, writeEntry, write', writeEntry', writeTrailer)
 
 import Control.Applicative ((<|>))
 import Control.Exception (Exception, throw, catch, SomeException(..))

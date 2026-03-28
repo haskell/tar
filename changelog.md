@@ -1,3 +1,8 @@
+## 0.7.1.0 Bodigrim <andrew.lelechenko@gmail.com> March 2026
+
+  * Support long file paths and symlinks in PAX format.
+  * Export `writeEntry`, `writeEntry'` and `writeTrailer`.
+
 ## 0.7.0.0 Bodigrim <andrew.lelechenko@gmail.com> September 2025
 
   This release fixes a long-standing issue with exhaustion of file handles

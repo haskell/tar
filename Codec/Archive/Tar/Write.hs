@@ -1,5 +1,6 @@
 {-# LANGUAGE PackageImports #-}
 {-# OPTIONS_HADDOCK hide #-}
+{- HLINT ignore "Avoid restricted function" -}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Write
@@ -12,7 +13,13 @@
 -- Portability :  portable
 --
 -----------------------------------------------------------------------------
-module Codec.Archive.Tar.Write (write, write') where
+module Codec.Archive.Tar.Write
+  ( write
+  , writeEntry
+  , write'
+  , writeEntry'
+  , writeTrailer
+  ) where
 
 import Codec.Archive.Tar.PackAscii
 import Codec.Archive.Tar.Types
@@ -41,13 +48,19 @@ import qualified "os-string" System.OsString.Posix as PS
 -- * The conversion is done lazily.
 --
 write :: [Entry] -> LBS.ByteString
-write es = LBS.concat $ map putEntry es ++ [LBS.replicate (512*2) 0]
+write es = LBS.concat $ map writeEntry es ++ [writeTrailer]
 
 -- | Like 'write' but for 'GenEntry' with 'OsPath' as contents.
 --
 -- @since 0.7.0.0
 write' :: [GenEntry OsPath TarPath LinkTarget] -> IO LBS.ByteString
-write' es = interleavedByteStringConcat $ map putEntry' es ++ [pure $ LBS.replicate (512*2) 0]
+write' es = interleavedByteStringConcat $ map writeEntry' es ++ [pure writeTrailer]
+
+-- | Standard TAR trailer of two empty blocks, put it at the end of any archive.
+--
+-- @since 0.7.1.0
+writeTrailer :: LBS.ByteString
+writeTrailer = LBS.replicate (512*2) 0
 
 interleavedByteStringConcat :: [IO LBS.ByteString] -> IO LBS.ByteString
 interleavedByteStringConcat [] = return LBS.empty
@@ -56,19 +69,22 @@ interleavedByteStringConcat (x:xs) = do
   ys <- unsafeInterleaveIO (interleavedByteStringConcat xs)
   return (LBS.append y ys)
 
-putEntry :: Entry -> LBS.ByteString
-putEntry entry = case entryContent entry of
+-- | Convert an entry to its representation in TAR format.
+--
+-- @since 0.7.1.0
+writeEntry :: Entry -> LBS.ByteString
+writeEntry entry = case entryContent entry of
   NormalFile       content size
     -- size field is 12 bytes long, so in octal format (see 'putOct')
     -- it can hold numbers up to 8Gb
     | size >= 1 `shiftL` (3 * (12 -1))
     , entryFormat entry == V7Format
-    -> error "putEntry: support for files over 8Gb is a Ustar extension"
+    -> error "writeEntry: support for files over 8Gb is a Ustar extension"
     | otherwise -> LBS.concat [ header, content, padding size ]
   OtherEntryType 'K' _ _
-    | entryFormat entry /= GnuFormat -> error "putEntry: long symlink support is a GNU extension"
+    | entryFormat entry /= GnuFormat -> error "writeEntry: long symlink support is a GNU extension"
   OtherEntryType 'L' _ _
-    | entryFormat entry /= GnuFormat -> error "putEntry: long filename support is a GNU extension"
+    | entryFormat entry /= GnuFormat -> error "writeEntry: long filename support is a GNU extension"
   OtherEntryType _ content size -> LBS.concat [ header, content, padding size ]
   _                             -> header
   where
@@ -76,8 +92,11 @@ putEntry entry = case entryContent entry of
     padding size = LBS.replicate paddingSize 0
       where paddingSize = fromIntegral (negate size `mod` 512)
 
-putEntry' :: GenEntry OsPath TarPath LinkTarget -> IO LBS.ByteString
-putEntry' entry' = do
+-- | Convert an entry to its representation in TAR format.
+--
+-- @since 0.7.1.0
+writeEntry' :: GenEntry OsPath TarPath LinkTarget -> IO LBS.ByteString
+writeEntry' entry' = do
   entryContent' <- case entryContent entry' of
     NormalFile path size -> do
       content <- defaultRead size path
@@ -91,7 +110,7 @@ putEntry' entry' = do
     NamedPipe -> return NamedPipe
     OtherEntryType typeCode lbs fileSize -> return (OtherEntryType typeCode lbs fileSize)
 
-  return (putEntry entry' { entryContent = entryContent' })
+  return (writeEntry entry' { entryContent = entryContent' })
 
 putHeader :: Entry -> LBS.ByteString
 putHeader entry =
