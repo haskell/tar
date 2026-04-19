@@ -94,48 +94,51 @@ decodeLongNames
   -> GenEntries BL.ByteString FilePath FilePath (Either e DecodeLongNamesError)
 decodeLongNames = go Nothing Nothing
   where
+    isKEntry :: GenEntryContent content linkTarget -> Maybe FilePath
+    isKEntry = \case
+      OtherEntryType 'K' fn _ ->
+        Just $ otherEntryKLPayloadToFilePath fn
+      OtherEntryType 'x' fn _
+        | Just fp <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
+        Just $ B.unpack fp
+      _ -> Nothing
+
+    isLEntry :: GenEntryContent content linkTarget -> Maybe FilePath
+    isLEntry = \case
+      OtherEntryType 'L' fn _ ->
+        Just $ otherEntryKLPayloadToFilePath fn
+      OtherEntryType 'x' fn _
+        | Just fp <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
+        Just $ B.unpack fp
+      _ -> Nothing
+
     go :: Maybe FilePath -> Maybe FilePath -> Entries e -> GenEntries BL.ByteString FilePath FilePath (Either e DecodeLongNamesError)
     go _ _ (Fail err) = Fail (Left err)
     go _ _ Done = Done
 
-    go Nothing Nothing (Next e rest) = case entryContent e of
-      OtherEntryType 'x' fn _
-        | Just fp <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
-        go (Just (B.unpack fp)) Nothing rest
-      OtherEntryType 'K' fn _ ->
-        go (Just (otherEntryKLPayloadToFilePath fn)) Nothing rest
-      OtherEntryType 'x' fn _
-        | Just fp <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
-        go Nothing (Just (B.unpack fp)) rest
-      OtherEntryType 'L' fn _ ->
-        go Nothing (Just (otherEntryKLPayloadToFilePath fn)) rest
-      _ ->
-        Next (castEntry e) (go Nothing Nothing rest)
+    go Nothing Nothing (Next e rest)
+      | Just link <- isKEntry (entryContent e)
+      = go (Just link) Nothing rest
+      | Just path <- isLEntry (entryContent e)
+      = go Nothing (Just path) rest
+      | otherwise
+      = Next (castEntry e) (go Nothing Nothing rest)
 
-    go Nothing (Just path) (Next e rest) = case entryContent e of
-      OtherEntryType 'x' fn _
-        | Just fp <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
-        go (Just (B.unpack fp)) (Just path) rest
-      OtherEntryType 'K' fn _ ->
-        go (Just (otherEntryKLPayloadToFilePath fn)) (Just path) rest
-      OtherEntryType 'x' fn _
-        | Just{} <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
-        Fail $ Right TwoTypeLEntries
-      OtherEntryType 'L' _ _ ->
-        Fail $ Right TwoTypeLEntries
-      _ -> Next ((castEntry e) { entryTarPath = path }) (go Nothing Nothing rest)
+    go Nothing (Just path) (Next e rest)
+      | Just link <- isKEntry (entryContent e)
+      = go (Just link) (Just path) rest
+      | Just{} <- isLEntry (entryContent e)
+      = Fail $ Right TwoTypeLEntries
+      | otherwise
+      = Next ((castEntry e) { entryTarPath = path }) (go Nothing Nothing rest)
 
-    go (Just link) Nothing (Next e rest) = case entryContent e of
-      OtherEntryType 'x' fn _
-        | Just{} <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
-        Fail $ Right TwoTypeKEntries
-      OtherEntryType 'K' _ _ ->
-        Fail $ Right TwoTypeKEntries
-      OtherEntryType 'x' fn _
-        | Just fp <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
-        go (Just link) (Just (B.unpack fp)) rest
-      OtherEntryType 'L' fn _ ->
-        go (Just link) (Just (otherEntryKLPayloadToFilePath fn)) rest
+    go (Just link) Nothing (Next e rest)
+      | Just{} <- isKEntry (entryContent e)
+      = Fail $ Right TwoTypeKEntries
+      | Just path <- isLEntry (entryContent e)
+      = go (Just link) (Just path) rest
+      | otherwise
+      = case entryContent e of
       SymbolicLink{} ->
         Next ((castEntry e) { entryContent = SymbolicLink link }) (go Nothing Nothing rest)
       HardLink{} ->
@@ -143,17 +146,13 @@ decodeLongNames = go Nothing Nothing
       _ ->
         Fail $ Right NoLinkEntryAfterTypeKEntry
 
-    go (Just link) (Just path) (Next e rest) = case entryContent e of
-      OtherEntryType 'x' fn _
-        | Just{} <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
-        Fail $ Right TwoTypeKEntries
-      OtherEntryType 'K' _ _ ->
-        Fail $ Right TwoTypeKEntries
-      OtherEntryType 'x' fn _
-        | Just{} <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
-        Fail $ Right TwoTypeLEntries
-      OtherEntryType 'L' _ _ ->
-        Fail $ Right TwoTypeLEntries
+    go (Just link) (Just path) (Next e rest)
+      | Just{} <- isKEntry (entryContent e)
+      = Fail $ Right TwoTypeKEntries
+      | Just{} <- isLEntry (entryContent e)
+      = Fail $ Right TwoTypeLEntries
+      | otherwise
+      = case entryContent e of
       SymbolicLink{} ->
         Next ((castEntry e) { entryTarPath = path, entryContent = SymbolicLink link }) (go Nothing Nothing rest)
       HardLink{} ->
