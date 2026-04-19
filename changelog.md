@@ -1,4 +1,4 @@
-## 0.7.1.0 Bodigrim <andrew.lelechenko@gmail.com> March 2026
+## 0.7.1.0 Bodigrim <andrew.lelechenko@gmail.com> April 2026
 
   * Support long file paths and symlinks in PAX format.
   * Export `writeEntry`, `writeEntry'` and `writeTrailer`.
