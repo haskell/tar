@@ -1,0 +1,45 @@
+name: bsds
+on:
+  - push
+  - pull_request
+  - merge_group
+  - workflow_dispatch
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  openbsd:
+    name: OpenBSD
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+    - name: test
+      uses: vmactions/openbsd-vm@v1
+      with:
+        prepare: pkg_add ghc cabal-install
+        run: |
+          mkdir -p /home/cabal
+          ln -s /home/cabal $HOME/.cabal
+          cabal update
+          cabal build all --enable-tests --enable-benchmarks
+          cabal test
+
+  netbsd:
+    name: NetBSD
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+    - name: test
+      uses: vmactions/netbsd-vm@v1
+      with:
+        release: "11.0"
+        prepare: /usr/sbin/pkg_add ghc cabal-install
+        run: |
+          cd $GITHUB_WORKSPACE;
+          cabal update
+          cabal build all --enable-tests --enable-benchmarks
+          cabal test
