@@ -218,6 +218,9 @@ data Ownership = Ownership {
   }
     deriving (Eq, Ord, Show)
 
+defaultOwnership :: Ownership
+defaultOwnership = Ownership "" "" 0 0
+
 -- | There have been a number of extensions to the tar file format over the
 -- years. They all share the basic entry fields and put more meta-data in
 -- different extended headers.
@@ -286,7 +289,7 @@ simpleEntry tarPath content = Entry {
                          Directory -> directoryPermissions
                          SymbolicLink _ -> symbolicLinkPermission
                          _         -> ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = defaultOwnership,
     entryTime        = 0,
     entryFormat      = UstarFormat
   }
@@ -323,7 +326,7 @@ longLinkEntry tarpath = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
     entryContent     = OtherEntryType 'L' (LBS.fromStrict $ posixToByteString $ toPosixString tarpath) (fromIntegral $ length tarpath),
     entryPermissions = ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = defaultOwnership,
     entryTime        = 0,
     entryFormat      = GnuFormat
   }
@@ -340,7 +343,7 @@ longSymLinkEntry linkTarget = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
     entryContent     = OtherEntryType 'K' (LBS.fromStrict $ posixToByteString $ toPosixString $ linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
-    entryOwnership   = Ownership "" "" 0 0,
+    entryOwnership   = defaultOwnership,
     entryTime        = 0,
     entryFormat      = GnuFormat
   }
