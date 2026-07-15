@@ -1,3 +1,8 @@
+## 0.7.2.0 Bodigrim <andrew.lelechenko@gmail.com> July 2026
+
+  * Allow writing entries with strings containing the entire set of Latin-1 encoding,
+    so that at least we can write any entry we can read.
+
 ## 0.7.1.0 Bodigrim <andrew.lelechenko@gmail.com> April 2026
 
   * Support long file paths and symlinks in PAX format.
