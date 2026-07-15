@@ -204,7 +204,7 @@ putPosixString :: FieldWidth -> PosixString -> BS.ByteString
 putPosixString n s = posixToByteString (PS.take n s) <> BS.replicate (n - PS.length s) 0x00
 
 putString :: FieldWidth -> String -> BS.ByteString
-putString n s = BS.take n (packAscii s) <> BS.replicate (n - length s) 0x00
+putString n s = BS.take n (packLatin1 s) <> BS.replicate (n - length s) 0x00
 
 {-# SPECIALISE putLarge :: FieldWidth -> Int64 -> BS.ByteString #-}
 putLarge :: (Bits a, Integral a) => FieldWidth -> a -> BS.ByteString

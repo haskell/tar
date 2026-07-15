@@ -10,7 +10,7 @@ module Codec.Archive.Tar.PackAscii
   , fromPosixString
   , posixToByteString
   , byteToPosixString
-  , packAscii
+  , packLatin1
   , filePathToOsPath
   , osPathToFilePath
   ) where
@@ -38,10 +38,10 @@ posixToByteString = Sh.fromShort . PS.getPosixString
 byteToPosixString :: ByteString -> PosixString
 byteToPosixString = PS.PosixString . Sh.toShort
 
-packAscii :: HasCallStack => FilePath -> BS.Char8.ByteString
-packAscii xs
-  | all isAscii xs = BS.Char8.pack xs
-  | otherwise = error $ "packAscii: only ASCII inputs are supported, but got " ++ xs
+packLatin1 :: HasCallStack => FilePath -> BS.Char8.ByteString
+packLatin1 xs
+  | all isLatin1 xs = BS.Char8.pack xs
+  | otherwise = error $ "packLatin1: only Latin-1 inputs are supported, but got " ++ xs
 
 filePathToOsPath :: FilePath -> OS.OsPath
 filePathToOsPath = unsafePerformIO . OS.encodeFS
