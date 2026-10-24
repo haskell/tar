@@ -30,13 +30,8 @@ import Data.ByteString.Builder          as BS
 #else
 import Data.ByteString.Lazy.Builder     as BS
 #endif
-#if MIN_VERSION_containers(0,5,0)
 import qualified Data.IntMap.Strict     as IntMap
 import Data.IntMap.Strict (IntMap)
-#else
-import qualified Data.IntMap            as IntMap
-import Data.IntMap (IntMap)
-#endif
 
 import Test.QuickCheck
 import Control.Applicative ((<$>), (<*>))
