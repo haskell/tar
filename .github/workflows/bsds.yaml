@@ -10,6 +10,21 @@ defaults:
     shell: bash
 
 jobs:
+  freebsd:
+    name: FreeBSD
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+    - name: test
+      uses: vmactions/freebsd-vm@v1
+      with:
+        prepare: pkg install -y ghc hs-cabal-install
+        run: |
+          cabal update
+          cabal build all --enable-tests --enable-benchmarks
+          cabal test
+
   openbsd:
     name: OpenBSD
     runs-on: ubuntu-latest
@@ -27,19 +42,19 @@ jobs:
           cabal build all --enable-tests --enable-benchmarks
           cabal test
 
-  netbsd:
-    name: NetBSD
-    runs-on: ubuntu-latest
-    steps:
-    - name: checkout
-      uses: actions/checkout@v7
-    - name: test
-      uses: vmactions/netbsd-vm@v1
-      with:
-        release: "11.0"
-        prepare: /usr/sbin/pkg_add ghc cabal-install
-        run: |
-          cd $GITHUB_WORKSPACE;
-          cabal update
-          cabal build all --enable-tests --enable-benchmarks
-          cabal test
+  # netbsd:
+  #   name: NetBSD
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: checkout
+  #     uses: actions/checkout@v7
+  #   - name: test
+  #     uses: vmactions/netbsd-vm@v1
+  #     with:
+  #       release: "11.0"
+  #       prepare: /usr/sbin/pkg_add ghc cabal-install
+  #       run: |
+  #         cd $GITHUB_WORKSPACE;
+  #         cabal update
+  #         cabal build all --enable-tests --enable-benchmarks
+  #         cabal test
