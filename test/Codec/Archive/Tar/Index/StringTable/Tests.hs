@@ -16,13 +16,8 @@ import Data.List hiding (lookup, insert)
 import qualified Data.Array.Unboxed as A
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
-#if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
 import Data.ByteString.Builder.Extra    as BS (byteStringCopy)
-#else
-import Data.ByteString.Lazy.Builder     as BS
-import Data.ByteString.Lazy.Builder.Extras as BS (byteStringCopy)
-#endif
 
 prop_valid :: [BS.ByteString] -> Property
 prop_valid strs =

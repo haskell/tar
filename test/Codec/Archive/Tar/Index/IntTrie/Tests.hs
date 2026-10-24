@@ -25,11 +25,7 @@ import Data.List hiding (lookup, insert)
 import Data.Word (Word32)
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
-#if MIN_VERSION_bytestring(0,10,2) || defined(MIN_VERSION_bytestring_builder)
 import Data.ByteString.Builder          as BS
-#else
-import Data.ByteString.Lazy.Builder     as BS
-#endif
 import qualified Data.IntMap.Strict     as IntMap
 import Data.IntMap.Strict (IntMap)
 
