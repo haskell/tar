@@ -1,8 +1,8 @@
-{-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE MagicHash #-}
 {-# LANGUAGE UnboxedTuples #-}
 {-# OPTIONS_HADDOCK hide #-}
+{- HLINT ignore "Avoid restricted function" -}
 
 module Codec.Archive.Tar.Index.IntTrie (
 
@@ -42,8 +42,6 @@ import Data.Array.IArray  ((!))
 import qualified Data.Bits as Bits
 import Data.Word (Word32)
 import Data.Bits
-import Data.Monoid (Monoid(..))
-import Data.Monoid ((<>))
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Lazy   as LBS
 import qualified Data.ByteString.Unsafe as BS

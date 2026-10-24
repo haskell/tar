@@ -29,7 +29,6 @@ import Data.Bits
 import Data.Char     (chr,ord)
 import Data.Int
 import Data.List     (foldl')
-import Data.Monoid   (mempty)
 import Numeric       (showOct)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.OsPath

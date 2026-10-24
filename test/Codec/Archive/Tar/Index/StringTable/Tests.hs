@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 module Codec.Archive.Tar.Index.StringTable.Tests (
     prop_valid,
     prop_sorted,

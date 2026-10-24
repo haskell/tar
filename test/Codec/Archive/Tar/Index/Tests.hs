@@ -1,7 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
------------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Index.Tests
 -- Copyright   :  (c) 2010-2015 Duncan Coutts
@@ -10,7 +8,6 @@
 -- Maintainer  :  duncan@community.haskell.org
 -- Portability :  portable
 --
------------------------------------------------------------------------------
 module Codec.Archive.Tar.Index.Tests (
     prop_lookup,
     prop_toList,
@@ -33,8 +30,8 @@ import qualified Codec.Archive.Tar.Write as Tar
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Char8  as BS.Char8
 import qualified Data.ByteString.Lazy   as LBS
+import Data.Either (fromRight)
 import Data.Int
-import Data.Monoid ((<>))
 import qualified System.FilePath.Posix as FilePath
 import System.IO
 
@@ -132,7 +129,7 @@ instance Arbitrary ValidPaths where
                          <$> listOf1 (elements ["a", "b", "c", "d"])
       makeNoPrefix [] = []
       makeNoPrefix (k:ks)
-        | all (not . isPrefixOfOther k) ks
+        | not (any (isPrefixOfOther k) ks)
                      = k : makeNoPrefix ks
         | otherwise  =     makeNoPrefix ks
 
@@ -144,7 +141,7 @@ instance Arbitrary ValidPaths where
 -- Helper for bulk construction.
 construct :: [(FilePath, (Int64, TarEntryOffset))] -> TarIndex
 construct =
-    either (const undefined) id
+    fromRight undefined
   . Tar.build
   . foldr (\(path, (size, _off)) es -> Next (testEntry path size) es) Done
 
@@ -233,8 +230,3 @@ instance Arbitrary SimpleIndexBuilder where
 prop_finalise_unfinalise :: SimpleIndexBuilder -> Property
 prop_finalise_unfinalise (SimpleIndexBuilder index) =
     Tar.unfinalise (Tar.finalise index) === index
-
-#if !(MIN_VERSION_base(4,5,0))
-(<>) :: Monoid m => m -> m -> m
-(<>) = mappend
-#endif

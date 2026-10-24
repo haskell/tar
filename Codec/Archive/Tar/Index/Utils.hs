@@ -1,7 +1,10 @@
 {-# LANGUAGE MagicHash, UnboxedTuples, BangPatterns, CPP #-}
 {-# OPTIONS_HADDOCK hide #-}
 
-module Codec.Archive.Tar.Index.Utils where
+module Codec.Archive.Tar.Index.Utils
+  ( readWord32BE
+  , beToLe
+  ) where
 
 import Data.ByteString as BS
 import Control.Exception (assert)
@@ -64,10 +67,6 @@ beToLe lenArr (BS fptr _) = do
 
 {-# SPECIALISE beToLe :: Word32 -> BS.ByteString -> IO (UArray Word32 Word32) #-}
 {-# SPECIALISE beToLe :: Int32 -> BS.ByteString -> IO (UArray Int32 Word32) #-}
-
-readInt32BE :: BS.ByteString -> Int -> Int32
-readInt32BE bs i = fromIntegral (readWord32BE bs i)
-{-# INLINE readInt32BE #-}
 
 readWord32OffPtrBE :: Ptr Word32 -> Int -> IO Word32
 readWord32OffPtrBE ptr i = do

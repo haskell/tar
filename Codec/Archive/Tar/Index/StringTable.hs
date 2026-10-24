@@ -1,6 +1,7 @@
-{-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
+{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 {-# OPTIONS_HADDOCK hide #-}
+{- HLINT ignore "Avoid restricted function" -}
 
 module Codec.Archive.Tar.Index.StringTable (
 
@@ -30,8 +31,6 @@ import Data.Function (on)
 import Data.Word (Word32)
 import Data.Int  (Int32)
 import Data.Bits
-import Data.Monoid (Monoid(..))
-import Data.Monoid ((<>))
 import Control.Exception (assert)
 
 import qualified Data.Array.Unboxed as A
@@ -122,8 +121,7 @@ inserts :: Enum id => [BS.ByteString] -> StringTableBuilder id -> (StringTableBu
 inserts bss builder = mapAccumL (flip insert) builder bss
 
 finalise :: Enum id => StringTableBuilder id -> StringTable id
-finalise (StringTableBuilder smap _) =
-    (StringTable strs offsets ids ixs)
+finalise (StringTableBuilder smap _) = StringTable strs offsets ids ixs
   where
     strs    = BS.concat (Map.keys smap)
     offsets = A.listArray (0, fromIntegral (Map.size smap))
@@ -209,7 +207,7 @@ deserialiseV2 bs
         ixs_bs  = BS.unsafeDrop ((lenArr - 1) * 4) ids_bs
 
         castArray :: A.UArray i Word32 -> A.UArray i Int32
-        castArray (A.UArray a b c d) = (A.UArray a b c d)
+        castArray (A.UArray a b c d) = A.UArray a b c d
 
         -- Bangs are crucial for this to work in spite of unsafePerformIO!
         (offs, ids, ixs) = unsafePerformIO $ do

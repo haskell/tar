@@ -6,8 +6,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_HADDOCK hide #-}
+{- HLINT ignore "Avoid restricted function" -}
 
------------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Types
 -- Copyright   :  (c) 2007 Bjorn Bringert,
@@ -21,7 +21,6 @@
 --
 -- Types to represent the content of @.tar@ archives.
 --
------------------------------------------------------------------------------
 module Codec.Archive.Tar.Types (
 
   GenEntry(..),
@@ -79,8 +78,6 @@ module Codec.Archive.Tar.Types (
 import Data.Bifunctor (Bifunctor, bimap)
 import Data.Int      (Int64)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Monoid   (Monoid(..))
-import Data.Semigroup as Sem
 import qualified Data.ByteString       as BS
 import qualified Data.ByteString.Char8 as BS.Char8
 import qualified Data.ByteString.Lazy  as LBS
@@ -341,7 +338,7 @@ longLinkEntry tarpath = Entry {
 longSymLinkEntry :: FilePath -> GenEntry content TarPath linkTarget
 longSymLinkEntry linkTarget = Entry {
     entryTarPath     = TarPath [PS.pstr|././@LongLink|] mempty,
-    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ posixToByteString $ toPosixString $ linkTarget) (fromIntegral $ length linkTarget),
+    entryContent     = OtherEntryType 'K' (LBS.fromStrict $ posixToByteString $ toPosixString linkTarget) (fromIntegral $ length linkTarget),
     entryPermissions = ordinaryFilePermissions,
     entryOwnership   = defaultOwnership,
     entryTime        = 0,
@@ -724,12 +721,11 @@ mapEntriesNoFail f =
   foldEntries (Next . f) Done Fail
 
 -- | @since 0.5.1.0
-instance Sem.Semigroup (GenEntries content tarPath linkTarget e) where
+instance Semigroup (GenEntries content tarPath linkTarget e) where
   a <> b = foldEntries Next b Fail a
 
 instance Monoid (GenEntries content tarPath linkTarget e) where
   mempty  = Done
-  mappend = (Sem.<>)
 
 instance (NFData tarPath, NFData content, NFData linkTarget, NFData e) => NFData (GenEntries content tarPath linkTarget e) where
   rnf (Next e es) = rnf e `seq` rnf es

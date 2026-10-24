@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -19,6 +18,7 @@ import Prelude hiding (lookup)
 import Codec.Archive.Tar.Index.IntTrie
 
 import qualified Data.Array.Unboxed as A
+import Data.Bifunctor (bimap)
 import Data.Char
 import Data.Function (on)
 import Data.List hiding (lookup, insert)
@@ -229,15 +229,15 @@ instance Arbitrary ValidPaths where
         | otherwise  =           makeNoPrefix ksvs
 
   shrink (ValidPaths kvs)
-      = map ValidPaths . filter noPrefix . filter nonEmpty . map (map (\(ks, v) -> (map Key ks, Value v)))
+      = map ValidPaths . filter noPrefix . filter nonEmpty . map (map (bimap (map Key) Value))
       . shrink
-      . map (\(ks, v) -> (map unKey ks, unValue v)) $ kvs
+      . map (bimap (map unKey) unValue) $ kvs
     where
       noPrefix :: [([Key], Value)] -> Bool
       noPrefix []           = True
       noPrefix ((k,_):kvs') = all (\(k', _) -> not (isPrefixOfOther k k')) kvs'
                            && noPrefix kvs'
-      nonEmpty = all (not . null . fst)
+      nonEmpty = not . any (null . fst)
 
 isPrefixOfOther :: [Key] -> [Key] -> Bool
 isPrefixOfOther a b = a `isPrefixOf` b || b `isPrefixOf` a

@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
------------------------------------------------------------------------------
 -- |
 -- Module      :  Codec.Archive.Tar.Tests
 -- Copyright   :  (c) 2007 Bjorn Bringert,
@@ -10,7 +8,6 @@
 -- Maintainer  :  duncan@community.haskell.org
 -- Portability :  portable
 --
------------------------------------------------------------------------------
 module Codec.Archive.Tar.Tests (
   prop_write_read_ustar,
   prop_write_read_gnu,

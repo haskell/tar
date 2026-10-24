@@ -1,6 +1,4 @@
-{-# LANGUAGE CPP #-}
-
-module Main where
+module Main (main) where
 
 import qualified Codec.Archive.Tar.Index.Tests as Index
 import qualified Codec.Archive.Tar.Index.IntTrie.Tests as IntTrie

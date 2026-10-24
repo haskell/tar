@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, BangPatterns, PatternGuards #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_HADDOCK hide #-}
 
@@ -66,8 +66,6 @@ import Codec.Archive.Tar.Index.IntTrie (IntTrie, IntTrieBuilder)
 import Codec.Archive.Tar.PackAscii
 
 import qualified System.FilePath.Posix as FilePath
-import Data.Monoid (Monoid(..))
-import Data.Monoid ((<>))
 import Data.Word
 import Data.Int
 import Data.Bits
