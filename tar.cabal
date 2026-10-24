@@ -107,8 +107,6 @@ test-suite properties
                  tasty-quickcheck >= 0.8  && <1,
                  temporary < 1.4,
                  time
-  if impl(ghc < 9.0)
-    build-depends: bytestring-handle < 0.2
 
   hs-source-dirs: test
 

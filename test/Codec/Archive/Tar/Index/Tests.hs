@@ -17,9 +17,6 @@ module Codec.Archive.Tar.Index.Tests (
     prop_valid,
     prop_serialise_deserialise,
     prop_serialiseSize,
-#ifdef MIN_VERSION_bytestring_handle
-    prop_index_matches_tar,
-#endif
     prop_finalise_unfinalise,
   ) where
 
@@ -53,10 +50,6 @@ import qualified Data.List.NonEmpty as NE
 import Data.Maybe
 import Data.Function (on)
 import Control.Exception (SomeException, try, throwIO)
-
-#ifdef MIN_VERSION_bytestring_handle
-import qualified Data.ByteString.Handle as HBS
-#endif
 
 -- Not quite the properties of a finite mapping because we also have lookups
 -- that result in completions.
@@ -180,37 +173,6 @@ data SimpleTarArchive = SimpleTarArchive {
 
 instance Show SimpleTarArchive where
   show = show . simpleTarRaw
-
-#ifdef MIN_VERSION_bytestring_handle
-prop_index_matches_tar :: SimpleTarArchive -> Property
-prop_index_matches_tar sta =
-    ioProperty (try go >>= either (\e -> throwIO (e :: SomeException))
-                                  (\_ -> return True))
-  where
-    go :: IO ()
-    go = do
-      h <- HBS.readHandle True (simpleTarBS sta)
-      goEntries h 0 (simpleTarEntries sta)
-
-    goEntries :: Handle -> TarEntryOffset -> Entries () -> IO ()
-    goEntries _ _ Done =
-      return ()
-    goEntries _ _ (Fail _) =
-      throwIO (userError "Fail entry in SimpleTarArchive")
-    goEntries h offset (Tar.Next e es) = do
-      goEntry h offset e
-      goEntries h (Tar.nextEntryOffset e offset) es
-
-    goEntry :: Handle -> TarEntryOffset -> Tar.Entry -> IO ()
-    goEntry h offset e = do
-      e' <- Tar.hReadEntry h offset
-      case (Tar.entryContent e, Tar.entryContent e') of
-        (Tar.NormalFile bs sz, Tar.NormalFile bs' sz') ->
-          unless (sz == sz' && bs == bs') $
-            throwIO $ userError "Entry mismatch"
-        _otherwise ->
-          throwIO $ userError "unexpected entry types"
-#endif
 
 instance Arbitrary SimpleTarArchive where
   arbitrary = do
