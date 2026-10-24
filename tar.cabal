@@ -107,6 +107,8 @@ test-suite properties
                  tasty-quickcheck >= 0.8  && <1,
                  temporary < 1.4,
                  time
+  if impl(ghc >= 8.10) && impl(ghc < 9.0)
+    build-depends: QuickCheck < 2.19
 
   hs-source-dirs: test
 
