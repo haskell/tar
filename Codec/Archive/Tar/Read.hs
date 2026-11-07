@@ -265,6 +265,6 @@ readOct = go 0 0
     go !i !n !bs = case BS.uncons bs of
       Nothing -> if i == 0 then Nothing else Just n
       Just (w, tl)
-        | w >= 0x30 && w <= 0x39 ->
+        | w >= 0x30 && w <= 0x37 ->
           go (i+1) (n * 8 + (fromIntegral w - 0x30)) tl
         | otherwise -> Nothing
