@@ -24,7 +24,7 @@ import Codec.Archive.Tar.Types
 
 import Data.Char     (ord)
 import Data.Int      (Int64)
-import Data.Bits     (Bits(shiftL, (.&.), complement))
+import Data.Bits     (shiftL, (.&.), complement, FiniteBits)
 import Control.Exception (Exception(..))
 import Control.Applicative
 import Control.Monad
@@ -216,7 +216,7 @@ correctChecksum header checksum = checksum == checksum'
 
 {-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Either FormatError Int   #-}
 {-# SPECIALISE getOct :: Int -> Int -> BS.ByteString -> Either FormatError Int64 #-}
-getOct :: (Integral a, Bits a) => Int -> Int -> BS.ByteString -> Either FormatError a
+getOct :: (Integral a, FiniteBits a) => Int -> Int -> BS.ByteString -> Either FormatError a
 getOct off len = parseOct . getBytes off len
   where
     -- As a star extension, octal fields can hold a base-256 value if the high
@@ -230,19 +230,21 @@ getOct off len = parseOct . getBytes off len
     -- extra bits in the first character, but I don't think it works and the
     -- docs I can find on star seem to suggest that these will always be 0,
     -- which is what I will assume.
-    parseOct s | BS.head s == 128 = return (readBytes (BS.tail s))
-               | BS.head s == 255 = return (negate (readBytes (BS.tail s)))
-    parseOct s
-      | BS.null stripped = return 0
-      | otherwise = case readOct stripped of
-        Just x  -> return x
-        Nothing -> Left HeaderBadNumericEncoding
+    parseOct s = case BS.uncons s of
+      Nothing -> pure 0
+      Just (0x80, s') -> pure $ readBigEndian s'
+      Just (0xFF, s') -> pure $ negate $ readBigEndian s'
+      Just{}
+        | BS.null stripped -> pure 0
+        | otherwise -> case readOct stripped of
+          Just x  -> pure x
+          Nothing -> Left HeaderBadNumericEncoding
      where
       stripped = BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
                $ BS.Char8.dropWhile (== ' ') s
 
-    readBytes :: (Integral a, Bits a) => BS.ByteString -> a
-    readBytes = BS.foldl' (\acc x -> acc `shiftL` 8 + fromIntegral x) 0
+    readBigEndian :: (Integral a, FiniteBits a) => BS.ByteString -> a
+    readBigEndian = BS.foldl' (\acc x -> acc `shiftL` 8 + fromIntegral x) 0
 
 getBytes :: Int -> Int -> BS.ByteString -> BS.ByteString
 getBytes off len = BS.take len . BS.drop off
