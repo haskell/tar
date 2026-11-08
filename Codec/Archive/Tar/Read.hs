@@ -163,6 +163,8 @@ parseHeader header' = do
   uid      <- uid_
   gid      <- gid_
   size     <- size_
+  when (size < 0) $
+    Left HeaderBadNumericEncoding
   mtime    <- mtime_
   format   <- format_ magic
   devmajor <- devmajor_
