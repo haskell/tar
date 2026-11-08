@@ -232,21 +232,24 @@ getOct off len = parseOct . getBytes off len
     -- extra bits in the first character, but I don't think it works and the
     -- docs I can find on star seem to suggest that these will always be 0,
     -- which is what I will assume.
-    parseOct s = case BS.uncons s of
-      Nothing -> pure 0
-      Just (0x80, s') -> pure $ readBigEndian s'
-      Just (0xFF, s') -> pure $ complement $ readBigEndian $ BS.map complement s'
+    parseOct s = maybe (Left HeaderBadNumericEncoding) Right $ case BS.uncons s of
+      Nothing -> Just 0
+      Just (0x80, s') -> readBigEndian s'
+      Just (0xFF, s') -> complement <$> readBigEndian (BS.map complement s')
       Just{}
-        | BS.null stripped -> pure 0
-        | otherwise -> case readOct stripped of
-          Just x  -> pure x
-          Nothing -> Left HeaderBadNumericEncoding
+        | BS.null stripped -> Just 0
+        | otherwise -> readOct stripped
      where
       stripped = BS.Char8.takeWhile (\c -> c /= '\NUL' && c /= ' ')
                $ BS.Char8.dropWhile (== ' ') s
 
-    readBigEndian :: (Integral a, FiniteBits a) => BS.ByteString -> a
-    readBigEndian = BS.foldl' (\acc x -> acc `shiftL` 8 + fromIntegral x) 0
+    readBigEndian :: (Integral a, FiniteBits a) => BS.ByteString -> Maybe a
+    readBigEndian = BS.foldl' go (Just 0)
+      where
+        go Nothing _ = Nothing
+        go (Just acc) x
+          | acc `shiftL` 8 < acc = Nothing -- is it integer overflow?
+          | otherwise = Just $ acc `shiftL` 8 + fromIntegral x
 
 getBytes :: Int -> Int -> BS.ByteString -> BS.ByteString
 getBytes off len = BS.take len . BS.drop off
@@ -269,6 +272,7 @@ readOct = go 0 0
     go !i !n !bs = case BS.uncons bs of
       Nothing -> if i == 0 then Nothing else Just n
       Just (w, tl)
+        | n * 8 < n -> Nothing -- is it integer overflow?
         | w >= 0x30 && w <= 0x37 ->
           go (i+1) (n * 8 + (fromIntegral w - 0x30)) tl
         | otherwise -> Nothing
