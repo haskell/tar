@@ -235,7 +235,7 @@ getOct off len = parseOct . getBytes off len
     parseOct s = case BS.uncons s of
       Nothing -> pure 0
       Just (0x80, s') -> pure $ readBigEndian s'
-      Just (0xFF, s') -> pure $ negate $ readBigEndian s'
+      Just (0xFF, s') -> pure $ complement $ readBigEndian $ BS.map complement s'
       Just{}
         | BS.null stripped -> pure 0
         | otherwise -> case readOct stripped of
