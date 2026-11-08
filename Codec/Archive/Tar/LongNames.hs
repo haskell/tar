@@ -13,6 +13,7 @@ import Codec.Archive.Tar.Types
 import Control.Exception
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.Map as M
 import "os-string" System.OsString.Posix (PosixString, PosixChar)
 import qualified "os-string" System.OsString.Posix as PS
 
@@ -99,7 +100,7 @@ decodeLongNames = go Nothing Nothing
       OtherEntryType 'K' fn _ ->
         Just $ otherEntryKLPayloadToFilePath fn
       OtherEntryType 'x' fn _
-        | Just fp <- lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
+        | Just fp <- M.lookup (B.pack "linkpath") (parsePaxExtendedHeader fn) ->
         Just $ B.unpack fp
       _ -> Nothing
 
@@ -108,7 +109,7 @@ decodeLongNames = go Nothing Nothing
       OtherEntryType 'L' fn _ ->
         Just $ otherEntryKLPayloadToFilePath fn
       OtherEntryType 'x' fn _
-        | Just fp <- lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
+        | Just fp <- M.lookup (B.pack "path") (parsePaxExtendedHeader fn) ->
         Just $ B.unpack fp
       _ -> Nothing
 
@@ -164,8 +165,12 @@ otherEntryKLPayloadToFilePath :: BL.ByteString -> FilePath
 otherEntryKLPayloadToFilePath =
   fromPosixString . byteToPosixString . B.takeWhile (/= '\0') . BL.toStrict
 
-parsePaxExtendedHeader :: BL.ByteString -> [(B.ByteString, B.ByteString)]
-parsePaxExtendedHeader xs
+-- | POSIX says that "When extended header records conflict, the last one given in the header shall take precedence".
+parsePaxExtendedHeader :: BL.ByteString -> M.Map B.ByteString B.ByteString
+parsePaxExtendedHeader = M.fromList . parsePaxExtendedHeaderList
+
+parsePaxExtendedHeaderList :: BL.ByteString -> [(B.ByteString, B.ByteString)]
+parsePaxExtendedHeaderList xs
   | BL.null xs = []
   | otherwise = case BL.readInt xs of
   Nothing -> corrupted
@@ -174,7 +179,7 @@ parsePaxExtendedHeader xs
       Just (' ', us) -> case B.unsnoc us of
         Just (vs, '\n') -> let (key, value') = B.span (/= '=') vs in
           case B.uncons value' of
-            Just ('=', value) -> (key, value) : parsePaxExtendedHeader xs'
+            Just ('=', value) -> (key, value) : parsePaxExtendedHeaderList xs'
             _ -> corrupted
         _ -> corrupted
       _ -> corrupted
